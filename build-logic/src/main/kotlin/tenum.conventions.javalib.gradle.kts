@@ -18,23 +18,6 @@ val compileNative = findProperty("compileNative") == "true"
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri("https://git.plantiwork.i234.me/api/packages/Plantitude.ai/maven")
-        credentials(HttpHeaderCredentials::class) {
-            name = "Authorization"
-            value = "token " +
-                System.getenv("PLANTITUDE_PACKAGE_READ_TOKEN").let {
-                    if (it.isNullOrEmpty()) {
-                        throw IllegalStateException("PLANTITUDE_PACKAGE_READ_TOKEN environmentVariable not set")
-                    } else {
-                        it
-                    }
-                }
-        }
-        authentication {
-            create<HttpHeaderAuthentication>("header")
-        }
-    }
 }
 
 tasks {

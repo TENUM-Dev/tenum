@@ -20,19 +20,4 @@ allprojects {
         return@allprojects
     }
     apply(plugin = "maven-publish")
-    configure<PublishingExtension> {
-        repositories {
-            maven {
-                name = "Gitea"
-                url = uri("https://git.plantiwork.i234.me/api/packages/Plentitude.ai/maven")
-                credentials(HttpHeaderCredentials::class) {
-                    name = "Authorization"
-                    value = "token " + System.getenv("PUBLICATION_TOKEN")
-                }
-                authentication {
-                    create<HttpHeaderAuthentication>("header")
-                }
-            }
-        }
-    }
 }
