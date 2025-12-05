@@ -3,7 +3,7 @@ kotlin = "2.2.20"
 convention = "0.9.6"
 coroutines = "1.10.2"
 kotlinx-serialization = "1.9.0"
-koTest = "6.0.4"
+koTest = "6.0.7"
 benchmark = "0.4.14"
 cpd = "3.5"
 okio = "3.16.2"
@@ -38,7 +38,7 @@ kotlin-test-annotations-common = { module = "org.jetbrains.kotlin:kotlin-test-an
 kotlin-test-common = { module = "org.jetbrains.kotlin:kotlin-test-common", version.ref = "kotlin" }
 kotlin-test-main = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
-kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version = "6.0.3" }
+kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version = "6.0.7" }
 junit = { module = "junit:junit", version = "4.13.2" }
 kotlinx-benchmark-runtime = { module = "org.jetbrains.kotlinx:kotlinx-benchmark-runtime", version.ref = "benchmark" }
 
