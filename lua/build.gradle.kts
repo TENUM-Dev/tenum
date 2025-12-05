@@ -21,7 +21,7 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.pedestal.weak)
                 implementation(libs.kotlinx.datetime)
-                implementation(libs.ktmath)
+                implementation(libs.bignum)
             }
         }
         val commonTest by getting {
