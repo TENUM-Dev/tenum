@@ -117,7 +117,7 @@ jobs:
         run: chmod +x gradlew
       - name: Build & Test JS targets
         run: |
-          ./gradlew jsBrowserTest jsNodeTest --no-daemon
+          ./gradlew kotlinUpgradeYarnLock jsBrowserTest jsNodeTest --no-daemon
 
   build-test-linux:
     name: Build & Test (Linux)
