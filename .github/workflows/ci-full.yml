@@ -280,7 +280,7 @@ jobs:
           echo "tar=$TAR" >> "$GITHUB_OUTPUT"
       - name: Upload installer artifacts (Linux)
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: installers-linux
           path: |
@@ -328,7 +328,7 @@ jobs:
           done
       - name: Upload installer artifacts (macOS)
         if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: installers-macos
           path: |
@@ -391,7 +391,7 @@ jobs:
           & "$WixBin\\light.exe" -ext WixUIExtension -o "tenum-windows-x64-$Version.msi" "$Stage\\tenum.wixobj"
       - name: Upload installer artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: installers-windows
           path: tenum-windows-x64-*.msi
