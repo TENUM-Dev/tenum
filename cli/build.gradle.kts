@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithHostTests
 
 plugins {
-    alias(libs.plugins.convention.common)
+    id("tenum.conventions.common")
     alias(libs.plugins.shadow)
     distribution
     id("com.github.gmazzo.buildconfig") version "5.7.1"

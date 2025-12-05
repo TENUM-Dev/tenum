@@ -1,5 +1,5 @@
 plugins {
-    id("ai.plantitude.conventions.common")
+    id("tenum.conventions.common")
 }
 
 val ideaActive = System.getProperty("idea.active") == "true"

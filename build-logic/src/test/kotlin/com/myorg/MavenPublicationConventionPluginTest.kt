@@ -10,7 +10,7 @@ class MavenPublicationConventionPluginTest : PluginTest() {
         buildFile.appendText(
             """
             plugins {
-                id("ai.plantitude.conventions.maven-publication")
+                id("tenum.conventions.maven-publication")
             }
         """,
         )

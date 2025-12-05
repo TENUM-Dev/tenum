@@ -54,16 +54,25 @@ pedestal-weak = "dev.opensavvy.pedestal:weak:3.1.1"
 logback = "ch.qos.logback:logback-classic:1.5.20"
 
 [bundles]
-kotlin-test = ["kotlin-test-main", "kotlin-test-common", "kotlin-test-annotations-common", "kotest-assertions-core", "kotlinx-coroutines-test"]
+kotlin-test = [
+    "kotlin-test-main",
+    "kotlin-test-common",
+    "kotlin-test-annotations-common",
+    "kotest-assertions-core",
+    "kotlinx-coroutines-test"
+]
+
+
+convention_test_dependencies = [
+    "kotest-assertions-core",
+    "junit"
+]
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "13.1.0" }
-maven-publication = { id = "ai.plantitude.conventions.maven-publication", version.ref = "convention" }
-changelog = { id = "ai.plantitude.conventions.changelog", version.ref = "convention" }
-convention-mpplib = { id = "ai.plantitude.conventions.mpplib", version.ref = "convention" }
-convention-common = { id = "ai.plantitude.conventions.common", version.ref = "convention" }
 shadow = { id = "com.github.johnrengelman.shadow", version = "8.1.1" }
 benchmark = { id = "org.jetbrains.kotlinx.benchmark", version.ref = "benchmark" }
 allopen = { id = "org.jetbrains.kotlin.plugin.allopen", version.ref = "kotlin" }

@@ -1,18 +1,21 @@
 plugins {
-    id("ai.plantitude.conventions.common")
+    id("tenum.conventions.common")
+    // id("io.github.turansky.kfc.definitions")
+    id("org.danilopianini.npm.publish")
 }
 
 val ideaActive = System.getProperty("idea.active") == "true"
 val compileNative = findProperty("compileNative") == "true"
 val useMochaInBrowser = findProperty("useMochaInBrowser") == "true"
-val enableLinuxArm = findProperty("enableLinuxArm") == "true"
 val browserHeadless = findProperty("browser.headless") == "true"
-val browserType = findProperty("browser.type") ?: "chrome"
+val browserType = findProperty("browser.type") ?: "Chrome"
 val env = System.getenv()
 val isCiServer = env.containsKey("CI")
+
 kotlin {
-    jvm { }
-    js {
+    js(IR) {
+        generateTypeScriptDefinitions()
+        binaries.library()
         nodejs { testTask { useMocha { timeout = "60s" } } }
         if (useMochaInBrowser) {
             browser {
@@ -49,60 +52,27 @@ kotlin {
                 }
             }
         }
+        useCommonJs()
     }
-    if (compileNative) {
-        if (ideaActive) {
-            val os =
-                org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
-                    .getCurrentOperatingSystem()
-            if (os.isWindows) {
-                mingwX64()
-                linuxX64()
-                if (enableLinuxArm) {
-                    linuxArm64()
-                }
-            } else if (os.isLinux) {
-                linuxX64()
-                if (enableLinuxArm) {
-                    linuxArm64()
-                }
-            } else if (os.isMacOsX) {
-                macosArm64()
-            }
-        } else {
-            val os =
-                org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
-                    .getCurrentOperatingSystem()
-            if (os.isWindows) {
-                mingwX64()
-                linuxX64()
-                if (enableLinuxArm) {
-                    linuxArm64()
-                }
-            } else if (os.isLinux) {
-                mingwX64()
-                linuxX64()
-                if (enableLinuxArm) {
-                    linuxArm64()
-                }
-            } else if (os.isMacOsX) {
-                macosArm64()
-                macosX64()
-                iosArm64()
-                iosX64()
-                watchosArm32()
-                watchosArm64()
-                watchosX64()
-                tvosArm64()
-                tvosX64()
-            }
-        }
-    }
-
     sourceSets {
         all {
             languageSettings.optIn("kotlin.js.ExperimentalJsExport")
             languageSettings.optIn("kotlin.RequiresOptIn")
+        }
+    }
+}
+
+npmPublish {
+    val os =
+        org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+            .getCurrentOperatingSystem()
+    if (os.isWindows) {
+        val nodePath = System.getenv("NODE_HOME")
+
+        if (nodePath != null) {
+            nodeHome = project.objects.directoryProperty().fileValue(File(nodePath))
+            nodeBin = nodeHome.file("node.exe")
+            npmBin = nodeHome.file("npm.cmd")
         }
     }
 }

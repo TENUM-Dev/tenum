@@ -3,13 +3,13 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 plugins {
     alias(libs.plugins.ktlint)
-    alias(libs.plugins.maven.publication)
-    alias(libs.plugins.changelog)
     alias(libs.plugins.cpd)
     alias(libs.plugins.kover)
+    id("tenum.conventions.maven-publication")
+    id("tenum.conventions.changelog")
     alias(libs.plugins.kotlin.multiplatform) apply false
-    alias(libs.plugins.convention.common) apply false
-    alias(libs.plugins.convention.mpplib) apply false
+    id("tenum.conventions.common") apply false
+    id("tenum.conventions.mpplib") apply false
 }
 
 group = "ai.plantitude.luak"

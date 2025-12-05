@@ -9,7 +9,7 @@ class CommonConventionPluginTest : PluginTest() {
         buildFile.appendText(
             """
             plugins {
-                id("ai.plantitude.conventions.common")
+                id("tenum.conventions.common")
             }
         """,
         )

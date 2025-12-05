@@ -10,7 +10,7 @@ class MppLibConventionPluginTest : PluginTest() {
         buildFile.appendText(
             """
             plugins {
-                id("ai.plantitude.conventions.mpplib")
+                id("tenum.conventions.mpplib")
             }
         """,
         )
