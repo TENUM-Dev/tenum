@@ -1,0 +1,35 @@
+{
+  "name": "@luak2/cli",
+  "version": "1.0.0",
+  "description": "LuaK2 CLI - Lua 5.4.8 interpreter implemented in Kotlin Multiplatform",
+  "main": "dist/lua.js",
+  "types": "dist/lua.d.ts",
+  "bin": {
+    "tlua": "./dist/lua.js",
+    "tluac": "./dist/luac.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:bundle": "npx esbuild ../cli/build/compileSync/js/main/productionLibrary/kotlin/luak-cli.js --bundle --minify --platform=node --outdir=/src --external:ws --external:@js-joda/core",
+    "install:copy": "cpy ./src/luak-cli.js ./dist --flat",
+    "install:global": "npm install -g .",
+    "build:bundle:install": "npm run build && npm run build:bundle && npm run install:copy && npm run install:global"
+  },
+  "keywords": ["lua", "interpreter", "lua5.4", "cli"],
+  "author": "",
+  "license": "ISC",
+  "files": [
+    "index.js",
+    "dist/**/*",
+    "README.md"
+  ],
+  "dependencies": {
+    "@js-joda/core": "^5.6.2",
+    "@js-joda/timezone": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "cpy-cli": "6.0.0"
+  }
+}

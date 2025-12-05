@@ -1,0 +1,444 @@
+name: Release Installers
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+  GRADLE_CACHE_USER: ${{ secrets.GRADLE_CACHE_USER }}
+  GRADLE_CACHE_PASSWORD: ${{ secrets.GRADLE_CACHE_PASSWORD }}
+  PLANTITUDE_PACKAGE_READ_TOKEN: ${{ secrets.PLANTITUDE_PACKAGE_READ_TOKEN }}
+  PKG_VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  linux:
+    name: Linux deb/rpm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install packaging tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm ruby ruby-dev make gcc
+          gem install --no-document fpm
+
+      - name: Build native binary
+        run: ./gradlew :cli:linkReleaseExecutableLinuxX64 --stacktrace --no-daemon
+
+      - name: Package deb/rpm/tar.gz
+        id: pkg
+        run: |
+          set -euo pipefail
+          VERSION="${PKG_VERSION#v}"
+          STAGE="$PWD/packaging/linux"
+          BIN="$STAGE/usr/local/tenum/bin"
+          mkdir -p "$BIN" "$STAGE/usr/local/bin"
+          cp cli/build/bin/linuxX64/releaseExecutable/cli.kexe "$BIN/tenum"
+          cat > "$BIN/tlua" <<'EOF'
+#!/usr/bin/env bash
+exec /usr/local/tenum/bin/tenum lua "$@"
+EOF
+          cat > "$BIN/tluac" <<'EOF'
+#!/usr/bin/env bash
+exec /usr/local/tenum/bin/tenum luac "$@"
+EOF
+          chmod +x "$BIN/tenum" "$BIN/tlua" "$BIN/tluac"
+          cat > "$STAGE/usr/local/bin/tenum" <<'EOF'
+#!/usr/bin/env bash
+exec /usr/local/tenum/bin/tenum "$@"
+EOF
+          cat > "$STAGE/usr/local/bin/tlua" <<'EOF'
+#!/usr/bin/env bash
+exec /usr/local/tenum/bin/tenum lua "$@"
+EOF
+          cat > "$STAGE/usr/local/bin/tluac" <<'EOF'
+#!/usr/bin/env bash
+exec /usr/local/tenum/bin/tenum luac "$@"
+EOF
+          chmod +x "$STAGE/usr/local/bin/"{tenum,tlua,tluac}
+
+          TAR="tenum-linux-x64-${VERSION}.tar.gz"
+          tar -czf "$TAR" -C "$STAGE" .
+
+          DEB="tenum_${VERSION}_amd64.deb"
+          fpm -s dir -t deb -n tenum -v "$VERSION" --license MIT --architecture amd64 \
+            --description "Tenum CLI with lua/luac subcommands" \
+            --prefix / -C "$STAGE" usr
+          mv tenum_${VERSION}_amd64.deb "$DEB"
+
+          RPM="tenum-${VERSION}-1.x86_64.rpm"
+          fpm -s dir -t rpm -n tenum -v "$VERSION" --iteration 1 --license MIT --architecture x86_64 \
+            --description "Tenum CLI with lua/luac subcommands" \
+            --prefix / -C "$STAGE" usr
+          mv tenum-*.x86_64.rpm "$RPM"
+
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          echo "rpm=$RPM" >> "$GITHUB_OUTPUT"
+          echo "tar=$TAR" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenum-linux
+          path: |
+            ${{ steps.pkg.outputs.deb }}
+            ${{ steps.pkg.outputs.rpm }}
+            ${{ steps.pkg.outputs.tar }}
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.pkg.outputs.deb }}
+            ${{ steps.pkg.outputs.rpm }}
+            ${{ steps.pkg.outputs.tar }}
+
+      - name: Publish to GitHub Packages (generic)
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OWNER="${{ github.repository_owner }}"
+          OWNER_PATH="/orgs/${OWNER}"
+          if [ "${{ github.event.repository.owner.type }}" = "User" ]; then OWNER_PATH="/users/${OWNER}"; fi
+          PKG="tenum-linux"
+          VERSION="${PKG_VERSION#v}"
+          for file in "${{ steps.pkg.outputs.deb }}" "${{ steps.pkg.outputs.rpm }}" "${{ steps.pkg.outputs.tar }}"; do
+            echo "Uploading $file to GitHub Packages ($PKG $VERSION)"
+            gh api --method PUT \
+              -H "Content-Type: application/octet-stream" \
+              --input "$file" \
+              "${OWNER_PATH}/packages/generic/${PKG}/${VERSION}/files/$(basename "$file")"
+          done
+
+  macos:
+    name: macOS pkg
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: macosX64
+            suffix: macos-x64
+          - target: macosArm64
+            suffix: macos-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build native binary
+        run: ./gradlew :cli:linkReleaseExecutable${{ matrix.target }} --stacktrace --no-daemon
+
+      - name: Build pkg
+        id: pkg
+        run: |
+          set -euo pipefail
+          VERSION="${PKG_VERSION#v}"
+          STAGE="$PWD/packaging/${{ matrix.suffix }}"
+          BIN="$STAGE/usr/local/tenum/bin"
+          mkdir -p "$BIN" "$STAGE/usr/local/bin"
+          cp "cli/build/bin/${{ matrix.target }}/releaseExecutable/cli.kexe" "$BIN/tenum"
+          cat > "$BIN/tlua" <<'EOF'
+#!/bin/bash
+exec /usr/local/tenum/bin/tenum lua "$@"
+EOF
+          cat > "$BIN/tluac" <<'EOF'
+#!/bin/bash
+exec /usr/local/tenum/bin/tenum luac "$@"
+EOF
+          chmod +x "$BIN/tenum" "$BIN/tlua" "$BIN/tluac"
+          cat > "$STAGE/usr/local/bin/tenum" <<'EOF'
+#!/bin/bash
+exec /usr/local/tenum/bin/tenum "$@"
+EOF
+          cat > "$STAGE/usr/local/bin/tlua" <<'EOF'
+#!/bin/bash
+exec /usr/local/tenum/bin/tenum lua "$@"
+EOF
+          cat > "$STAGE/usr/local/bin/tluac" <<'EOF'
+#!/bin/bash
+exec /usr/local/tenum/bin/tenum luac "$@"
+EOF
+          chmod +x "$STAGE/usr/local/bin/"{tenum,tlua,tluac}
+
+          PKG="tenum-${{ matrix.suffix }}-${VERSION}.pkg"
+          pkgbuild \
+            --root "$STAGE" \
+            --identifier "ai.tenum.cli" \
+            --version "$VERSION" \
+            --install-location / \
+            "$PKG"
+
+          echo "pkg=$PKG" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenum-${{ matrix.suffix }}
+          path: ${{ steps.pkg.outputs.pkg }}
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pkg.outputs.pkg }}
+
+      - name: Publish to GitHub Packages (generic)
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OWNER="${{ github.repository_owner }}"
+          OWNER_PATH="/orgs/${OWNER}"
+          if [ "${{ github.event.repository.owner.type }}" = "User" ]; then OWNER_PATH="/users/${OWNER}"; fi
+          PKG="tenum-${{ matrix.suffix }}"
+          VERSION="${PKG_VERSION#v}"
+          FILE="${{ steps.pkg.outputs.pkg }}"
+          echo "Uploading $FILE to GitHub Packages ($PKG $VERSION)"
+          gh api --method PUT \
+            -H "Content-Type: application/octet-stream" \
+            --input "$FILE" \
+            "${OWNER_PATH}/packages/generic/${PKG}/${VERSION}/files/$(basename "$FILE")"
+
+  windows:
+    name: Windows MSI
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install WiX
+        shell: pwsh
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Build native binary
+        shell: pwsh
+        run: ./gradlew.bat :cli:linkReleaseExecutableMingwX64 --stacktrace --no-daemon
+
+      - name: Build MSI
+        id: pkg
+        shell: pwsh
+        run: |
+          $Version = $env:PKG_VERSION -replace '^v',''
+          if (-not ($Version -match '^\d+(\.\d+){1,3}$')) { $Version = "1.0.0" }
+          $Stage = Join-Path $PWD "packaging\\windows"
+          $Bin = Join-Path $Stage "bin"
+          New-Item -ItemType Directory -Force -Path $Bin | Out-Null
+          Copy-Item "cli\\build\\bin\\mingwX64\\releaseExecutable\\cli.exe" "$Bin\\tenum.exe"
+          "@echo off`r`n""%~dp0tenum.exe"" lua %*`r`n" | Out-File "$Bin\\tlua.cmd" -Encoding ASCII
+          "@echo off`r`n""%~dp0tenum.exe"" luac %*`r`n" | Out-File "$Bin\\tluac.cmd" -Encoding ASCII
+
+          $wxs = @"
+<?xml version='1.0' encoding='UTF-8'?>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+  <Product Id='*' Name='Tenum' Language='1033' Version='$(var.ProductVersion)' Manufacturer='Tenum' UpgradeCode='C7B4B815-A3E2-4E10-A6DE-09F8C817C53E'>
+    <Package InstallerVersion='500' Compressed='yes' InstallScope='perMachine' />
+    <MajorUpgrade DowngradeErrorMessage='A newer version of Tenum is already installed.' />
+    <MediaTemplate />
+    <Directory Id='ProgramFilesFolder'>
+      <Directory Id='TENUMPARENT' Name='Tenum'>
+        <Directory Id='INSTALLFOLDER' Name='tenum'>
+          <Directory Id='BINDIR' Name='bin'>
+            <Component Id='cmpTenum' Guid='*'>
+              <File Id='filTenum' Source='$(var.SourceDir)\\tenum.exe' KeyPath='yes' />
+            </Component>
+            <Component Id='cmpTlua' Guid='*'>
+              <File Id='filTlua' Source='$(var.SourceDir)\\tlua.cmd' KeyPath='yes' />
+            </Component>
+            <Component Id='cmpTluac' Guid='*'>
+              <File Id='filTluac' Source='$(var.SourceDir)\\tluac.cmd' KeyPath='yes' />
+            </Component>
+            <Component Id='cmpPath' Guid='*'>
+              <Environment Id='PATH_TENUM' Name='PATH' Value='[BINDIR]' Action='set' System='yes' Part='last' Permanent='no' />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+    <Feature Id='MainFeature' Title='Tenum' Level='1'>
+      <ComponentRef Id='cmpTenum' />
+      <ComponentRef Id='cmpTlua' />
+      <ComponentRef Id='cmpTluac' />
+      <ComponentRef Id='cmpPath' />
+    </Feature>
+  </Product>
+</Wix>
+"@
+          $wxsPath = Join-Path $Stage "tenum.wxs"
+          Set-Content -Path $wxsPath -Value $wxs -Encoding UTF8
+
+          $WixBin = (Get-ChildItem "C:\\Program Files (x86)\\WiX Toolset v3.*\\bin" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+          & "$WixBin\\candle.exe" -dProductVersion=$Version -dSourceDir=$Bin -out "$Stage\\" $wxsPath
+          & "$WixBin\\light.exe" -ext WixUIExtension -o "tenum-windows-x64-$Version.msi" "$Stage\\tenum.wixobj"
+
+          Write-Output "msi=tenum-windows-x64-$Version.msi" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenum-windows
+          path: ${{ steps.pkg.outputs.msi }}
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pkg.outputs.msi }}
+
+      - name: Publish to GitHub Packages (generic)
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $Owner = "${{ github.repository_owner }}"
+          $OwnerPath = "/orgs/$Owner"
+          if ("${{ github.event.repository.owner.type }}" -eq "User") { $OwnerPath = "/users/$Owner" }
+          $Pkg = "tenum-windows"
+          $Version = "${{ env.PKG_VERSION }}" -replace '^v',''
+          $File = "${{ steps.pkg.outputs.msi }}"
+          Write-Host "Uploading $File to GitHub Packages ($Pkg $Version)"
+          gh api --method PUT `
+            -H "Content-Type: application/octet-stream" `
+            --input "$File" `
+            "$OwnerPath/packages/generic/$Pkg/$Version/files/$(Split-Path -Leaf $File)"
+
+  npm:
+    name: NPM CLI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Build JS CLI (Kotlin/JS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tasks=(
+            ":cli:jsProductionLibraryCompileSync"
+            ":cli:compileProductionLibraryKotlinJs"
+            ":cli:jsBrowserProductionLibraryDistribution"
+            ":cli:assemble"
+          )
+          success=0
+          for t in "${tasks[@]}"; do
+            echo "Trying Gradle task $t"
+            if ./gradlew "$t" --stacktrace --no-daemon; then
+              success=1
+              break
+            fi
+          done
+          if [ $success -eq 0 ]; then
+            echo "No JS build task succeeded"; exit 1
+          fi
+
+          shopt -s globstar
+          JS_OUT=$(ls cli/build/compileSync/js/main/productionLibrary/kotlin/*.js 2>/dev/null | head -n1)
+          if [ -z "$JS_OUT" ]; then
+            JS_OUT=$(ls cli/build/**/productionLibrary/kotlin/*.js 2>/dev/null | head -n1 || true)
+          fi
+          if [ -z "$JS_OUT" ]; then
+            echo "Could not find compiled JS output in cli/build"; exit 1
+          fi
+          echo "Using Kotlin/JS output: $JS_OUT"
+          cp "$JS_OUT" clinpm/src/luak-cli.js
+
+      - name: Install npm dependencies
+        working-directory: clinpm
+        run: npm ci
+
+      - name: Set npm version
+        working-directory: clinpm
+        run: |
+          VERSION="${PKG_VERSION#v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Build npm package
+        working-directory: clinpm
+        run: |
+          npm run build
+          npm run install:copy
+
+      - name: Pack npm tarball
+        id: npmpack
+        working-directory: clinpm
+        run: |
+          PKG_FILE=$(npm pack --silent)
+          echo "npm_tgz=$PKG_FILE" >> "$GITHUB_OUTPUT"
+          echo "Packed $PKG_FILE"
+
+      - name: Upload npm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-cli
+          path: clinpm/${{ steps.npmpack.outputs.npm_tgz }}
+          if-no-files-found: error
+
+      - name: Attach npm artifact to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: clinpm/${{ steps.npmpack.outputs.npm_tgz }}
+
+      - name: Publish to npm
+        if: github.event_name == 'release'
+        working-directory: clinpm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish --access public
