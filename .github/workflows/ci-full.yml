@@ -223,8 +223,7 @@ jobs:
         working-directory: clinpm
         run: npm ci
       - name: Build CLI JS artifacts
-        run: ./gradlew :clinpm:cliJsBuild --stacktrace --no-daemon
-
+        run: ./gradlew :clinpm:installLocal --stacktrace --no-daemon
       - name: Build npm package
         working-directory: clinpm
         run: |
