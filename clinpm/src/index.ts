@@ -29,7 +29,7 @@ const originalResolveFilename = (Module as any)._resolveFilename;
 const kotlinBuildDir = path.resolve(__dirname, '../../cli/build/compileSync/js/main/productionLibrary/kotlin');
 
 // Import the compiled Kotlin/JS CLI module
-const cliModule = require(path.join(kotlinBuildDir, 'luak-cli.js'));
+const cliModule = require(path.join(kotlinBuildDir, 'tenum-cli.js'));
 
 // Run the CLI with command line arguments (skip 'node' and script name)
 const args = process.argv.slice(2);
@@ -44,7 +44,7 @@ if (typeof cliModule === 'function') {
     const exitCode = cliModule.execLua(args);
     process.exit(exitCode);
 } else {
-    console.error('Unable to find CLI entry point in luak-cli module');
+    console.error('Unable to find CLI entry point in tenum-cli module');
     console.error('Available exports:', Object.keys(cliModule));
     process.exit(1);
 }

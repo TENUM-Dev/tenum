@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc",
     "build:bundle": "npx esbuild ../cli/build/compileSync/js/main/productionLibrary/kotlin/tenum-cli.js --bundle --minify --platform=node --outdir=./src --external:ws --external:@js-joda/core",
-    "install:copy": "cpy ./src/luak-cli.js ./dist --flat",
+    "install:copy": "cpy ./src/tenum-cli.js ./dist --flat",
     "install:global": "npm install -g .",
     "build:bundle:install": "npm run build:bundle && npm run install:copy && npm run build && npm run install:global"
   },
