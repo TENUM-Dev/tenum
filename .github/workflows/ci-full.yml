@@ -228,16 +228,19 @@ jobs:
       - name: Build npm package
         working-directory: clinpm
         run: |
-          npm version --no-git-tag-version "${PKG_VERSION#v}"
-          npm run build
-          npm run build:bundle
-          npm run install:copy
+          npm run build:bundle:install
       - name: Publish to npm
         if: github.event_name == 'release'
         working-directory: clinpm
         env:
           NODE_AUTH_TOKEN: ${ secrets.NPM_TOKEN }
-        run: npm publish --access public
+        run: |
+          VERSION="${PKG_VERSION#v}"
+          CURRENT="$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$CURRENT" ]; then
+            npm version --no-git-tag-version "$VERSION"
+          fi
+          npm publish --access public
   installers:
     name: Build Installers
     if: false
