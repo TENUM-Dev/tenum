@@ -9,11 +9,23 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "daily"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
   - package-ecosystem: "npm"
     directory: "/clinpm"
     schedule:
       interval: "daily"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
