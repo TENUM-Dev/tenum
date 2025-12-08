@@ -197,6 +197,45 @@ jobs:
       - name: Build macOS arm targets
         run: |
           ./gradlew macosArm64Test --no-daemon
+  publish-npm-cli:
+    name: Publish npm CLI
+    runs-on: ubuntu-latest
+    needs:
+      - build-test-JS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Install npm dependencies
+        working-directory: clinpm
+        run: npm ci
+      - name: Build CLI JS artifacts
+        run: ./gradlew :clinpm:cliJsBuild --stacktrace --no-daemon
+
+      - name: Build npm package
+        working-directory: clinpm
+        run: |
+          npm version --no-git-tag-version "${PKG_VERSION#v}"
+          npm run build
+          npm run build:bundle
+          npm run install:copy
+      - name: Publish to npm
+        if: github.event_name == 'release'
+        working-directory: clinpm
+        env:
+          NODE_AUTH_TOKEN: ${ secrets.NPM_TOKEN }
+        run: npm publish --access public
   installers:
     name: Build Installers
     if: false
