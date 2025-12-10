@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload npm package to GitHub release
         if: steps.prepare_package.outputs.skip_publish != 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: ${{ steps.prepare_package.outputs.tarball_path }}

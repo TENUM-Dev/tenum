@@ -6,10 +6,11 @@
   "types": "dist/lua.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TENUM-Dev/tenum.git",
+    "url": "git+https://github.com/TENUM-Dev/tenum.git",
     "directory": "clinpm"
   },
   "bin": {
+    "tenum": "dist/tenum.js",
     "tlua": "dist/lua.js",
     "tluac": "dist/luac.js"
   },
@@ -17,10 +18,15 @@
     "build": "tsc",
     "build:bundle": "npx esbuild ../cli/build/compileSync/js/main/productionLibrary/kotlin/tenum-cli.js --bundle --minify --platform=node --outdir=./src --external:ws --external:@js-joda/core",
     "install:copy": "cpy ./src/tenum-cli.js ./dist --flat",
-    "install:global": "npm install -g .",
+    "install:global": "npm install -g --force .",
     "build:bundle:install": "npm run build:bundle && npm run install:copy && npm run build && npm run install:global"
   },
-  "keywords": ["lua", "interpreter", "lua5.4", "cli"],
+  "keywords": [
+    "lua",
+    "interpreter",
+    "lua5.4",
+    "cli"
+  ],
   "author": "",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": [

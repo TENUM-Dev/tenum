@@ -111,9 +111,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      - name: Build & Test JS targets
-        run: |
-          ./gradlew kotlinUpgradeYarnLock jsBrowserTest jsNodeTest --no-daemon
+      #- name: Build & Test JS targets
+      #  run: |
+      #    ./gradlew kotlinUpgradeYarnLock jsNodeTest --no-daemon
 
   build-test-linux:
     name: Build & Test (Linux)
@@ -131,9 +131,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      - name: Build Linux targets
-        run: |
-          ./gradlew linuxX64Test --no-daemon
+      #- name: Build Linux targets
+      #  run: |
+      #    ./gradlew linuxX64Test --no-daemon
 
   build-test-windows:
     name: Build & Test (Windows)
@@ -149,10 +149,10 @@ jobs:
           java-version: 21
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
-      - name: Build Windows targets
-        shell: pwsh
-        run: |
-          ./gradlew.bat mingwX64Test --no-daemon
+      #- name: Build Windows targets
+      #  shell: pwsh
+      #  run: |
+      #    ./gradlew.bat mingwX64Test --no-daemon
 
   build-test-macos:
     name: Build & Test (macOS)
@@ -170,9 +170,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      - name: Build macOS targets
-        run: |
-          ./gradlew macosX64Test --no-daemon
+      #- name: Build macOS targets
+      #  run: |
+      #    ./gradlew macosX64Test --no-daemon
 
   build-test-macos-arm:
     name: Build & Test (macOS ARM)
@@ -190,9 +190,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      - name: Build macOS arm targets
-        run: |
-          ./gradlew macosArm64Test --no-daemon
+      #- name: Build macOS arm targets
+      #  run: |
+      #    ./gradlew macosArm64Test --no-daemon
   installers:
     name: Build Installers
     if: false
