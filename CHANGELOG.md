@@ -1,3 +1,18 @@
+## <small>1.0.2 (2025-12-10)</small>
+
+* fix: Switch changelog generation to GitHub Action ([acc1044](https://github.com/TENUM-Dev/tenum/commit/acc1044))
+* fix: Switch to semantic-release GitHub Action and update config ([feccebe](https://github.com/TENUM-Dev/tenum/commit/feccebe))
+* fix: Update CI triggers and auto-merge method in workflows ([ce52435](https://github.com/TENUM-Dev/tenum/commit/ce52435))
+* fix: Update GitHub Actions tokens and disable CPD step ([828eab2](https://github.com/TENUM-Dev/tenum/commit/828eab2))
+* fix: Update release branches in .releaserc ([90fd330](https://github.com/TENUM-Dev/tenum/commit/90fd330))
+* fix: Use BOT_TOKEN for auto-merge in release workflow ([71445a0](https://github.com/TENUM-Dev/tenum/commit/71445a0))
+* fix: Use GITHUB_TOKEN for PR approval and auto-merge ([39bc6c1](https://github.com/TENUM-Dev/tenum/commit/39bc6c1))
+* Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([5b7f411](https://github.com/TENUM-Dev/tenum/commit/5b7f411))
+* Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([fa94eef](https://github.com/TENUM-Dev/tenum/commit/fa94eef))
+* Merge pull request #17 from TENUM-Dev/main ([8e8e530](https://github.com/TENUM-Dev/tenum/commit/8e8e530)), closes [#17](https://github.com/TENUM-Dev/tenum/issues/17)
+* Refactor release workflow and update semantic-release config ([56a2928](https://github.com/TENUM-Dev/tenum/commit/56a2928))
+* bump: (deps): Bump actions/checkout from 4 to 6 (#15) ([5c7676e](https://github.com/TENUM-Dev/tenum/commit/5c7676e)), closes [#15](https://github.com/TENUM-Dev/tenum/issues/15)
+
 ## <small>1.0.1 (2025-12-10)</small>
 
 * Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([69535c5](https://github.com/TENUM-Dev/tenum/commit/69535c5))
