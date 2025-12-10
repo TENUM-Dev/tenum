@@ -1,3 +1,21 @@
+## <small>1.1.1 (2025-12-10)</small>
+
+* Merge branch 'main' into release ([14b66f3](https://github.com/TENUM-Dev/tenum/commit/14b66f3))
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([1f13aee](https://github.com/TENUM-Dev/tenum/commit/1f13aee))
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([cc675e0](https://github.com/TENUM-Dev/tenum/commit/cc675e0))
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([6203ff2](https://github.com/TENUM-Dev/tenum/commit/6203ff2))
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([8f33e32](https://github.com/TENUM-Dev/tenum/commit/8f33e32))
+* Merge pull request #27 from TENUM-Dev/release ([0d2b8d9](https://github.com/TENUM-Dev/tenum/commit/0d2b8d9)), closes [#27](https://github.com/TENUM-Dev/tenum/issues/27)
+* chore(release): 1.0.10 ([2916bc0](https://github.com/TENUM-Dev/tenum/commit/2916bc0))
+* chore(release): 1.0.7 ([a7ede5b](https://github.com/TENUM-Dev/tenum/commit/a7ede5b))
+* chore(release): 1.0.8 ([6ac05f5](https://github.com/TENUM-Dev/tenum/commit/6ac05f5))
+* chore(release): 1.0.9 ([c9685bc](https://github.com/TENUM-Dev/tenum/commit/c9685bc))
+* fix npm publish ([fda9820](https://github.com/TENUM-Dev/tenum/commit/fda9820))
+* fix: Npm publishing ([d9b6088](https://github.com/TENUM-Dev/tenum/commit/d9b6088))
+* fix: one extra ([6aa8881](https://github.com/TENUM-Dev/tenum/commit/6aa8881))
+* fix: package.json ([5ef5939](https://github.com/TENUM-Dev/tenum/commit/5ef5939))
+* fix: readme ([217de5f](https://github.com/TENUM-Dev/tenum/commit/217de5f))
+
 ## 1.1.0 (2025-12-10)
 
 * feat: add initial code (#29) ([ae7a966](https://github.com/TENUM-Dev/tenum/commit/ae7a966)), closes [#29](https://github.com/TENUM-Dev/tenum/issues/29)
