@@ -17,12 +17,12 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.DEPENDABOT_TOKEN }}
           
       - name: Enable auto-merge
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.DEPENDABOT_TOKEN }}
           script: |
             const prNodeId = context.payload.pull_request.node_id;
             await github.graphql(
@@ -37,10 +37,9 @@ jobs:
             );
 
       - name: Approve PR
-        if: false
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.APPROVE_TOKEN }}
+          github-token: ${{ secrets.DEPENDABOT_TOKEN }}
           script: |
             await github.rest.pulls.createReview({
               owner: context.repo.owner,
