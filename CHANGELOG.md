@@ -1,6 +1,21 @@
+## <small>1.0.6 (2025-12-10)</small>
+
+* Merge branch 'dev' into release ([04f16ab](https://github.com/TENUM-Dev/tenum/commit/04f16ab))
+* fix: Update release workflow and semantic-release config ([2f5ccd4](https://github.com/TENUM-Dev/tenum/commit/2f5ccd4))
+
+## <small>1.0.5 (2025-12-10)</small>
+
+* Merge branch 'dev' into release ([6e30592](https://github.com/TENUM-Dev/tenum/commit/6e30592))
+* Merge branch 'main' into dev ([7bbdac1](https://github.com/TENUM-Dev/tenum/commit/7bbdac1))
+* Merge branch 'main' into release ([c3024c9](https://github.com/TENUM-Dev/tenum/commit/c3024c9))
+* Merge pull request #18 from TENUM-Dev/dev ([9accc38](https://github.com/TENUM-Dev/tenum/commit/9accc38)), closes [#18](https://github.com/TENUM-Dev/tenum/issues/18)
+* Merge pull request #23 from TENUM-Dev/release ([ab9f0a7](https://github.com/TENUM-Dev/tenum/commit/ab9f0a7)), closes [#23](https://github.com/TENUM-Dev/tenum/issues/23)
+* Merge pull request #24 from TENUM-Dev/release ([69d1a21](https://github.com/TENUM-Dev/tenum/commit/69d1a21)), closes [#24](https://github.com/TENUM-Dev/tenum/issues/24)
+* chore(release): 1.0.4 [skip ci] ([7343adc](https://github.com/TENUM-Dev/tenum/commit/7343adc))
+* fix: Update CI workflows for manual dispatch and release triggers ([a84b123](https://github.com/TENUM-Dev/tenum/commit/a84b123))
+
 ## <small>1.0.4 (2025-12-10)</small>
 
-* fix: Add release branch workflow and update release PR workflow ([bda0316](https://github.com/TENUM-Dev/tenum/commit/bda0316))
 * Set release branch environment variables in workflow ([b2eba61](https://github.com/TENUM-Dev/tenum/commit/b2eba61))
 * Fix: Refactor release branch creation in workflow ([d3c40ff](https://github.com/TENUM-Dev/tenum/commit/d3c40ff))
 * Fix: Remove redundant git fetch and branch steps ([4462d77](https://github.com/TENUM-Dev/tenum/commit/4462d77))
