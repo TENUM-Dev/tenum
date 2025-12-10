@@ -4,9 +4,14 @@
   "description": "Tenum Lua - Lua 5.4.8 interpreter implemented in Kotlin Multiplatform",
   "main": "dist/lua.js",
   "types": "dist/lua.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TENUM-Dev/tenum.git",
+    "directory": "clinpm"
+  },
   "bin": {
-    "tlua": "./dist/lua.js",
-    "tluac": "./dist/luac.js"
+    "tlua": "dist/lua.js",
+    "tluac": "dist/luac.js"
   },
   "scripts": {
     "build": "tsc",
@@ -15,7 +20,12 @@
     "install:global": "npm install -g .",
     "build:bundle:install": "npm run build:bundle && npm run install:copy && npm run build && npm run install:global"
   },
-  "keywords": ["lua", "interpreter", "lua5.4", "cli"],
+  "keywords": [
+    "lua",
+    "interpreter",
+    "lua5.4",
+    "cli"
+  ],
   "author": "",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": [
