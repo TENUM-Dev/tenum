@@ -1,3 +1,8 @@
+## <small>1.0.3 (2025-12-10)</small>
+
+* Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([1aca505](https://github.com/TENUM-Dev/tenum/commit/1aca505))
+* Fix: workspace permissions in release workflow ([f4d4a8f](https://github.com/TENUM-Dev/tenum/commit/f4d4a8f))
+
 ## <small>1.0.2 (2025-12-10)</small>
 
 * fix: Switch changelog generation to GitHub Action ([acc1044](https://github.com/TENUM-Dev/tenum/commit/acc1044))
