@@ -1,3 +1,13 @@
+## [](https://github.com/TENUM-Dev/tenum/compare/v1.0.1...v) (2025-12-10)
+
+
+### Bug Fixes
+
+* Update CI triggers and auto-merge method in workflows ([ce52435](https://github.com/TENUM-Dev/tenum/commit/ce52435ca5d702c35e02e099a9319a9b44a156f2))
+* Update GitHub Actions tokens and disable CPD step ([828eab2](https://github.com/TENUM-Dev/tenum/commit/828eab269ee31034fcd2b8ca6339d371431468bb))
+* Use BOT_TOKEN for auto-merge in release workflow ([71445a0](https://github.com/TENUM-Dev/tenum/commit/71445a079eb95f93fcc1ffc884d3baa2f36c6cf7))
+* Use GITHUB_TOKEN for PR approval and auto-merge ([39bc6c1](https://github.com/TENUM-Dev/tenum/commit/39bc6c184ec0fff5c84efcad20ce33385048ee7b))
+
 ## <small>1.0.1 (2025-12-10)</small>
 
 * Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([69535c5](https://github.com/TENUM-Dev/tenum/commit/69535c5))
