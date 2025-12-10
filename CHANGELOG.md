@@ -1,3 +1,9 @@
+## <small>1.0.9 (2025-12-10)</small>
+
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([cc675e0](https://github.com/TENUM-Dev/tenum/commit/cc675e0))
+* fix npm publish ([fda9820](https://github.com/TENUM-Dev/tenum/commit/fda9820))
+* fix: one extra ([6aa8881](https://github.com/TENUM-Dev/tenum/commit/6aa8881))
+
 ## <small>1.0.8 (2025-12-10)</small>
 
 * Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([6203ff2](https://github.com/TENUM-Dev/tenum/commit/6203ff2))
