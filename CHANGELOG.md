@@ -1,3 +1,8 @@
+## <small>1.0.8 (2025-12-10)</small>
+
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([6203ff2](https://github.com/TENUM-Dev/tenum/commit/6203ff2))
+* fix: Npm publishing ([d9b6088](https://github.com/TENUM-Dev/tenum/commit/d9b6088))
+
 ## <small>1.0.7 (2025-12-10)</small>
 
 * Merge branch 'main' into dev ([8a1b084](https://github.com/TENUM-Dev/tenum/commit/8a1b084))
