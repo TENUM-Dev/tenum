@@ -1,3 +1,8 @@
+## <small>1.0.10 (2025-12-10)</small>
+
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([1f13aee](https://github.com/TENUM-Dev/tenum/commit/1f13aee))
+* fix: package.json ([5ef5939](https://github.com/TENUM-Dev/tenum/commit/5ef5939))
+
 ## <small>1.0.9 (2025-12-10)</small>
 
 * Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([cc675e0](https://github.com/TENUM-Dev/tenum/commit/cc675e0))
