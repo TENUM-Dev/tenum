@@ -1,3 +1,15 @@
+## <small>1.0.4 (2025-12-10)</small>
+
+* fix: Add release branch workflow and update release PR workflow ([bda0316](https://github.com/TENUM-Dev/tenum/commit/bda0316))
+* fix: Update CI workflows for manual dispatch and release triggers ([a84b123](https://github.com/TENUM-Dev/tenum/commit/a84b123))
+* Set release branch environment variables in workflow ([b2eba61](https://github.com/TENUM-Dev/tenum/commit/b2eba61))
+* Fix: Refactor release branch creation in workflow ([d3c40ff](https://github.com/TENUM-Dev/tenum/commit/d3c40ff))
+* Fix: Remove redundant git fetch and branch steps ([4462d77](https://github.com/TENUM-Dev/tenum/commit/4462d77))
+* Fix: Swap bot and secrets tokens in release workflow ([71e770e](https://github.com/TENUM-Dev/tenum/commit/71e770e))
+* Update release workflow to use 'release' branch ([d0104b1](https://github.com/TENUM-Dev/tenum/commit/d0104b1))
+* Update release workflow to use BOT_TOKEN and auto-commit ([db16e0d](https://github.com/TENUM-Dev/tenum/commit/db16e0d))
+* Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([e2e6190](https://github.com/TENUM-Dev/tenum/commit/e2e6190))
+
 ## <small>1.0.3 (2025-12-10)</small>
 
 * Merge branch 'dev' of https://github.com/TENUM-Dev/tenum into dev ([1aca505](https://github.com/TENUM-Dev/tenum/commit/1aca505))
