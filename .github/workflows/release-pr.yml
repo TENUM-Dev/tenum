@@ -104,7 +104,8 @@ jobs:
         if: steps.pr.outputs.number != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          # Use GITHUB_TOKEN so approval comes from github-actions, not the PR author PAT
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
             await github.rest.pulls.createReview({
@@ -121,7 +122,8 @@ jobs:
         if: steps.pr.outputs.node_id != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          # Use GITHUB_TOKEN so auto-merge is not initiated by the PR author PAT
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prNodeId = process.env.PR_ID;
             await github.graphql(
