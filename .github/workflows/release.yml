@@ -18,7 +18,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: main
@@ -65,7 +65,7 @@ jobs:
       DEPENDABOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
@@ -104,7 +104,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.DEPENDABOT_TOKEN }}
@@ -196,7 +196,7 @@ jobs:
       DEPENDABOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ env.DEPENDABOT_TOKEN }}
