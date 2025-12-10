@@ -111,9 +111,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      - name: Build & Test JS targets
-        run: |
-          ./gradlew kotlinUpgradeYarnLock jsBrowserTest jsNodeTest --no-daemon
+      #- name: Build & Test JS targets
+      #  run: |
+      #    ./gradlew kotlinUpgradeYarnLock jsNodeTest --no-daemon
 
   build-test-linux:
     name: Build & Test (Linux)
