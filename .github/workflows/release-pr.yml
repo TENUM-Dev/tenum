@@ -122,8 +122,8 @@ jobs:
         if: steps.pr.outputs.node_id != ''
         uses: actions/github-script@v8
         with:
-          # Use GITHUB_TOKEN so auto-merge is not initiated by the PR author PAT
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Use BOT_TOKEN so actor has push rights on the PR branch when enabling auto-merge
+          github-token: ${{ env.BOT_TOKEN }}
           script: |
             const prNodeId = process.env.PR_ID;
             await github.graphql(
