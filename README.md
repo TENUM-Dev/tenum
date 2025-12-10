@@ -177,3 +177,4 @@ Federico and Jochen, who hold several software patents, are the founders committ
 
 Made with ❤️ in Munich, Germany  
 Copyright © 2025, Plentitude AI GmbH
+
