@@ -1,0 +1,1322 @@
+package ai.tenum.lua.vm
+
+import ai.tenum.lua.compiler.model.LineEventKind
+import ai.tenum.lua.compiler.model.Proto
+import ai.tenum.lua.runtime.LuaBoolean
+import ai.tenum.lua.runtime.LuaCompiledFunction
+import ai.tenum.lua.runtime.LuaCoroutine
+import ai.tenum.lua.runtime.LuaDouble
+import ai.tenum.lua.runtime.LuaFunction
+import ai.tenum.lua.runtime.LuaLong
+import ai.tenum.lua.runtime.LuaNativeFunction
+import ai.tenum.lua.runtime.LuaNil
+import ai.tenum.lua.runtime.LuaNumber
+import ai.tenum.lua.runtime.LuaString
+import ai.tenum.lua.runtime.LuaTable
+import ai.tenum.lua.runtime.LuaValue
+import ai.tenum.lua.runtime.LuaYieldException
+import ai.tenum.lua.runtime.Upvalue
+import ai.tenum.lua.vm.callstack.CallStackManager
+import ai.tenum.lua.vm.coroutine.CoroutineStateManager
+import ai.tenum.lua.vm.debug.DebugContext
+import ai.tenum.lua.vm.debug.DebugHook
+import ai.tenum.lua.vm.debug.DebugTracer
+import ai.tenum.lua.vm.debug.HookConfig
+import ai.tenum.lua.vm.debug.HookEvent
+import ai.tenum.lua.vm.debug.HookManager
+import ai.tenum.lua.vm.errorhandling.ErrorReporter
+import ai.tenum.lua.vm.errorhandling.LuaException
+import ai.tenum.lua.vm.errorhandling.LuaRuntimeError
+import ai.tenum.lua.vm.errorhandling.LuaStackFrame
+import ai.tenum.lua.vm.errorhandling.NameHintResolver
+import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
+import ai.tenum.lua.vm.execution.ChunkExecutor
+import ai.tenum.lua.vm.execution.DispatchResult
+import ai.tenum.lua.vm.execution.ExecutionEnvironment
+import ai.tenum.lua.vm.execution.ExecutionFrame
+import ai.tenum.lua.vm.execution.ExecutionMode
+import ai.tenum.lua.vm.execution.ExecutionSnapshot
+import ai.tenum.lua.vm.execution.FunctionNameSource
+import ai.tenum.lua.vm.execution.InferredFunctionName
+import ai.tenum.lua.vm.execution.OpcodeDispatcher
+import ai.tenum.lua.vm.execution.ResultStorage
+import ai.tenum.lua.vm.execution.ResumptionState
+import ai.tenum.lua.vm.execution.StackView
+import ai.tenum.lua.vm.execution.VmCapabilities
+import ai.tenum.lua.vm.execution.opcodes.CallOpcodes
+import ai.tenum.lua.vm.library.LibraryRegistry
+import ai.tenum.lua.vm.library.LuaLibraryContext
+import ai.tenum.lua.vm.metamethods.MetamethodResolver
+import ai.tenum.lua.vm.typeops.TypeComparisons
+import ai.tenum.lua.vm.typeops.TypeConversions
+import okio.FileSystem
+import okio.fakefilesystem.FakeFileSystem
+
+/**
+ * Full implementation of the Lua VM that executes compiled bytecode
+ */
+class LuaVmImpl(
+    /**
+     * Filesystem for load/require operations. Defaults to platform-specific filesystem.
+     */
+    private val fileSystem: FileSystem = FakeFileSystem(),
+) : LuaVm,
+    VmCapabilities,
+    DebugContext {
+    // VmCapabilities implementation
+    val globals = mutableMapOf<String, LuaValue<*>>()
+
+    /**
+     * Lua registry table - pre-defined table where C code can store Lua values.
+     * Used for storing internal state like hook tables.
+     */
+    private val registryTable = LuaTable()
+
+    override val debug: (String) -> Unit
+        get() = { msg -> debug { msg } }
+    override val trace: (Int, LuaValue<*>, String) -> Unit
+        get() = ::traceRegisterWrite
+
+    override fun getCallStack(): MutableList<CallFrame> = callStackManager.captureSnapshot().toMutableList()
+
+    override fun replaceLastCallFrame(newFrame: CallFrame) {
+        callStackManager.replaceLastFrame(newFrame)
+    }
+
+    override fun setMetamethodCallContext(metamethodName: String) {
+        // Set the pending inferred name with metamethod source
+        // Strip the __ prefix if present (e.g., __index -> index, __add -> add)
+        val cleanName = metamethodName.removePrefix("__")
+        pendingInferredName = InferredFunctionName(cleanName, FunctionNameSource.Metamethod)
+    }
+
+    override fun getMetamethod(
+        value: LuaValue<*>,
+        methodName: String,
+    ): LuaValue<*>? = metamethodResolver.getMetamethod(value, methodName)
+
+    override fun getRegisterNameHint(registerIndex: Int): String? {
+        // Access current proto and pc from execution context
+        // These are captured when executeProto runs
+        return try {
+            val frame = callStackManager.captureSnapshot().lastOrNull()
+            val proto = frame?.proto
+            if (frame != null && proto != null) {
+                nameHintResolver.getRegisterNameHint(registerIndex, proto, frame.pc)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    override fun getRegisterNameHint(
+        registerIndex: Int,
+        pc: Int,
+    ): String? =
+        try {
+            val frame = callStackManager.captureSnapshot().lastOrNull()
+            val proto = frame?.proto
+            if (proto != null) {
+                nameHintResolver.getRegisterNameHint(registerIndex, proto, pc)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+    override fun luaError(message: String): Nothing {
+        // Find the first non-native frame for error location
+        val currentStack = callStackManager.captureSnapshot()
+        val frame = currentStack.lastOrNull { !it.isNative }
+        if (frame != null) {
+            errorReporter.luaError(message, frame.proto, frame.pc, currentStack)
+        } else {
+            throw LuaException(message)
+        }
+    }
+
+    override fun error(
+        message: String,
+        pc: Int,
+    ): Nothing {
+        // If executing in a coroutine, save the call stack for debug.traceback()
+        // Do this BEFORE throwing the exception so the stack is captured
+        val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
+        if (currentCoroutine is LuaCoroutine.LuaFunctionCoroutine) {
+            val callStackBase = currentCoroutine.thread.callStackBase
+            val fullStack = callStackManager.captureSnapshot()
+            val coroutineCallStack = fullStack.drop(callStackBase)
+            currentCoroutine.thread.savedCallStack = coroutineCallStack
+        }
+
+        // Find the first non-native frame for error location
+        val currentStack = callStackManager.captureSnapshot()
+        val frame = currentStack.lastOrNull { !it.isNative }
+        if (frame != null) {
+            errorReporter.luaError(message, frame.proto, pc, currentStack)
+        } else {
+            throw LuaException(message)
+        }
+    }
+
+    /**
+     * Library registry for standard library modules
+     */
+    private val libraryRegistry: LibraryRegistry by lazy {
+        LibraryRegistry.createDefault(debugTracer)
+    }
+
+    /**
+     * Loaded modules cache for require()
+     */
+    private val loadedModules = mutableMapOf<String, LuaValue<*>>()
+
+    /**
+     * Package search paths for require()
+     */
+    private val packagePath =
+        mutableListOf(
+            "./?.lua",
+            "./?/init.lua",
+        )
+
+    /**
+     * Track current _ENV upvalue for load() inheritance.
+     * Note: _ENV is NOT always at upvalue[0] - functions can have other upvalues before _ENV!
+     * We must find _ENV by name from proto.upvalueInfo, not assume a fixed position.
+     */
+    private var currentEnvUpvalue: Upvalue? = null
+
+    /**
+     * Function call context for name inference (Phase 6.4 - debug.getinfo)
+     * These track the inferred name from bytecode analysis before a CALL
+     */
+    private var pendingInferredName: InferredFunctionName? = null
+
+    /**
+     * Original call stack snapshot for hooks.
+     * When a hook is executing, this contains the call stack from where the hook was triggered,
+     * allowing debug.traceback() to show the complete stack including the triggering location.
+     */
+    private var hookSnapshot: ExecutionSnapshot? = null
+
+    /**
+     * Coroutine state manager
+     */
+    private val coroutineStateManager = CoroutineStateManager()
+
+    /**
+     * Global environment table (_ENV) - wraps the globals map
+     * Created once and reused across all chunk executions
+     */
+    private val globalsTable: LuaTable by lazy {
+        val table = LuaTable()
+        for ((key, value) in globals) {
+            table[LuaString(key)] = value
+        }
+        // Expose _VERSION for compatibility tests (Lua 5.4)
+        table[LuaString("_VERSION")] = LuaString("Lua 5.4")
+        // _G should point to the global table itself (Lua 5.1+ standard)
+        table[LuaString("_G")] = table
+        table
+    }
+
+    /**
+     * Call stack manager - handles frame lifecycle and provides snapshots for debugging.
+     * Separates call stack management from execution logic (DDD: bounded context)
+     */
+    private val callStackManager = CallStackManager()
+
+    // Debug components
+    private val debugTracer = DebugTracer()
+    private val hookManager = HookManager(getCallStack = { callStackManager.captureSnapshot() }, getRegistry = { registryTable })
+
+    // Error handling components
+    private val nameHintResolver = NameHintResolver()
+    private val stackTraceBuilder = StackTraceBuilder()
+    private val errorReporter = ErrorReporter(stackTraceBuilder)
+
+    // Metamethod components
+    private val metamethodResolver =
+        MetamethodResolver(
+            callFunction = { func, args -> callFunction(func, args) },
+        )
+
+    // Type operation components
+    private val typeConversions = TypeConversions()
+    private val typeComparisons = TypeComparisons()
+
+    // Chunk execution component
+    private val chunkExecutor by lazy {
+        ChunkExecutor(
+            executeProto = { proto, args, upvalues, function -> executeProto(proto, args, upvalues, function) },
+            globalsTable = globalsTable,
+            globals = globals,
+            debugEnabled = { debugTracer.debugEnabled },
+            debug = { messageBuilder -> debug(messageBuilder) },
+            callStackManager = callStackManager,
+        )
+    }
+
+    // Opcode dispatch component
+    private val opcodeDispatcher = OpcodeDispatcher(debugTracer)
+
+    // Expose debugEnabled for public access (used by tests)
+    var debugEnabled: Boolean
+        get() = debugTracer.debugEnabled
+        set(value) {
+            if (value) debugTracer.enableDebug() else debugTracer.disableDebug()
+        }
+
+    var debugLogger: (String) -> Unit
+        get() = debugTracer.debugLogger
+        set(value) {
+            debugTracer.debugLogger = value
+        }
+
+    fun enableTrampoline(enabled: Boolean) = debugTracer.enableTrampoline(enabled)
+
+    fun enableRegisterTrace(index: Int?) = debugTracer.enableRegisterTrace(index)
+
+    init {
+        initStandardLibrary()
+    }
+
+    // ===== DebugContext Interface Implementation =====
+
+    /**
+     * Get a view of the current call stack for stack inspection operations.
+     * All frames (including native) are included because debug.getinfo needs to return them.
+     * However, atLevel() will skip native frames when counting levels (Lua semantics).
+     *
+     * When called from within a hook, returns a combined view:
+     * - Observed frames from the snapshot taken when the hook was triggered
+     * - Current frames (hook function and any nested calls) from the live stack
+     * This prevents nested hook calls from corrupting the observed state while
+     * maintaining correct level counting.
+     */
+    override fun getStackView(): StackView {
+        // If we're in a hook, combine snapshot with current live frames
+        val snapshot = hookSnapshot
+        if (snapshot != null) {
+            // Snapshot contains the stack as it was when hook was triggered
+            // Live stack now contains: [...snapshot frames..., hook frame, ...nested calls...]
+            // We need to combine: snapshot frames + frames added since snapshot
+
+            val snapshotSize = snapshot.frames.size
+            val currentStack = callStackManager.captureSnapshot()
+
+            // Get frames that were added after the snapshot (hook and nested calls)
+            val newFrames =
+                if (currentStack.size > snapshotSize) {
+                    currentStack.subList(snapshotSize, currentStack.size)
+                } else {
+                    emptyList()
+                }
+
+            // Combine: snapshot (old state) + new frames (hook and its callees)
+            val combinedFrames = snapshot.frames + newFrames
+            return StackView(combinedFrames)
+        }
+
+        // Call stack is stored oldest-first internally
+        // Include all frames: atLevel() handles native frame skipping
+        return StackView(callStackManager.captureSnapshot())
+    }
+
+    /**
+     * Execute a hook function with proper context preservation.
+     */
+    override fun executeHook(
+        hookFunc: LuaFunction,
+        event: HookEvent,
+        line: Int,
+        observedStack: List<CallFrame>,
+    ) {
+        // Capture the execution state as an immutable snapshot
+        val snapshot = ExecutionSnapshot.capture(observedStack)
+        hookSnapshot = snapshot
+
+        // Set the pending inferred name for the hook call
+        pendingInferredName = snapshot.inferredName
+
+        // Call the hook function with event name and line number
+        val eventName =
+            when (event) {
+                HookEvent.CALL -> "call"
+                HookEvent.RETURN -> "return"
+                HookEvent.LINE -> "line"
+                HookEvent.COUNT -> "count"
+                HookEvent.TAILCALL -> "tail call" // Lua 5.4 event name
+            }
+
+        // For LINE events, pass the line number; for other events, pass nil
+        // This matches Lua 5.4 behavior where call/return events don't have meaningful line numbers
+        val lineArg = if (event == HookEvent.LINE) LuaNumber.of(line) else LuaNil
+
+        try {
+            hookFunc.call(listOf(LuaString(eventName), lineArg))
+        } catch (e: Exception) {
+            // Hook errors shouldn't crash execution
+        } finally {
+            // Clear the hook context
+            pendingInferredName = null
+            hookSnapshot = null
+        }
+    }
+
+    /**
+     * Set debug hook (Phase 6.4)
+     */
+    override fun setHook(
+        hook: DebugHook?,
+        mask: String,
+        count: Int,
+    ) = hookManager.setHook(hook, mask, count)
+
+    /**
+     * Get current hook configuration (Phase 6.4)
+     */
+    override fun getHook(): HookConfig = hookManager.getHook()
+
+    /**
+     * Get registry table (Phase 6.4)
+     */
+    override fun getRegistry(): LuaTable = registryTable
+
+    /**
+     * Get the current execution snapshot if in a hook, null otherwise.
+     */
+    override fun getHookSnapshot(): ExecutionSnapshot? = hookSnapshot
+
+    // ===== Backward Compatibility Methods (Deprecated Internally) =====
+
+    /**
+     * Set pending inferred function name for next call (used by hook invocation)
+     * @deprecated Hook execution now uses ExecutionSnapshot
+     */
+    override fun setPendingInferredName(name: InferredFunctionName?) {
+        pendingInferredName = name
+    }
+
+    /**
+     * Set the hook call stack snapshot.
+     * @deprecated Hook execution now uses ExecutionSnapshot via executeHook()
+     */
+    fun setHookCallStack(callStack: List<CallFrame>?) {
+        // For backward compatibility, convert to/from ExecutionSnapshot
+        if (callStack != null) {
+            hookSnapshot = ExecutionSnapshot.capture(callStack)
+        } else {
+            hookSnapshot = null
+        }
+    }
+
+    /**
+     * Get the hook call stack snapshot if available, otherwise return the current call stack.
+     * @deprecated Use getStackView() or getHookSnapshot() instead
+     */
+    fun getCallStackForTraceback(): List<CallFrame> {
+        val snapshot = hookSnapshot
+        val currentStack = getCallStack()
+
+        return if (snapshot != null && currentStack.isNotEmpty()) {
+            // We're in a hook - combine the stacks
+            // currentStack[0] is the hook function (most recent)
+            // snapshot.frames is the saved stack (oldest-first): [oldest, ..., most recent]
+            // Result should be most-recent-first: [hook, main chunk, ...]
+            listOf(currentStack[0]) + snapshot.frames.asReversed()
+        } else {
+            currentStack
+        }
+    }
+
+    /**
+     * Set debug hook (legacy overload)
+     * @deprecated Use setHook(hook, mask, count) with all parameters
+     */
+    fun setHook(
+        hook: DebugHook?,
+        mask: String,
+    ) = hookManager.setHook(hook, mask, 0)
+
+    // ===== End Backward Compatibility =====
+
+    /**
+     * Call debug hook if configured, preventing recursion (Phase 6.4)
+     */
+    private inline fun triggerHook(
+        event: HookEvent,
+        line: Int,
+    ) = hookManager.triggerHook(event, line)
+
+    /**
+     * Enable debug logging with optional custom logger
+     */
+    fun enableDebug(logger: (String) -> Unit = { message -> println("[LuaVM] $message") }) = debugTracer.enableDebug(logger)
+
+    /**
+     * Disable debug logging
+     */
+    fun disableDebug() = debugTracer.disableDebug()
+
+    /**
+     * Internal debug logging helper - inline for zero overhead when disabled.
+     * The lambda is only evaluated if debug is enabled.
+     */
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun debug(messageBuilder: () -> String) = debugTracer.debug(messageBuilder)
+
+    // Helper to emit register write traces when traceRegisterIndex is set
+    private fun traceRegisterWrite(
+        regIndex: Int,
+        value: LuaValue<*>,
+        ctx: String,
+    ) = debugTracer.traceRegisterWrite(regIndex, value, ctx)
+
+    override fun execute(
+        chunk: String,
+        source: String,
+    ): LuaValue<*> = chunkExecutor.execute(chunk, source)
+
+    /**
+     * Close to-be-closed variables during unwinding with proper error handling.
+     * Called from exception handlers to ensure __close metamethods are invoked.
+     *
+     * @param toBeClosedVars List of (register, value) pairs to close
+     * @param alreadyClosedRegs Set of registers already closed
+     * @param errorValue The error value to pass to __close metamethods (nil or error message)
+     */
+    private fun closeToBeClosedVars(
+        toBeClosedVars: List<Pair<Int, LuaValue<*>>>,
+        alreadyClosedRegs: Set<Int>,
+        errorValue: LuaValue<*>,
+    ) {
+        for ((reg, capturedValue) in toBeClosedVars.reversed()) {
+            if (reg in alreadyClosedRegs) continue
+            if (capturedValue !is LuaNil && capturedValue != LuaBoolean.FALSE) {
+                val metatable = capturedValue.metatable as? LuaTable
+                val closeMethod = metatable?.get(LuaString("__close"))
+                if (closeMethod is LuaFunction) {
+                    try {
+                        callFunction(closeMethod, listOf(capturedValue, errorValue))
+                    } catch (closeEx: Exception) {
+                        // Suppress errors in __close during unwinding
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Execute a compiled proto
+     */
+    private fun executeProto(
+        proto: Proto,
+        args: List<LuaValue<*>>,
+        upvalues: List<Upvalue> = emptyList(),
+        function: LuaFunction? = null,
+        mode: ExecutionMode = ExecutionMode.FreshCall,
+    ): List<LuaValue<*>> {
+        // Handle execution mode - fresh call vs resume continuation
+        val initialCallStackSize =
+            when (mode) {
+                is ExecutionMode.FreshCall -> {
+                    // Fresh call: will add new frame below
+                    callStackManager.size
+                }
+                is ExecutionMode.ResumeContinuation -> {
+                    // Resume: restore debug frames WITHOUT duplicating current execution frame
+                    // Filter out coroutine.yield frame - it's a temporary suspension point
+                    val framesToRestore =
+                        mode.state.debugCallStack.filter { frame ->
+                            // Keep all non-native frames
+                            // For native frames, filter out coroutine.yield
+                            !frame.isNative || (frame.function as? ai.tenum.lua.runtime.LuaNativeFunction)?.name != "coroutine.yield"
+                        }
+                    callStackManager.resumeWithDebugFrames(framesToRestore)
+                }
+            }
+
+        // Create execution frame with state from mode
+        val resumptionState = (mode as? ExecutionMode.ResumeContinuation)?.state
+        var currentProto = resumptionState?.proto ?: proto
+        var execFrame =
+            ExecutionFrame(
+                proto = currentProto,
+                initialArgs = args,
+                upvalues = resumptionState?.upvalues ?: upvalues,
+                initialPc = resumptionState?.pc ?: 0,
+                existingRegisters = resumptionState?.registers,
+                existingVarargs = resumptionState?.varargs,
+            )
+
+        // Local aliases for frequently accessed frame state
+        var registers = execFrame.registers
+        var constants = execFrame.constants
+        var instructions = execFrame.instructions
+        var pc = execFrame.pc
+        val openUpvalues = execFrame.openUpvalues
+        val toBeClosedVars = execFrame.toBeClosedVars
+        var varargs = execFrame.varargs
+        val alreadyClosedRegs = mutableSetOf<Int>() // Track which have been closed in normal flow
+        // Create execution environment for opcode handlers
+        var env = ExecutionEnvironment(execFrame, globals, this)
+
+        // Handle coroutine resumption - place resume args as yield return values
+        if (mode is ExecutionMode.ResumeContinuation) {
+            val storage = ResultStorage(env)
+            storage.storeResults(
+                targetReg = mode.state.yieldTargetRegister,
+                encodedCount = mode.state.yieldExpectedResults,
+                results = args,
+                opcodeName = "RESUME",
+            )
+        }
+
+        // Create call frame for debugging/error handling (Phase 6.4 + 7.1)
+        // For FRESH calls: add frame to stack
+        // For RESUME: frame already exists in restored debug frames, DON'T duplicate
+        if (mode is ExecutionMode.FreshCall) {
+            callStackManager.beginFunctionCall(
+                proto = currentProto,
+                function = function,
+                registers = registers,
+                varargs = varargs,
+                args = args,
+                inferredName = pendingInferredName,
+                pc = pc,
+            )
+        }
+
+        // Clear call context after using it
+        pendingInferredName = null
+
+        // Trigger CALL hook (Phase 6.4)
+        triggerHook(HookEvent.CALL, currentProto.lineDefined)
+
+        // Trigger LINE hook for function definition line (Lua 5.4 semantics)
+        // For regular function calls: LINE hook fires at lineDefined when entering function
+        // For coroutines: LINE hook does NOT fire at lineDefined on entry/resume
+        // This is verified by: db.lua:134 (regular function) vs db.lua:786 (coroutine)
+        //
+        // Detection: Check if we're in a coroutine context (currentCoroutine != null)
+        // - Regular functions: currentCoroutine is null → fire LINE hook at lineDefined
+        // - Coroutines: currentCoroutine is set → skip LINE hook at lineDefined
+        val isCoroutineContext = coroutineStateManager.getCurrentCoroutine() != null
+        if (currentProto.lineDefined > 0 && !isCoroutineContext) {
+            triggerHook(HookEvent.LINE, currentProto.lineDefined)
+        }
+
+        // Track current upvalues for this execution context and _ENV
+        var currentUpvalues = upvalues
+        val previousEnv = currentEnvUpvalue
+        // Find _ENV by name, not position (_ENV is not always at index 0!)
+        val envIndex = currentProto.upvalueInfo.indexOfFirst { it.name == "_ENV" }
+        currentEnvUpvalue = if (envIndex >= 0) currentUpvalues.getOrNull(envIndex) else null
+
+        try {
+            debug { "--- Starting execution ---" }
+            debug { "Max stack size: ${currentProto.maxStackSize}" }
+            debug { "Varargs: ${varargs.size} values" }
+
+            var lastLine = -1 // Track line changes for LINE hooks
+
+            whileLoop@ while (pc < instructions.size) {
+                // Update current frame PC
+                callStackManager.updateLastFramePc(pc)
+
+                // Trigger LINE hooks for ALL LineEvents at current PC (BEFORE executing instruction)
+                // Domain concept: Multiple LineEvents can exist at same PC (e.g., CONTROL_FLOW + EXECUTION)
+                // This allows hooks to fire for control flow keywords like 'then' that don't have dedicated instructions
+                // ITERATION events bypass lastLine deduplication to fire on every loop iteration
+                val currentEvents = currentProto.lineEvents.filter { it.pc == pc }
+                for (event in currentEvents) {
+                    if (event.kind == LineEventKind.ITERATION || event.line != lastLine) {
+                        lastLine = event.line
+                        triggerHook(HookEvent.LINE, event.line)
+                    }
+                }
+
+                val instr = instructions[pc]
+
+                if (debugEnabled) {
+                    debug { "PC=$pc: ${instr.opcode} a=${instr.a} b=${instr.b} c=${instr.c}" }
+                }
+
+                // Get current frame for dispatch
+                val currentFrame = callStackManager.lastFrame()!!
+
+                // Dispatch opcode to handler
+                when (
+                    val dispatchResult =
+                        opcodeDispatcher.dispatch(
+                            instr = instr,
+                            env = env,
+                            registers = registers,
+                            execFrame = execFrame,
+                            openUpvalues = openUpvalues,
+                            varargs = varargs,
+                            pc = pc,
+                            frame = currentFrame,
+                            executeProto = { proto, args, upvalues, func -> executeProto(proto, args, upvalues, func) },
+                            callFunction = { func, args -> callFunction(func, args) },
+                            traceRegisterWrite = { regIndex, value, ctx -> traceRegisterWrite(regIndex, value, ctx) },
+                            triggerHook = { event, line -> triggerHook(event, line) },
+                            setCallContext = { inferred ->
+                                pendingInferredName = inferred
+                            },
+                        )
+                ) {
+                    is DispatchResult.Continue -> {
+                        // Normal execution continues
+                    }
+                    is DispatchResult.SkipNext -> {
+                        pc++ // Skip next instruction (LOADBOOL with skip)
+                    }
+                    is DispatchResult.Jump -> {
+                        // Loop opcodes return PC-1 (expecting pc++ at end of loop to reach target)
+                        pc = dispatchResult.newPc
+                    }
+                    is DispatchResult.Return -> {
+                        debug { "[REGISTERS after RETURN] ${registers.slice(0..10).mapIndexed { i, v -> "R[$i]=$v" }.joinToString(", ")}" }
+                        return dispatchResult.values
+                    }
+                    is DispatchResult.TailCallTrampoline -> {
+                        // Perform in-place trampoline: replace current execution context
+                        val funcVal = dispatchResult.newProto
+                        val args = dispatchResult.newArgs
+                        val calleeUpvalues = dispatchResult.newUpvalues
+
+                        debug { "  TCO: Before trampoline, registers.hashCode=${registers.hashCode()}" }
+
+                        // Log closure identity and upvalue wiring for diagnosis
+                        if (debugEnabled) {
+                            val cid = funcVal.hashCode()
+                            debug { "  TCO: trampoline into closure id=$cid" }
+                            calleeUpvalues.forEachIndexed { i, uv ->
+                                try {
+                                    val regsHash = uv.registers?.hashCode() ?: 0
+                                    val regIdx =
+                                        try {
+                                            uv.registerIndex
+                                        } catch (_: Exception) {
+                                            -1
+                                        }
+                                    debug { "    upval[$i] regIdx=$regIdx regsHash=$regsHash closed=${uv.isClosed}" }
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
+
+                        // Replace current execution context with callee's proto
+                        currentProto = funcVal
+                        constants = currentProto.constants
+                        instructions = currentProto.instructions
+
+                        // Reset program counter
+                        pc = -1 // Will be incremented to 0 at end of loop
+
+                        // Clear previous frame resources: open upvalues and to-be-closed lists
+                        // IMPORTANT: Close all open upvalues BEFORE clearing registers!
+                        for ((regIdx, upvalue) in openUpvalues) {
+                            if (!upvalue.isClosed) {
+                                debug { "  TCO: Closing upvalue at R[$regIdx] before trampoline" }
+                                upvalue.close()
+                            }
+                        }
+                        openUpvalues.clear()
+                        toBeClosedVars.clear()
+                        alreadyClosedRegs.clear()
+
+                        // TCO: Move arguments from `args` to the beginning of the current register set.
+                        val calleeNumParams = funcVal.parameters.size
+                        debug { "  TCO: About to fill registers with nil, registers.hashCode=${registers.hashCode()}" }
+                        registers.fill(LuaNil)
+                        debug { "  TCO: After fill, registers[0]=${registers[0]}, registers.hashCode=${registers.hashCode()}" }
+
+                        for (i in 0 until calleeNumParams) {
+                            registers[i] = args.getOrElse(i) { LuaNil }
+                        }
+
+                        // Recalculate varargs for the new frame
+                        varargs =
+                            if (currentProto.hasVararg && args.size > calleeNumParams) {
+                                args.subList(calleeNumParams, args.size)
+                            } else {
+                                emptyList()
+                            }
+
+                        // Reset top for varargs tracking (will be set by VARARG if needed)
+                        execFrame.top = 0
+
+                        // Switch current upvalues to callee's upvalues
+                        currentUpvalues = calleeUpvalues
+
+                        // Create NEW execution frame for the tail-called function
+                        // Made mutable (var) to allow reassignment during tail call optimization (TCO)
+                        execFrame =
+                            ExecutionFrame(
+                                proto = currentProto,
+                                initialArgs = args,
+                                upvalues = calleeUpvalues,
+                                initialPc = 0,
+                                existingRegisters = registers,
+                                existingVarargs = varargs,
+                            )
+
+                        // Recreate execution environment with the new frame
+                        // Made mutable (var) to allow recreation during tail call optimization (TCO)
+                        env = ExecutionEnvironment(execFrame, globals, this)
+
+                        // Get function object for frame (use saved reference since register may be overwritten)
+                        val luaFunc = dispatchResult.savedFunc
+
+                        // TAIL CALL: Remove the caller's frame before adding the tail-called frame
+                        // This implements proper Lua tail call semantics where the caller is replaced
+                        callStackManager.removeLastFrame()
+
+                        // Push new call frame (preserves call stack for debug.getinfo)
+                        // The trampoline still avoids JVM stack growth by continuing in this loop
+                        val tailFrame =
+                            CallFrame(
+                                function = luaFunc,
+                                proto = currentProto,
+                                pc = pc,
+                                base = 0,
+                                registers = registers,
+                                isNative = false,
+                                isTailCall = true, // Mark as tail call for debug library
+                                inferredFunctionName = pendingInferredName,
+                                varargs = varargs,
+                                ftransfer = if (args.isEmpty()) 0 else 1, // Lua 5.4: 0 if no parameters, else 1
+                                ntransfer = args.size, // Lua 5.4: number of parameters
+                            )
+                        callStackManager.addFrame(tailFrame)
+
+                        // Clear call context after using it
+                        pendingInferredName = null
+
+                        // Trigger TAILCALL hook for tail calls (Lua 5.4 semantics)
+                        // Tail calls trigger "tail call" event, not "call" event
+                        triggerHook(HookEvent.TAILCALL, currentProto.lineDefined)
+
+                        // Continue executing the callee in this loop (tail-call optimized)
+                        // pc will be incremented to 0 at end of loop
+                    }
+                }
+                pc++
+
+                // Trigger COUNT hook
+                val currentLineForHook = callStackManager.lastFrame()?.getCurrentLine() ?: -1
+                hookManager.checkCountHook(currentLineForHook)
+            }
+
+            // If we reach here without a return, return no values
+            return emptyList()
+        } catch (e: LuaYieldException) {
+            // Coroutine yielded - save execution state for resumption
+
+            // Only save state once (on the first/innermost catch)
+            if (!e.stateSaved) {
+                // The yield was triggered by a CALL instruction, so instructions[pc] has the target register and result count
+                val yieldInstr = if (pc < instructions.size) instructions[pc] else null
+                val yieldTargetReg = yieldInstr?.a ?: 0
+                val yieldExpectedResults = yieldInstr?.c ?: 0
+
+                // Filter call stack to only include coroutine's frames (not main thread frames)
+                // Save coroutine state for resume
+                val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
+                val callStackBase = (currentCoroutine as? LuaCoroutine.LuaFunctionCoroutine)?.thread?.callStackBase ?: 0
+                val coroutineCallStack = callStackManager.captureSnapshotFrom(callStackBase)
+
+                coroutineStateManager.saveCoroutineState(
+                    currentCoroutine,
+                    currentProto,
+                    pc,
+                    registers,
+                    execFrame.upvalues,
+                    varargs,
+                    e.yieldedValues,
+                    yieldTargetReg,
+                    yieldExpectedResults,
+                    coroutineCallStack, // Save only coroutine's call stack (without main thread frames)
+                )
+                e.stateSaved = true // Mark that state has been saved
+            }
+            throw e // Re-throw to be caught by coroutineResume
+        } catch (e: LuaRuntimeError) {
+            // If executing in a coroutine, save the call stack for debug.traceback()
+            val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
+            if (currentCoroutine is LuaCoroutine.LuaFunctionCoroutine) {
+                // Save the error stack so debug.traceback() can access it after coroutine dies
+                val callStackBase = currentCoroutine.thread.callStackBase
+
+                // Filter out yield frames from saved call stack for error tracebacks
+                // Yield frames are temporary suspension points and shouldn't appear in error tracebacks
+                // However, keep the 'error' function frame as Lua 5.4 includes it
+                val coroutineCallStack =
+                    e.callStack.drop(callStackBase).filter { frame ->
+                        // Keep all non-native frames
+                        // For native frames, only filter out coroutine.yield (keep error, etc.)
+                        !frame.isNative || (frame.function as? LuaNativeFunction)?.name != "coroutine.yield"
+                    }
+                currentCoroutine.thread.savedCallStack = coroutineCallStack
+            }
+
+            // When level=0 or errorValue is nil, return raw message with no location info
+            if (e.level == 0 || e.errorValue is LuaNil) {
+                throw LuaException(
+                    errorMessageOnly = e.message ?: "",
+                    line = null, // No line info for level=0
+                    source = null, // No source info for level=0
+                    luaStackTrace = emptyList(), // No stack trace for level=0
+                    errorValueOverride = e.errorValue, // Preserve original error value (especially for nil)
+                )
+            }
+
+            // Determine which stack frame to report based on error level
+            // level=1 means error location (where error() was called)
+            // level=2 means caller of the function that called error()
+            // level=3 means caller's caller, etc.
+            // Skip native frames when determining the error location
+            val reversedStack = e.callStack.asReversed()
+            val nonNativeFrames = reversedStack.filter { !it.isNative }
+            val targetFrameIndex = e.level - 1
+
+            val (errorLine, errorSource) =
+                if (targetFrameIndex >= 0 && targetFrameIndex < nonNativeFrames.size) {
+                    val targetFrame = nonNativeFrames[targetFrameIndex]
+                    Pair(targetFrame.getCurrentLine(), targetFrame.proto?.source ?: "?")
+                } else {
+                    // If level is beyond stack depth, use current location
+                    Pair(stackTraceBuilder.getCurrentLine(currentProto, pc), currentProto.source)
+                }
+
+            // Convert LuaRuntimeError to LuaException (LuaRuntimeError already has stack trace)
+            val errorMsg = e.message ?: "runtime error"
+
+            // Build the stack trace (using nonNativeFrames to exclude native functions)
+            val stackTrace =
+                nonNativeFrames.map { frame ->
+                    LuaStackFrame(
+                        functionName = frame.proto?.name?.takeIf { it.isNotEmpty() },
+                        source = frame.proto?.source ?: "?",
+                        line = frame.getCurrentLine(),
+                    )
+                }
+
+            // For non-string errors (tables, nil, etc.), pass errorValueOverride to preserve the original value
+            // For string errors, let LuaException create formatted errorValue automatically
+            val luaEx =
+                if (e.errorValue is ai.tenum.lua.runtime.LuaString) {
+                    LuaException(
+                        errorMessageOnly = errorMsg,
+                        line = errorLine,
+                        source = errorSource,
+                        luaStackTrace = stackTrace,
+                    )
+                } else {
+                    LuaException(
+                        errorMessageOnly = errorMsg,
+                        line = errorLine,
+                        source = errorSource,
+                        luaStackTrace = stackTrace,
+                        errorValueOverride = e.errorValue,
+                    )
+                }
+
+            // When an assertion fails during compat testing, dump nearby proto info to help debugging
+            try {
+                val msg = luaEx.message ?: ""
+                if (msg.contains("assertion failed") || debugEnabled) {
+                    val proto = currentProto
+                    val start = maxOf(0, pc - 8)
+                    val end = minOf(proto.instructions.size - 1, pc + 8)
+                    println("--- Proto dump for ${proto.name} source=${proto.source} pc=$pc ---")
+                    for (i in start..end) {
+                        val ins = proto.instructions[i]
+                        println(
+                            "  PC=$i: ${ins.opcode} a=${ins.a} b=${ins.b} c=${ins.c}  # line=${stackTraceBuilder.getCurrentLine(proto, i)}",
+                        )
+                    }
+                    println("--- Constants (${proto.constants.size}) ---")
+                    for ((ci, c) in proto.constants.withIndex()) {
+                        if (ci in (0..199)) println("  K[$ci] = $c")
+                    }
+                    println("--- LineInfo entries (${proto.lineInfo.size}) ---")
+                    for (li in proto.lineInfo) println("  PC=${li.pc} -> line=${li.line}")
+                    println("--- End proto dump ---")
+                }
+            } catch (_: Exception) {
+            }
+
+            // Close to-be-closed variables
+            val errorValue = if (luaEx.message != null) LuaString(luaEx.message!!) else LuaNil
+            closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, errorValue)
+            throw luaEx
+        } catch (e: LuaException) {
+            // Already a LuaException - close to-be-closed vars and re-throw
+            val errorValue = if (e.message != null) LuaString(e.message!!) else LuaNil
+            closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, errorValue)
+            throw e
+        } catch (e: Exception) {
+            // Convert RuntimeException to LuaException, optionally with enhanced diagnostic info
+            val extraInfo =
+                if (debugEnabled) {
+                    try {
+                        val instr = if (pc in instructions.indices) instructions[pc] else null
+                        "pc=$pc, instr=${instr?.opcode ?: "?"} a=${instr?.a ?: -1} b=${instr?.b ?: -1} c=${instr?.c ?: -1}, registers=${registers.size}, constants=${constants.size}, instructions=${instructions.size}"
+                    } catch (inner: Exception) {
+                        "pc=$pc, registers=${registers.size}, constants=${constants.size}, instructions=${instructions.size}"
+                    }
+                } else {
+                    null
+                }
+
+            val composedMessage =
+                when (e) {
+                    is RuntimeException -> {
+                        val base = e.message ?: "runtime error"
+                        if (extraInfo != null) "$base ($extraInfo)" else base
+                    }
+                    else -> {
+                        if (extraInfo != null) {
+                            "${e::class.simpleName}: ${e.message} ($extraInfo)"
+                        } else {
+                            "${e::class.simpleName}: ${e.message}"
+                        }
+                    }
+                }
+
+            val luaEx =
+                if (e is RuntimeException) {
+                    LuaException(
+                        errorMessageOnly = composedMessage,
+                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
+                        source = currentProto.source,
+                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                    )
+                } else {
+                    // Wrap non-runtime exceptions as LuaException to preserve context
+                    LuaException(
+                        errorMessageOnly = composedMessage,
+                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
+                        source = currentProto.source,
+                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                    )
+                }
+
+            // On error, close all to-be-closed variables in reverse order
+            val errorValue = if (luaEx.message != null) LuaString(luaEx.message!!) else LuaNil
+            closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, errorValue)
+            // Re-throw the exception after cleanup
+            throw luaEx
+        } catch (e: Error) {
+            // Convert platform errors to Lua errors with proper stack trace
+            val errorType = e::class.simpleName ?: "Error"
+
+            when {
+                errorType.contains("StackOverflow") -> {
+                    // Convert platform stack overflow to Lua "C stack overflow" error
+                    // This catches StackOverflowError on JVM and similar errors on other platforms
+                    // This matches Lua 5.4 behavior and lets the platform determine the actual limit
+                    throw LuaException(
+                        errorMessageOnly = "C stack overflow",
+                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
+                        source = currentProto.source,
+                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                    )
+                }
+                errorType.contains("OutOfMemory") -> {
+                    // Convert out of memory errors to Lua error with stack trace
+                    // This helps identify where in Lua code the OOM occurred
+                    throw LuaException(
+                        errorMessageOnly = "not enough memory",
+                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
+                        source = currentProto.source,
+                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                    )
+                }
+                else -> throw e
+            }
+        } finally {
+            // Remove all frames added during this execution (including tail-called frames)
+            // This cleans up the call stack after trampolined tail calls
+            callStackManager.cleanupFrames(initialCallStackSize)
+
+            // Restore previous _ENV upvalue
+            currentEnvUpvalue = previousEnv
+        }
+    }
+
+    override fun callFunction(
+        func: LuaValue<*>,
+        args: List<LuaValue<*>>,
+    ): List<LuaValue<*>> =
+        when (func) {
+            is LuaFunction -> {
+                // Call through private callFunction to ensure hooks are triggered
+                callFunctionInternal(func, args)
+            }
+            else -> {
+                // Check for __call metamethod in the value's metatable
+                val callMeta = metamethodResolver.getMetamethod(func, "__call")
+                if (callMeta != null) {
+                    setMetamethodCallContext("__call")
+                    // Recursively call through callFunction to support chained __call metamethods
+                    callFunction(callMeta, listOf(func) + args)
+                } else {
+                    throw RuntimeException("attempt to call a ${func.type().name.lowercase()} value")
+                }
+            }
+        }
+
+    /**
+     * Convert a LuaNumber to a Double value.
+     * Helper to eliminate duplication in arithmetic operations.
+     */
+    private fun LuaNumber.toDoubleValue(): Double = if (this is LuaLong) this.value.toDouble() else (this as LuaDouble).value
+
+    private fun binaryOp(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+        op: (Double, Double) -> Double,
+    ): LuaValue<*> =
+        when {
+            left is LuaLong && right is LuaLong -> {
+                val result = op(left.value.toDouble(), right.value.toDouble())
+                if (result == result.toLong().toDouble()) LuaLong(result.toLong()) else LuaDouble(result)
+            }
+            left is LuaNumber && right is LuaNumber -> {
+                val leftVal = left.toDoubleValue()
+                val rightVal = right.toDoubleValue()
+                LuaDouble(op(leftVal, rightVal))
+            }
+            else -> {
+                val leftType = left.type().name.lowercase()
+                val rightType = right.type().name.lowercase()
+                throw RuntimeException("attempt to perform arithmetic on a $leftType value")
+            }
+        }
+
+    private fun bitwiseOp(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+        op: (Long, Long) -> Long,
+    ): LuaValue<*> {
+        val leftVal =
+            when (left) {
+                is LuaLong -> left.value
+                is LuaDouble -> left.value.toLong()
+                else -> return LuaNil
+            }
+        val rightVal =
+            when (right) {
+                is LuaLong -> right.value
+                is LuaDouble -> right.value.toLong()
+                else -> return LuaNil
+            }
+        return LuaLong(op(leftVal, rightVal))
+    }
+
+    private fun divOp(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+    ): LuaValue<*> {
+        // Division (/) always returns float in Lua 5.4
+        return when {
+            left is LuaNumber && right is LuaNumber -> {
+                val leftVal = left.toDoubleValue()
+                val rightVal = right.toDoubleValue()
+                LuaDouble(leftVal / rightVal)
+            }
+            else -> LuaNil
+        }
+    }
+
+    private fun floorDiv(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+    ): LuaValue<*> =
+        when {
+            left is LuaLong && right is LuaLong -> {
+                // Integer // Integer -> Integer (Lua 5.4 semantics)
+                // Use integer division directly to avoid precision loss
+                val a = left.value
+                val b = right.value
+                // Lua floor division: floor(a/b)
+                // For integers, this is: a // b with floor semantics (toward negative infinity)
+                val q = a / b // Kotlin integer division truncates toward zero
+                val r = a % b
+                // Adjust if remainder is non-zero and signs differ
+                val result = if (r != 0L && (a xor b) < 0) q - 1 else q
+                LuaNumber.of(result)
+            }
+            left is LuaNumber && right is LuaNumber -> {
+                // At least one operand is float -> Float result
+                val leftVal = left.toDoubleValue()
+                val rightVal = right.toDoubleValue()
+                val result = kotlin.math.floor(leftVal / rightVal)
+                LuaDouble(result)
+            }
+            else -> LuaNil
+        }
+
+    override fun isTruthy(value: LuaValue<*>): Boolean = typeConversions.isTruthy(value)
+
+    override fun luaEquals(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+    ): Boolean = typeComparisons.luaEquals(left, right)
+
+    override fun luaLessThan(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+    ): Boolean? = typeComparisons.luaLessThan(left, right)
+
+    override fun luaLessOrEqual(
+        left: LuaValue<*>,
+        right: LuaValue<*>,
+    ): Boolean? = typeComparisons.luaLessOrEqual(left, right)
+
+    override fun toNumber(value: LuaValue<*>): Double = typeConversions.toNumber(value)
+
+    override fun toString(value: LuaValue<*>): String = typeConversions.toString(value)
+
+    private fun initStandardLibrary() {
+        // Track native call depth for yield across C boundary detection
+        var nativeCallDepth = 0
+
+        // Initialize all registered libraries with full context (including VM reference for debug library)
+        val context =
+            LuaLibraryContext(
+                registerGlobal = { name, value ->
+                    globals[name] = value
+                    loadedModules[name] = value
+                },
+                getGlobal = { name -> globals[name] },
+                getMetamethod = { value, methodName -> metamethodResolver.getMetamethod(value, methodName) },
+                callFunction = { func, args ->
+                    val isNativeCall = func is LuaNativeFunction
+                    try {
+                        if (isNativeCall) {
+                            nativeCallDepth++
+                        }
+                        callFunction(func, args)
+                    } finally {
+                        if (isNativeCall) {
+                            nativeCallDepth--
+                        }
+                    }
+                },
+                fileSystem = fileSystem,
+                executeChunk = { chunk, source -> execute(chunk, source) },
+                loadedModules = loadedModules,
+                packagePath = packagePath,
+                vm = this, // Pass VM reference for debug library (Phase 6.4)
+                executeProto = { proto, args, upvalues -> executeProto(proto, args, upvalues) }, // For load() function
+                executeProtoWithResume = { proto, args, upvalues, function, thread ->
+                    // Convert CoroutineThread to ExecutionMode.ResumeContinuation
+                    val mode =
+                        if (thread != null) {
+                            ExecutionMode.ResumeContinuation(
+                                ResumptionState(
+                                    proto = thread.proto!!,
+                                    pc = thread.pc,
+                                    registers = thread.registers!!,
+                                    upvalues = thread.upvalues,
+                                    varargs = thread.varargs,
+                                    yieldTargetRegister = thread.yieldTargetRegister,
+                                    yieldExpectedResults = thread.yieldExpectedResults,
+                                    debugCallStack = thread.savedCallStack,
+                                ),
+                            )
+                        } else {
+                            ExecutionMode.FreshCall
+                        }
+                    executeProto(proto, args, upvalues, function, mode)
+                }, // For coroutine resumption with saved state
+                getCurrentEnv = { currentEnvUpvalue }, // Provide current _ENV for load() inheritance
+                getCurrentCoroutine = { coroutineStateManager.getCurrentCoroutine() }, // Get currently executing coroutine
+                getMainThread = { coroutineStateManager.mainThread }, // Get main thread
+                setCurrentCoroutine = { coroutine -> coroutineStateManager.setCurrentCoroutine(coroutine) }, // Set current coroutine
+                getCallStack = { callStackManager.captureSnapshot() }, // Provide call stack for error reporting
+                getNativeCallDepth = { nativeCallDepth }, // Provide current native call depth
+                saveNativeCallDepth = { depth -> nativeCallDepth = depth }, // Save native call depth (for coroutine context isolation)
+                getCoroutineStateManager = { coroutineStateManager }, // Provide coroutine state manager
+            )
+        libraryRegistry.initializeAll(context)
+    }
+
+    /**
+     * Call a function with arguments (internal implementation with hook support)
+     */
+    private fun callFunctionInternal(
+        func: LuaFunction,
+        args: List<LuaValue<*>>,
+    ): List<LuaValue<*>> =
+        when (func) {
+            is LuaNativeFunction -> {
+                // Create CallFrame for native function so debug.getinfo can access it
+                // Native frames are needed for hooks but excluded from error line tracking
+                // Populate registers with function arguments so debug.getlocal can access them (db.lua:403-407)
+                val frame =
+                    CallFrame(
+                        function = func,
+                        proto = null,
+                        pc = 0,
+                        base = 0,
+                        registers = args.toMutableList(),
+                        isNative = true,
+                        inferredFunctionName = pendingInferredName,
+                        varargs = emptyList(),
+                        ftransfer = if (args.isEmpty()) 0 else 1, // Lua 5.4: 0 if no parameters, else 1
+                        ntransfer = args.size, // Lua 5.4: number of parameters
+                    )
+
+                val initialCallStackSize = callStackManager.size
+                callStackManager.addFrame(frame)
+
+                // Clear call context after using it
+                pendingInferredName = null
+
+                // Trigger CALL hook for native function
+                triggerHook(HookEvent.CALL, 0)
+
+                var isYieldException = false
+                try {
+                    val results = func.function(args)
+
+                    // Update frame transfer info for return values before triggering RETURN hook
+                    // For native functions: ftransfer = 1 + param_count (no locals in native code)
+                    val currentFrame = callStackManager.lastFrame()
+                    if (currentFrame != null) {
+                        val returnFtransfer = 1 + args.size
+                        val updatedFrame = CallOpcodes.prepareFrameWithReturnValues(currentFrame, returnFtransfer, results)
+                        callStackManager.replaceLastFrame(updatedFrame)
+                    }
+
+                    // Trigger RETURN hook for native function
+                    triggerHook(HookEvent.RETURN, 0)
+
+                    results
+                } catch (e: LuaYieldException) {
+                    // For yield exceptions, DON'T clean up the call stack in finally
+                    // The call stack needs to include the yield frame for debug.traceback
+                    isYieldException = true
+                    throw e
+                } finally {
+                    // Clean up call stack (unless it was a yield exception)
+                    if (!isYieldException) {
+                        callStackManager.cleanupFrames(initialCallStackSize)
+                    }
+                }
+            }
+            is LuaCompiledFunction -> executeProto(func.proto, args, func.upvalues, func)
+            else -> emptyList()
+        }
+}
