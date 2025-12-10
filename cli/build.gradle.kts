@@ -7,7 +7,7 @@ plugins {
     id("tenum.conventions.common")
     alias(libs.plugins.shadow)
     distribution
-    id("com.github.gmazzo.buildconfig") version "5.7.1"
+    id("com.github.gmazzo.buildconfig") version "6.0.6"
 }
 
 fun KotlinNativeTargetWithHostTests.configureTarget() =
