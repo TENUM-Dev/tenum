@@ -60,14 +60,6 @@ jobs:
           fetch-depth: 0
           token: ${{ env.BOT_TOKEN }}
 
-      - name: Fetch branches and tags
-        if: steps.diff.outputs.has_diff == 'true'
-        run: |
-          git fetch origin main dev --tags --prune
-          git checkout "$RELEASE_BRANCH"
-          git branch --track dev origin/dev 2>/dev/null || true
-          git branch --track main origin/main 2>/dev/null || true
-
       - name: semantic-release
         if: steps.diff.outputs.has_diff == 'true'
         uses: codfish/semantic-release-action@v4.0.1
