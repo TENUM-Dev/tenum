@@ -1,0 +1,99 @@
+name: Publish npm on Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.DEPENDABOT_TOKEN }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm (required for trusted publishing)
+        run: npm install -g npm@latest
+
+      - name: Install npm dependencies
+        working-directory: clinpm
+        run: npm ci
+
+      - name: Build CLI JS artifacts
+        run: ./gradlew :clinpm:installLocal --stacktrace --no-daemon
+
+      - name: Build npm package
+        working-directory: clinpm
+        run: npm run build:bundle:install
+
+      - name: Prepare npm package
+        id: prepare_package
+        working-directory: clinpm
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          NPM_CONFIG_PROVENANCE: true
+        run: |
+          set -euo pipefail
+
+          TAG="${RELEASE_TAG:-}"
+          if [ -z "$TAG" ]; then
+            echo "No release tag provided; aborting."
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PUBLISHED=$(npm view @tenum_dev/tenum version 2>/dev/null || echo "")
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "skip_publish=false" >> "$GITHUB_OUTPUT"
+
+          if [ "$VERSION" = "$PUBLISHED" ]; then
+            echo "Version $VERSION already published, skipping."
+            echo "skip_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          npm version --no-git-tag-version "$VERSION"
+          TARBALL=$(npm pack | tail -n1)
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "tarball_path=$(pwd)/$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Upload npm package to GitHub release
+        if: steps.prepare_package.outputs.skip_publish != 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ steps.prepare_package.outputs.tarball_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm
+        if: steps.prepare_package.outputs.skip_publish != 'true'
+        working-directory: clinpm
+        env:
+          NPM_CONFIG_PROVENANCE: true
+        run: npm publish --provenance --access public

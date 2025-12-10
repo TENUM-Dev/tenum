@@ -1,3 +1,27 @@
+## <small>1.0.10 (2025-12-10)</small>
+
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([1f13aee](https://github.com/TENUM-Dev/tenum/commit/1f13aee))
+* fix: package.json ([5ef5939](https://github.com/TENUM-Dev/tenum/commit/5ef5939))
+
+## <small>1.0.9 (2025-12-10)</small>
+
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([cc675e0](https://github.com/TENUM-Dev/tenum/commit/cc675e0))
+* fix npm publish ([fda9820](https://github.com/TENUM-Dev/tenum/commit/fda9820))
+* fix: one extra ([6aa8881](https://github.com/TENUM-Dev/tenum/commit/6aa8881))
+
+## <small>1.0.8 (2025-12-10)</small>
+
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([6203ff2](https://github.com/TENUM-Dev/tenum/commit/6203ff2))
+* fix: Npm publishing ([d9b6088](https://github.com/TENUM-Dev/tenum/commit/d9b6088))
+
+## <small>1.0.7 (2025-12-10)</small>
+
+* Merge branch 'main' into dev ([8a1b084](https://github.com/TENUM-Dev/tenum/commit/8a1b084))
+* Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([8f33e32](https://github.com/TENUM-Dev/tenum/commit/8f33e32))
+* Merge pull request #25 from TENUM-Dev/release ([90a73e0](https://github.com/TENUM-Dev/tenum/commit/90a73e0)), closes [#25](https://github.com/TENUM-Dev/tenum/issues/25)
+* fix: readme ([217de5f](https://github.com/TENUM-Dev/tenum/commit/217de5f))
+* Refactor GitHub workflows for release and sync ([b326cc8](https://github.com/TENUM-Dev/tenum/commit/b326cc8))
+
 ## <small>1.0.6 (2025-12-10)</small>
 
 * Merge branch 'dev' into release ([04f16ab](https://github.com/TENUM-Dev/tenum/commit/04f16ab))
