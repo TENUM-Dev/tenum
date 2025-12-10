@@ -46,16 +46,20 @@ jobs:
           git checkout -b "$BRANCH" origin/dev
           echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Update changelog
+      - name: Generate changelog
         if: steps.branch.outputs.name != ''
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v4
+        with:
+          github-token: ${{ env.BOT_TOKEN }}
+          output-file: CHANGELOG.md
+          preset: conventionalcommits
+          release-count: 0
+          skip-on-empty: true
+
+      - name: Commit changelog
+        if: steps.branch.outputs.name != '' && steps.changelog.outputs.skipped != 'true'
         run: |
-          set -euo pipefail
-          npm install -g conventional-changelog-cli@2
-          conventional-changelog -p conventionalcommits -i CHANGELOG.md -s
-          if git diff --quiet; then
-            echo "No changelog updates; exiting."
-            exit 0
-          fi
           git add CHANGELOG.md
           git commit -m "chore(release): update changelog"
 
