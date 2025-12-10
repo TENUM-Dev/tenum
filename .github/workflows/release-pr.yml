@@ -69,6 +69,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
           GH_TOKEN: ${{ env.BOT_TOKEN }}
+          GITHUB_REF: refs/heads/release
+          GITHUB_REF_NAME: release
+          GITHUB_HEAD_REF: release
 
       - name: Push release branch (ensure latest changelog)
         if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != '' && success()
