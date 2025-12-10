@@ -1,3 +1,12 @@
+## 1.1.0 (2025-12-10)
+
+* feat: add initial code (#29) ([ae7a966](https://github.com/TENUM-Dev/tenum/commit/ae7a966)), closes [#29](https://github.com/TENUM-Dev/tenum/issues/29)
+* chore(deps)(deps): Bump softprops/action-gh-release from 1 to 2 (#4) ([55a7a22](https://github.com/TENUM-Dev/tenum/commit/55a7a22)), closes [#4](https://github.com/TENUM-Dev/tenum/issues/4)
+* Sync: main -> dev (#28) ([c3047f7](https://github.com/TENUM-Dev/tenum/commit/c3047f7)), closes [#28](https://github.com/TENUM-Dev/tenum/issues/28)
+* Merge branch 'main' into dev ([8a1b084](https://github.com/TENUM-Dev/tenum/commit/8a1b084))
+* Merge pull request #25 from TENUM-Dev/release ([90a73e0](https://github.com/TENUM-Dev/tenum/commit/90a73e0)), closes [#25](https://github.com/TENUM-Dev/tenum/issues/25)
+* Refactor GitHub workflows for release and sync ([b326cc8](https://github.com/TENUM-Dev/tenum/commit/b326cc8))
+
 ## <small>1.0.10 (2025-12-10)</small>
 
 * Merge branch 'release' of https://github.com/TENUM-Dev/tenum into release ([1f13aee](https://github.com/TENUM-Dev/tenum/commit/1f13aee))
