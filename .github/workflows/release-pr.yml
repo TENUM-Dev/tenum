@@ -35,7 +35,7 @@ jobs:
         if: steps.diff.outputs.has_diff == 'true'
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ env.BOT_TOKEN }}
           script: |
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
             const head = "dev";
