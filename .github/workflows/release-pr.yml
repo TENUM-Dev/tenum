@@ -22,9 +22,6 @@ jobs:
           fetch-depth: 0
           token: ${{ env.BOT_TOKEN }}
 
-      - name: Fix workspace permissions
-        run: sudo chown -R "$USER":"$USER" .
-
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -55,13 +52,17 @@ jobs:
           additional-packages: |
             ['@semantic-release/changelog', '@semantic-release/git']
         env:
-          GITHUB_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
-
+          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+          GH_TOKEN: ${{ env.BOT_TOKEN }}
+          
       - name: Commit changelog
-        run: |
-          git add CHANGELOG.md
-          git commit -m "chore(release): update changelog"
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          branch: ${{ steps.branch.outputs.name }}
+          commit_message: "chore(release): update changelog"
+          file_pattern: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
 
       - name: Push release branch
         if: steps.branch.outputs.name != '' && success()
