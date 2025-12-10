@@ -1,7 +1,5 @@
 ## <small>1.0.4 (2025-12-10)</small>
 
-* fix: Add release branch workflow and update release PR workflow ([bda0316](https://github.com/TENUM-Dev/tenum/commit/bda0316))
-* fix: Update CI workflows for manual dispatch and release triggers ([a84b123](https://github.com/TENUM-Dev/tenum/commit/a84b123))
 * Set release branch environment variables in workflow ([b2eba61](https://github.com/TENUM-Dev/tenum/commit/b2eba61))
 * Fix: Refactor release branch creation in workflow ([d3c40ff](https://github.com/TENUM-Dev/tenum/commit/d3c40ff))
 * Fix: Remove redundant git fetch and branch steps ([4462d77](https://github.com/TENUM-Dev/tenum/commit/4462d77))
