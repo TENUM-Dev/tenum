@@ -46,19 +46,16 @@ jobs:
           git checkout -b "$BRANCH" origin/dev
           echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Generate changelog
-        if: steps.branch.outputs.name != ''
-        id: changelog
-        uses: TriPSs/conventional-changelog-action@v4
+      - name: semantic-release
+        uses: codfish/semantic-release-action@v4
         with:
-          github-token: ${{ env.BOT_TOKEN }}
-          output-file: CHANGELOG.md
-          preset: conventionalcommits
-          release-count: 0
-          skip-on-empty: true
+          additional-packages: |
+            ['@semantic-release/changelog', '@semantic-release/git']
+        env:
+          GITHUB_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
 
       - name: Commit changelog
-        if: steps.branch.outputs.name != '' && steps.changelog.outputs.skipped != 'true'
         run: |
           git add CHANGELOG.md
           git commit -m "chore(release): update changelog"
