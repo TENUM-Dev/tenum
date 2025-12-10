@@ -23,22 +23,12 @@ jobs:
           ref: main
           fetch-depth: 0
           token: ${{ env.DEPENDABOT_TOKEN }}
-      - name: Record previous tag
-        run: echo "PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo '')" >> "$GITHUB_ENV"
-      - name: semantic-release
-        uses: codfish/semantic-release-action@v4
-        with:
-          additional-packages: |
-            ['@semantic-release/changelog', '@semantic-release/git']
-        env:
-          GITHUB_TOKEN: ${{ env.DEPENDABOT_TOKEN }}
-          GH_TOKEN: ${{ env.DEPENDABOT_TOKEN }}
       - name: Detect new release tag
         id: detect_release
         run: |
           PRE="${PREV_TAG:-}"
           POST=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -n "$POST" ] && [ "$POST" != "$PRE" ]; then
+          if [ -n "$POST" ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
             echo "tag=$POST" >> "$GITHUB_OUTPUT"
           else

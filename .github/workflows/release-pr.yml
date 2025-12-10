@@ -20,7 +20,14 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-      - name: Check for changes from dev to main
+          token: ${{ env.BOT_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure changes exist vs main
         id: diff
         run: |
           git fetch origin main dev --prune
@@ -30,18 +37,49 @@ jobs:
             echo "has_diff=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Create release branch from dev
+        if: steps.diff.outputs.has_diff == 'true'
+        id: branch
+        run: |
+          set -euo pipefail
+          BRANCH="release/${GITHUB_RUN_ID}"
+          git checkout -b "$BRANCH" origin/dev
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Update changelog
+        if: steps.branch.outputs.name != ''
+        run: |
+          set -euo pipefail
+          npm install -g conventional-changelog-cli@2
+          conventional-changelog -p conventionalcommits -i CHANGELOG.md -s
+          if git diff --quiet; then
+            echo "No changelog updates; exiting."
+            exit 0
+          fi
+          git add CHANGELOG.md
+          git commit -m "chore(release): update changelog"
+
+      - name: Push release branch
+        if: steps.branch.outputs.name != '' && success()
+        run: git push origin "${{ steps.branch.outputs.name }}"
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+
       - name: Create or reuse release PR
         id: pr
-        if: steps.diff.outputs.has_diff == 'true'
+        if: steps.branch.outputs.name != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ env.BOT_TOKEN }}
           script: |
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
-            const head = "dev";
+            const head = process.env.RELEASE_BRANCH;
             const base = "main";
-            const title = "Release: dev -> main";
-            const body = "Automated release PR from dev to main.";
+            const title = `Release: ${head.replace("release/", "")}`;
+            const body = "Automated release PR from dev (release branch) to main.";
 
             const existing = await github.rest.pulls.list({
               owner,
@@ -59,6 +97,8 @@ jobs:
 
             core.setOutput("number", pr.number.toString());
             core.setOutput("node_id", pr.node_id);
+        env:
+          RELEASE_BRANCH: ${{ steps.branch.outputs.name }}
 
       - name: Approve PR
         if: steps.pr.outputs.number != ''
