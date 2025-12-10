@@ -16,7 +16,7 @@ jobs:
       BOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
     steps:
       - name: Checkout dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: dev
           fetch-depth: 0
@@ -35,7 +35,7 @@ jobs:
         if: steps.diff.outputs.has_diff == 'true'
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
             const head = "dev";
@@ -87,7 +87,7 @@ jobs:
             await github.graphql(
               `
               mutation($prId: ID!) {
-                enablePullRequestAutoMerge(input: { pullRequestId: $prId, mergeMethod: SQUASH }) {
+                enablePullRequestAutoMerge(input: { pullRequestId: $prId, mergeMethod: MERGE }) {
                   clientMutationId
                 }
               }

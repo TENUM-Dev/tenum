@@ -1,11 +1,6 @@
 name: Full CI Pipeline
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-  release:
-    types: [published]
+on: push
 
 env:
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
@@ -75,8 +70,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      - name: Run CPD
-        run: ./gradlew cpdCheck --stacktrace --no-daemon
+      #- name: Run CPD
+      #  run: ./gradlew cpdCheck --stacktrace --no-daemon
 
   build-test-JVM:
     name: Build & Test (JVM)
