@@ -124,8 +124,6 @@ jobs:
       - name: Publish to npm
         if: steps.choose_tag.outputs.tag != '' && steps.prepare_package.outputs.skip_publish != 'true'
         working-directory: clinpm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
   sync-dev-pr:
     name: Sync dev PR

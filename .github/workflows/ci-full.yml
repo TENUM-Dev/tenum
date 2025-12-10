@@ -1,6 +1,8 @@
 name: Full CI Pipeline
 
-on: push
+on:
+  push:
+  workflow_dispatch:
 
 env:
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle

@@ -30,3 +30,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
           GH_TOKEN: ${{ env.BOT_TOKEN }}
+
+      - name: Trigger CI full workflow
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ env.BOT_TOKEN }}
+          script: |
+            // dispatch ci-full.yml on the release branch to run checks on the latest semantic-release commit
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "ci-full.yml",
+              ref: "release",
+            });
