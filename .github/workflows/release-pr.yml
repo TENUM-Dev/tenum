@@ -20,7 +20,14 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-      - name: Check for changes from dev to main
+          token: ${{ env.BOT_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure changes exist vs main
         id: diff
         run: |
           git fetch origin main dev --prune
@@ -30,18 +37,55 @@ jobs:
             echo "has_diff=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Set release branch vars
+        if: steps.diff.outputs.has_diff == 'true'
+        run: |
+          echo "RELEASE_BRANCH=release" >> "$GITHUB_ENV"
+          echo "DEV_SHA=$(git rev-parse origin/dev)" >> "$GITHUB_ENV"
+
+      - name: Create release branch on remote
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: peterjgrainger/action-create-branch@v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+        with:
+          branch: ${{ env.RELEASE_BRANCH }}
+          sha: ${{ env.DEV_SHA }}
+
+      - name: Checkout release branch
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ env.BOT_TOKEN }}
+
+      - name: semantic-release
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: codfish/semantic-release-action@v4.0.1
+        with:
+          additional-packages: |
+            ['@semantic-release/changelog', '@semantic-release/git']
+        env:
+          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+          GH_TOKEN: ${{ env.BOT_TOKEN }}
+
+      - name: Push release branch (ensure latest changelog)
+        if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != '' && success()
+        run: git push origin "$RELEASE_BRANCH"
+
       - name: Create or reuse release PR
         id: pr
-        if: steps.diff.outputs.has_diff == 'true'
+        if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != ''
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
-            const head = "dev";
+            const head = process.env.RELEASE_BRANCH;
             const base = "main";
-            const title = "Release: dev -> main";
-            const body = "Automated release PR from dev to main.";
+            const title = `Release: ${head}`;
+            const body = "Automated release PR from dev (release branch) to main.";
 
             const existing = await github.rest.pulls.list({
               owner,
@@ -64,7 +108,8 @@ jobs:
         if: steps.pr.outputs.number != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          # Use GITHUB_TOKEN so approval comes from github-actions, not the PR author PAT
+          github-token: ${{ env.BOT_TOKEN}}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
             await github.rest.pulls.createReview({
@@ -81,6 +126,7 @@ jobs:
         if: steps.pr.outputs.node_id != ''
         uses: actions/github-script@v8
         with:
+          # Use BOT_TOKEN so actor has push rights on the PR branch when enabling auto-merge
           github-token: ${{ env.BOT_TOKEN }}
           script: |
             const prNodeId = process.env.PR_ID;

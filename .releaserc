@@ -1,5 +1,5 @@
 {
-  "branches": ["main"],
+  "branches": ["release"],
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
@@ -49,5 +49,6 @@
       "@semantic-release/github",
       { "labels": ["release"] }
     ]
+  
   ]
 }
