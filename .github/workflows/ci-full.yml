@@ -1,0 +1,399 @@
+name: Full CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+
+env:
+  GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+  PKG_VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  wrapper-validation:
+    name: Validate Gradle Wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Validate wrapper
+        uses: gradle/wrapper-validation-action@v3
+
+  lint-format:
+    name: Lint & Formatting
+    runs-on: ubuntu-latest
+    needs: wrapper-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Run ktlint
+        run: ./gradlew ktlintCheck --stacktrace --no-daemon
+
+  duplication:
+    name: Duplication
+    runs-on: ubuntu-latest
+    needs: wrapper-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Run Kover
+        run: ./gradlew koverXmlReport --stacktrace --no-daemon
+
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: wrapper-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Run CPD
+        run: ./gradlew cpdCheck --stacktrace --no-daemon
+
+  build-test-JVM:
+    name: Build & Test (JVM)
+    runs-on: ubuntu-latest
+    needs: [lint-format, duplication, coverage]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Build & Test JVM targets
+        run: |
+          ./gradlew jvmTest --no-daemon
+
+  build-test-JS:
+    name: Build & Test (JS)
+    runs-on: ubuntu-latest
+    needs: [lint-format, duplication, coverage]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Build & Test JS targets
+        run: |
+          ./gradlew kotlinUpgradeYarnLock jsBrowserTest jsNodeTest --no-daemon
+
+  build-test-linux:
+    name: Build & Test (Linux)
+    runs-on: ubuntu-latest
+    needs: [lint-format, duplication, coverage]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Build Linux targets
+        run: |
+          ./gradlew linuxX64Test --no-daemon
+
+  build-test-windows:
+    name: Build & Test (Windows)
+    runs-on: windows-latest
+    needs: [lint-format, duplication, coverage]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Build Windows targets
+        shell: pwsh
+        run: |
+          ./gradlew.bat mingwX64Test --no-daemon
+
+  build-test-macos:
+    name: Build & Test (macOS)
+    runs-on: macos-latest
+    needs: [lint-format, duplication, coverage]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Build macOS targets
+        run: |
+          ./gradlew macosX64Test --no-daemon
+
+  build-test-macos-arm:
+    name: Build & Test (macOS ARM)
+    runs-on: macos-latest
+    needs: [lint-format, duplication, coverage]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Build macOS arm targets
+        run: |
+          ./gradlew macosArm64Test --no-daemon
+  installers:
+    name: Build Installers
+    if: false
+    needs:
+      - build-test-linux
+      - build-test-windows
+      - build-test-macos
+      - build-test-macos-arm
+      - duplication
+      - coverage
+      - lint-format
+      - wrapper-validation
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Make gradlew executable
+        if: runner.os != 'Windows'
+        run: chmod +x gradlew
+
+      - name: Installer build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm ruby ruby-dev make gcc
+          export GEM_HOME="$HOME/.gem"
+          export GEM_PATH="$GEM_HOME:$GEM_PATH"
+          export PATH="$GEM_HOME/bin:$PATH"
+          gem install --no-document fpm
+          ./gradlew :cli:linkReleaseExecutableLinuxX64 --stacktrace --no-daemon
+          VERSION="${PKG_VERSION#v}"
+          STAGE="$PWD/packaging/linux"
+          BIN="$STAGE/usr/local/tenum/bin"
+          mkdir -p "$BIN" "$STAGE/usr/local/bin"
+          cp cli/build/bin/linuxX64/releaseExecutable/cli.kexe "$BIN/tenum"
+          cat > "$BIN/tlua" <<'EOF'
+          #!/usr/bin/env bash
+          exec /usr/local/tenum/bin/tenum lua "$@"
+          EOF
+                    cat > "$BIN/tluac" <<'EOF'
+          #!/usr/bin/env bash
+          exec /usr/local/tenum/bin/tenum luac "$@"
+          EOF
+                    chmod +x "$BIN/tenum" "$BIN/tlua" "$BIN/tluac"
+                    cat > "$STAGE/usr/local/bin/tenum" <<'EOF'
+          #!/usr/bin/env bash
+          exec /usr/local/tenum/bin/tenum "$@"
+          EOF
+                    cat > "$STAGE/usr/local/bin/tlua" <<'EOF'
+          #!/usr/bin/env bash
+          exec /usr/local/tenum/bin/tenum lua "$@"
+          EOF
+                    cat > "$STAGE/usr/local/bin/tluac" <<'EOF'
+          #!/usr/bin/env bash
+          exec /usr/local/tenum/bin/tenum luac "$@"
+          EOF
+          chmod +x "$STAGE/usr/local/bin/"{tenum,tlua,tluac}
+          TAR="tenum-linux-x64-${VERSION}.tar.gz"
+          tar -czf "$TAR" -C "$STAGE" .
+          DEB="tenum_${VERSION}_amd64.deb"
+          fpm -s dir -t deb -n tenum -v "$VERSION" --license MIT --architecture amd64 \
+            --description "Tenum CLI with lua/luac subcommands" \
+            --prefix / -C "$STAGE" usr \
+            -p "$DEB"
+          RPM="tenum-${VERSION}-1.x86_64.rpm"
+          fpm -s dir -t rpm -n tenum -v "$VERSION" --iteration 1 --license MIT --architecture x86_64 \
+            --description "Tenum CLI with lua/luac subcommands" \
+            --prefix / -C "$STAGE" usr \
+            -p "$RPM"
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          echo "rpm=$RPM" >> "$GITHUB_OUTPUT"
+          echo "tar=$TAR" >> "$GITHUB_OUTPUT"
+      - name: Upload installer artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v5
+        with:
+          name: installers-linux
+          path: |
+            tenum-linux-x64-*.tar.gz
+            tenum_*_amd64.deb
+            tenum-*-1.x86_64.rpm
+          if-no-files-found: error
+
+      - name: Installer build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euo pipefail
+          ./gradlew :cli:linkReleaseExecutableMacosX64 :cli:linkReleaseExecutableMacosArm64 --stacktrace --no-daemon
+          VERSION="${PKG_VERSION#v}"
+          for target in macosX64 macosArm64; do
+            suffix=$([[ "$target" == "macosX64" ]] && echo "macos-x64" || echo "macos-arm64")
+            STAGE="$PWD/packaging/${suffix}"
+            BIN="$STAGE/usr/local/tenum/bin"
+            mkdir -p "$BIN" "$STAGE/usr/local/bin"
+            cp "cli/build/bin/${target}/releaseExecutable/cli.kexe" "$BIN/tenum"
+            cat > "$BIN/tlua" <<'EOF'
+            #!/bin/bash
+            exec /usr/local/tenum/bin/tenum lua "$@"
+            EOF
+                        cat > "$BIN/tluac" <<'EOF'
+            #!/bin/bash
+            exec /usr/local/tenum/bin/tenum luac "$@"
+            EOF
+                        chmod +x "$BIN/tenum" "$BIN/tlua" "$BIN/tluac"
+                        cat > "$STAGE/usr/local/bin/tenum" <<'EOF'
+            #!/bin/bash
+            exec /usr/local/tenum/bin/tenum "$@"
+            EOF
+                        cat > "$STAGE/usr/local/bin/tlua" <<'EOF'
+            #!/bin/bash
+            exec /usr/local/tenum/bin/tenum lua "$@"
+            EOF
+                        cat > "$STAGE/usr/local/bin/tluac" <<'EOF'
+            #!/bin/bash
+            exec /usr/local/tenum/bin/tenum luac "$@"
+            EOF
+            chmod +x "$STAGE/usr/local/bin/"{tenum,tlua,tluac}
+            PKG="tenum-${suffix}-${VERSION}.pkg"
+            pkgbuild --root "$STAGE" --identifier "ai.tenum.cli" --version "$VERSION" --install-location / "$PKG"
+          done
+      - name: Upload installer artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v5
+        with:
+          name: installers-macos
+          path: |
+            tenum-macos-x64-*.pkg
+            tenum-macos-arm64-*.pkg
+          if-no-files-found: error
+
+      - name: Installer build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          ./gradlew.bat :cli:linkReleaseExecutableMingwX64 --stacktrace --no-daemon
+          $Version = $env:PKG_VERSION -replace '^v',''
+          $Stage = Join-Path $PWD "packaging\\windows"
+          $Bin = Join-Path $Stage "bin"
+          New-Item -ItemType Directory -Force -Path $Bin | Out-Null
+          Copy-Item "cli\\build\\bin\\mingwX64\\releaseExecutable\\cli.exe" "$Bin\\tenum.exe"
+          "@echo off`r`n""%~dp0tenum.exe"" lua %*`r`n" | Out-File "$Bin\\tlua.cmd" -Encoding ASCII
+          "@echo off`r`n""%~dp0tenum.exe"" luac %*`r`n" | Out-File "$Bin\\tluac.cmd" -Encoding ASCII
+          $wxs = @"
+          <?xml version='1.0' encoding='UTF-8'?>
+          <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+            <Product Id='*' Name='Tenum' Language='1033' Version='$(var.ProductVersion)' Manufacturer='Tenum' UpgradeCode='C7B4B815-A3E2-4E10-A6DE-09F8C817C53E'>
+              <Package InstallerVersion='500' Compressed='yes' InstallScope='perMachine' />
+              <MajorUpgrade DowngradeErrorMessage='A newer version of Tenum is already installed.' />
+              <MediaTemplate />
+              <Directory Id='ProgramFilesFolder'>
+                <Directory Id='TENUMPARENT' Name='Tenum'>
+                  <Directory Id='INSTALLFOLDER' Name='tenum'>
+                    <Directory Id='BINDIR' Name='bin'>
+                      <Component Id='cmpTenum' Guid='*'>
+                        <File Id='filTenum' Source='$(var.SourceDir)\\tenum.exe' KeyPath='yes' />
+                      </Component>
+                      <Component Id='cmpTlua' Guid='*'>
+                        <File Id='filTlua' Source='$(var.SourceDir)\\tlua.cmd' KeyPath='yes' />
+                      </Component>
+                      <Component Id='cmpTluac' Guid='*'>
+                        <File Id='filTluac' Source='$(var.SourceDir)\\tluac.cmd' KeyPath='yes' />
+                      </Component>
+                      <Component Id='cmpPath' Guid='*'>
+                        <Environment Id='PATH_TENUM' Name='PATH' Value='[BINDIR]' Action='set' System='yes' Part='last' Permanent='no' />
+                      </Component>
+                    </Directory>
+                  </Directory>
+                </Directory>
+              </Directory>
+              <Feature Id='MainFeature' Title='Tenum' Level='1'>
+                <ComponentRef Id='cmpTenum' />
+                <ComponentRef Id='cmpTlua' />
+                <ComponentRef Id='cmpTluac' />
+                <ComponentRef Id='cmpPath' />
+              </Feature>
+            </Product>
+          </Wix>
+          "@
+          $wxsPath = Join-Path $Stage "tenum.wxs"
+          Set-Content -Path $wxsPath -Value $wxs -Encoding UTF8
+          $WixBin = (Get-ChildItem "C:\\Program Files (x86)\\WiX Toolset v3.*\\bin" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+          & "$WixBin\\candle.exe" -dProductVersion=$Version -dSourceDir=$Bin -out "$Stage\\" $wxsPath
+          & "$WixBin\\light.exe" -ext WixUIExtension -o "tenum-windows-x64-$Version.msi" "$Stage\\tenum.wixobj"
+      - name: Upload installer artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v5
+        with:
+          name: installers-windows
+          path: tenum-windows-x64-*.msi
+          if-no-files-found: error

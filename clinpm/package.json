@@ -1,0 +1,37 @@
+{
+  "name": "@tenum_dev/tenum",
+  "version": "1.0.0",
+  "description": "Tenum Lua - Lua 5.4.8 interpreter implemented in Kotlin Multiplatform",
+  "main": "dist/lua.js",
+  "types": "dist/lua.d.ts",
+  "bin": {
+    "tlua": "./dist/lua.js",
+    "tluac": "./dist/luac.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:bundle": "npx esbuild ../cli/build/compileSync/js/main/productionLibrary/kotlin/tenum-cli.js --bundle --minify --platform=node --outdir=./src --external:ws --external:@js-joda/core",
+    "install:copy": "cpy ./src/tenum-cli.js ./dist --flat",
+    "install:global": "npm install -g .",
+    "build:bundle:install": "npm run build:bundle && npm run install:copy && npm run build && npm run install:global"
+  },
+  "keywords": ["lua", "interpreter", "lua5.4", "cli"],
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "files": [
+    "index.js",
+    "dist/**/*",
+    "README.md",
+    "../LICENSE.md"
+  ],
+  "dependencies": {
+    "@js-joda/core": "5.6.5",
+    "@js-joda/timezone": "2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.10.0",
+    "typescript": "5.3.3",
+    "cpy-cli": "6.0.0",
+    "esbuild": "0.27.1"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits",
+        "parserOpts": {
+          "headerPattern": "^(?<type>[A-Za-z]+)(?:\\((?<scope>[^)]+)\\))?(?::| -)?\\s(?<subject>.*)$",
+          "headerCorrespondence": ["type", "scope", "subject"]
+        },
+        "releaseRules": [
+          { "type": "bump", "release": "patch" },
+          { "type": "chore", "scope": "deps", "release": "patch" },
+          { "type": "build", "scope": "deps", "release": "patch" },
+          { "type": "ci", "scope": "deps", "release": "patch" }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits",
+        "parserOpts": {
+          "headerPattern": "^(?<type>[A-Za-z]+)(?:\\((?<scope>[^)]+)\\))?(?::| -)?\\s(?<subject>.*)$",
+          "headerCorrespondence": ["type", "scope", "subject"]
+        }
+      }
+    ],
+    [
+      "@semantic-release/changelog",
+      { "changelogFile": "CHANGELOG.md" }
+    ],
+    [
+      "@semantic-release/git",
+      { "assets": ["CHANGELOG.md"] }
+    ],
+    [
+      "@semantic-release/github",
+      { "labels": ["release"] }
+    ]
+  ]
+}

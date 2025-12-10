@@ -1,0 +1,80 @@
+[versions]
+kotlin = "2.2.21"
+convention = "0.9.6"
+coroutines = "1.10.2"
+kotlinx-serialization = "1.9.0"
+koTest = "6.0.7"
+benchmark = "0.4.14"
+cpd = "3.5"
+okio = "3.16.2"
+datetime = "0.6.1"
+kover = "0.9.3"
+
+[libraries]
+appdirs = "ca.gosyer:kotlin-multiplatform-appdirs:2.0.0"
+
+
+kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "koTest" }
+kotest-assertions-json = { group = "io.kotest", name = "kotest-assertions-json", version.ref = "koTest" }
+kotest-engine = { module = "io.kotest:kotest-framework-engine", version.ref = "koTest" }
+kotest-property = { module = "io.kotest:kotest-property", version.ref = "koTest" }
+kotest-runner-jvm = { module = "io.kotest:kotest-runner-junit5-jvm", version.ref = "koTest" }
+
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version = "0.4.0" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+
+
+kotlinx-serialization-cbor = { module = "org.jetbrains.kotlinx:kotlinx-serialization-cbor", version.ref = "kotlinx-serialization" }
+kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "kotlinx-serialization" }
+kotlinx-serialization-hocon = { module = "org.jetbrains.kotlinx:kotlinx-serialization-hocon", version.ref = "kotlinx-serialization" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlinx-serialization-properties = { module = "org.jetbrains.kotlinx:kotlinx-serialization-properties", version.ref = "kotlinx-serialization" }
+kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "kotlinx-serialization" }
+
+github-ajalt-clikt = "com.github.ajalt.clikt:clikt:5.0.3"
+
+kotlin-test-annotations-common = { module = "org.jetbrains.kotlin:kotlin-test-annotations-common", version.ref = "kotlin" }
+kotlin-test-common = { module = "org.jetbrains.kotlin:kotlin-test-common", version.ref = "kotlin" }
+kotlin-test-main = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+
+kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version = "6.0.7" }
+junit = { module = "junit:junit", version = "4.13.2" }
+kotlinx-benchmark-runtime = { module = "org.jetbrains.kotlinx:kotlinx-benchmark-runtime", version.ref = "benchmark" }
+
+okio = { module= "com.squareup.okio:okio", version.ref = "okio" }
+okio-fakefilesystem = { module= "com.squareup.okio:okio-fakefilesystem", version.ref = "okio" }
+okio-nodefilesystem = { module= "com.squareup.okio:okio-nodefilesystem", version.ref = "okio" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
+
+bignum = "com.ionspin.kotlin:bignum:0.3.10"
+
+pedestal-weak = "dev.opensavvy.pedestal:weak:3.1.1"
+
+logback = "ch.qos.logback:logback-classic:1.5.21"
+
+[bundles]
+kotlin-test = [
+    "kotlin-test-main",
+    "kotlin-test-common",
+    "kotlin-test-annotations-common",
+    "kotest-assertions-core",
+    "kotlinx-coroutines-test"
+]
+
+
+convention_test_dependencies = [
+    "kotest-assertions-core",
+    "junit"
+]
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "14.0.1" }
+shadow = { id = "com.github.johnrengelman.shadow", version = "8.1.1" }
+benchmark = { id = "org.jetbrains.kotlinx.benchmark", version.ref = "benchmark" }
+allopen = { id = "org.jetbrains.kotlin.plugin.allopen", version.ref = "kotlin" }
+cpd = { id = "de.aaschmid.cpd", version.ref = "cpd" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
