@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   publish-npm:
@@ -35,8 +36,6 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - run: npm install -g npm@latest
-
       - name: Install npm dependencies
         working-directory: clinpm
         run: npm ci
@@ -53,6 +52,7 @@ jobs:
         working-directory: clinpm
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          NPM_CONFIG_PROVENANCE: true
         run: |
           set -euo pipefail
 
@@ -92,5 +92,5 @@ jobs:
         if: steps.prepare_package.outputs.skip_publish != 'true'
         working-directory: clinpm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+          NPM_CONFIG_PROVENANCE: true
+        run: npm publish --provenance --access public
