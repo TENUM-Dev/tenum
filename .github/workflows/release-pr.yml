@@ -37,45 +37,46 @@ jobs:
             echo "has_diff=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create release branch from dev
+      - name: Set release branch vars
         if: steps.diff.outputs.has_diff == 'true'
-        id: branch
         run: |
-          set -euo pipefail
-          BRANCH="release/${GITHUB_RUN_ID}"
-          git checkout -b "$BRANCH" origin/dev
-          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_BRANCH=release/${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+          echo "DEV_SHA=$(git rev-parse origin/dev)" >> "$GITHUB_ENV"
+
+      - name: Create release branch on remote
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: peterjgrainger/action-create-branch@v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+        with:
+          branch: ${{ env.RELEASE_BRANCH }}
+          sha: ${{ env.DEV_SHA }}
+
+      - name: Checkout release branch
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ env.BOT_TOKEN }}
 
       - name: semantic-release
-        uses: codfish/semantic-release-action@v4
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: codfish/semantic-release-action@v4.0.1
         with:
           additional-packages: |
             ['@semantic-release/changelog', '@semantic-release/git']
         env:
           GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
           GH_TOKEN: ${{ env.BOT_TOKEN }}
-          
-      - name: Commit changelog
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          branch: ${{ steps.branch.outputs.name }}
-          commit_message: "chore(release): update changelog"
-          file_pattern: CHANGELOG.md
-        env:
-          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
 
-      - name: Push release branch
-        if: steps.branch.outputs.name != '' && success()
-        run: git push origin "${{ steps.branch.outputs.name }}"
-        env:
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+      - name: Push release branch (ensure latest changelog)
+        if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != '' && success()
+        run: git push origin "$RELEASE_BRANCH"
 
       - name: Create or reuse release PR
         id: pr
-        if: steps.branch.outputs.name != ''
+        if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != ''
         uses: actions/github-script@v8
         with:
           github-token: ${{ env.BOT_TOKEN }}
@@ -102,8 +103,6 @@ jobs:
 
             core.setOutput("number", pr.number.toString());
             core.setOutput("node_id", pr.node_id);
-        env:
-          RELEASE_BRANCH: ${{ steps.branch.outputs.name }}
 
       - name: Approve PR
         if: steps.pr.outputs.number != ''
