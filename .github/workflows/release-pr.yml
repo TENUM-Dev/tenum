@@ -52,28 +52,6 @@ jobs:
           branch: ${{ env.RELEASE_BRANCH }}
           sha: ${{ env.DEV_SHA }}
 
-      - name: Checkout release branch
-        if: steps.diff.outputs.has_diff == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ env.RELEASE_BRANCH }}
-          fetch-depth: 0
-          token: ${{ env.BOT_TOKEN }}
-
-      - name: semantic-release
-        if: steps.diff.outputs.has_diff == 'true'
-        uses: codfish/semantic-release-action@v4.0.1
-        with:
-          additional-packages: |
-            ['@semantic-release/changelog', '@semantic-release/git']
-        env:
-          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
-          GH_TOKEN: ${{ env.BOT_TOKEN }}
-
-      - name: Push release branch (ensure latest changelog)
-        if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != '' && success()
-        run: git push origin "$RELEASE_BRANCH"
-
       - name: Create or reuse release PR
         id: pr
         if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != ''
