@@ -8,6 +8,7 @@ import kotlin.collections.component1
 import kotlin.collections.component2
 
 // Helper to create a WeakRef<T> using the top-level WeakRef(...) function.
+@OptIn(kotlin.experimental.ExperimentalNativeApi::class)
 private fun <T> newWeakRef(value: T): WeakRef<T> = WeakRef(value)
 
 /**
