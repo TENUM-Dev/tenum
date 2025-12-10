@@ -1,3 +1,8 @@
+## <small>1.0.6 (2025-12-10)</small>
+
+* Merge branch 'dev' into release ([04f16ab](https://github.com/TENUM-Dev/tenum/commit/04f16ab))
+* fix: Update release workflow and semantic-release config ([2f5ccd4](https://github.com/TENUM-Dev/tenum/commit/2f5ccd4))
+
 ## <small>1.0.5 (2025-12-10)</small>
 
 * Merge branch 'dev' into release ([6e30592](https://github.com/TENUM-Dev/tenum/commit/6e30592))
