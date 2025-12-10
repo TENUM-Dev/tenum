@@ -16,7 +16,7 @@ jobs:
       BOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
     steps:
       - name: Checkout dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: dev
           fetch-depth: 0
