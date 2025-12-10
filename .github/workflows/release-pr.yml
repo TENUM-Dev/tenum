@@ -79,7 +79,7 @@ jobs:
         if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
             const head = process.env.RELEASE_BRANCH;
@@ -109,7 +109,7 @@ jobs:
         uses: actions/github-script@v8
         with:
           # Use GITHUB_TOKEN so approval comes from github-actions, not the PR author PAT
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ env.BOT_TOKEN}}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
             await github.rest.pulls.createReview({
