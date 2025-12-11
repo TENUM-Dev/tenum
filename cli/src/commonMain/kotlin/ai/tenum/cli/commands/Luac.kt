@@ -6,6 +6,7 @@ import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.compiler.util.DebugInfoStripping
 import ai.tenum.lua.lexer.Lexer
 import ai.tenum.lua.parser.Parser
+import ai.tenum.lua.runtime.LuaCompiledFunction
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
