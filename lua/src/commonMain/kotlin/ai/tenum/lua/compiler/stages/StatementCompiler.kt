@@ -2,6 +2,7 @@ package ai.tenum.lua.compiler.stages
 
 import ai.tenum.lua.compiler.CompileContext
 import ai.tenum.lua.compiler.helper.CompilerHelpers
+import ai.tenum.lua.compiler.helper.ScopeManager
 import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.LineEvent
 import ai.tenum.lua.compiler.model.LineEventKind
@@ -637,8 +638,22 @@ class StatementCompiler {
     }
 
     /**
-     * Helper: Compile block statements with proper scope management and cleanup.
+     * Helper to end a scope with proper label and goto validation.
+     * Must be called before endScope() to ensure locals are still active for validation.
      */
+    private fun endScopeWithValidation(
+        ctx: CompileContext,
+        snapshot: Int,
+        isRepeatUntilBlock: Boolean = false,
+    ): ScopeManager.ScopeExitInfo {
+        ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
+        val scopeLevel = ctx.scopeManager.currentScopeLevel
+        val endPc = ctx.instructions.size
+        ctx.validateGotosAtScopeExit(scopeLevel, endPc, isRepeatUntilBlock)
+        ctx.removeLabelsAtScope(scopeLevel)
+        return ctx.scopeManager.endScope(snapshot, endPc)
+    }
+
     private fun compileBlockWithScope(
         block: List<Statement>,
         ctx: CompileContext,
@@ -647,12 +662,7 @@ class StatementCompiler {
         for (stmt in block) {
             compileStatement(stmt, ctx)
         }
-        ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
-
-        // Remove labels defined in this block (labels are block-scoped in Lua)
-        val scopeLevel = ctx.scopeManager.currentScopeLevel
-        val scopeExit = ctx.scopeManager.endScope(snapshot, ctx.instructions.size)
-        ctx.removeLabelsAtScope(scopeLevel)
+        val scopeExit = endScopeWithValidation(ctx, snapshot)
 
         // Close captured variables
         if (scopeExit.minCapturedRegister != null) {
@@ -777,10 +787,9 @@ class StatementCompiler {
         val condReg = ctx.registerAllocator.allocateLocal()
         expressionCompiler.compileExpression(statement.condition, condReg, ctx)
 
-        // Get scope info to determine captured variables
-        val scopeLevel = ctx.scopeManager.currentScopeLevel
-        val tempScopeExit = ctx.scopeManager.endScope(bodySnapshot, ctx.instructions.size)
-        ctx.removeLabelsAtScope(scopeLevel)
+        // For repeat-until, the condition is semantically part of the block scope
+        // So validation must happen after the condition is compiled
+        val tempScopeExit = endScopeWithValidation(ctx, bodySnapshot, isRepeatUntilBlock = true)
 
         // Lua semantics: repeat until <condition> → exit when condition is TRUE
         // TEST with c=1: if value is falsy, skip next instruction
@@ -884,12 +893,7 @@ class StatementCompiler {
         )
         ctx.scopeManager.beginLoop()
         statement.block.forEach { compileStatement(it, ctx) }
-        ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
-
-        // Remove labels defined in this block (labels are block-scoped in Lua)
-        val scopeLevel = ctx.scopeManager.currentScopeLevel
-        val scopeExit = ctx.scopeManager.endScope(bodySnapshot, ctx.instructions.size)
-        ctx.removeLabelsAtScope(scopeLevel)
+        val scopeExit = endScopeWithValidation(ctx, bodySnapshot)
 
         // Close captured variables (mode=0: close upvalues only, no __close)
         if (scopeExit.minCapturedRegister != null) {
@@ -1180,7 +1184,9 @@ class StatementCompiler {
 
         // Remove labels defined in this block (labels are block-scoped in Lua)
         val scopeLevel = ctx.scopeManager.currentScopeLevel
-        val bodyExit = ctx.scopeManager.endScope(bodySnapshot, ctx.instructions.size)
+        val endPc = ctx.instructions.size
+        val bodyExit = ctx.scopeManager.endScope(bodySnapshot, endPc)
+        ctx.validateGotosAtScopeExit(scopeLevel, endPc)
         ctx.removeLabelsAtScope(scopeLevel)
 
         // Close captured variables
@@ -1237,6 +1243,14 @@ class StatementCompiler {
 
         val labelInfo = ctx.labels[statement.label]
         if (labelInfo != null) {
+            val gotoInfo =
+                CompileContext.GotoInfo(
+                    instructionIndex = gotoJumpIndex,
+                    labelName = statement.label,
+                    scopeLevel = ctx.scopeManager.currentScopeLevel,
+                    localCount = ctx.scopeManager.activeLocalCount(),
+                    line = statement.line,
+                )
             ctx.validateGotoScope(
                 gotoScopeLevel = ctx.scopeManager.currentScopeLevel,
                 gotoLocalCount = ctx.scopeManager.activeLocalCount(),
@@ -1244,9 +1258,14 @@ class StatementCompiler {
                 labelLocalCount = labelInfo.localCount,
                 labelName = statement.label,
                 isForward = false,
+                gotoLine = statement.line,
+                gotoInstructionIndex = gotoJumpIndex,
+                labelInstructionIndex = labelInfo.instructionIndex,
             )
             // patchJump knows how to turn target index into an offset
             ctx.patchJump(gotoJumpIndex, labelInfo.instructionIndex)
+            // Record for later same-scope validation at endScope()
+            ctx.resolvedGotos.add(CompileContext.ResolvedGotoLabel(gotoInfo, labelInfo))
         } else {
             ctx.pendingGotos.add(
                 CompileContext.GotoInfo(
@@ -1304,8 +1323,12 @@ class StatementCompiler {
                     labelName = statement.name,
                     isForward = true,
                     gotoLine = gotoInfo.line,
+                    gotoInstructionIndex = gotoInfo.instructionIndex,
+                    labelInstructionIndex = labelIndex,
                 )
                 ctx.patchJump(gotoInfo.instructionIndex, labelIndex)
+                // Record for later same-scope validation at endScope()
+                ctx.resolvedGotos.add(CompileContext.ResolvedGotoLabel(gotoInfo, labelInfo))
                 iterator.remove()
             }
         }

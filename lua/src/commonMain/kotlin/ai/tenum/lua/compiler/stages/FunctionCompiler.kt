@@ -27,6 +27,9 @@ class FunctionCompiler {
             stmtCompiler.compileStatement(stmt, ctx)
         }
 
+        // Validate remaining goto-label pairs at function scope
+        ctx.validateGotosAtScopeExit(0, ctx.instructions.size)
+
         // Check for unresolved gotos (labels that were never defined or not visible)
         if (ctx.pendingGotos.isNotEmpty()) {
             val firstUnresolved = ctx.pendingGotos.first()

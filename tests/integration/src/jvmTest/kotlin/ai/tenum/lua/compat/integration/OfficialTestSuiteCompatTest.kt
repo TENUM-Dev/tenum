@@ -110,7 +110,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_gengc_lua() = runTest(timeout = 60.seconds) { executeTestFile("gengc.lua") }
 
     @Test
-    @Ignore
     fun test_goto_lua() = runTest(timeout = 60.seconds) { executeTestFile("goto.lua") }
 
     @Test

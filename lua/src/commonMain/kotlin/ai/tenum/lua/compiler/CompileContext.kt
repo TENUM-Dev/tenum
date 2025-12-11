@@ -65,6 +65,14 @@ data class CompileContext(
     )
 
     /**
+     * Info about a resolved goto-label pair for later validation.
+     */
+    data class ResolvedGotoLabel(
+        val gotoInfo: GotoInfo,
+        val labelInfo: LabelInfo,
+    )
+
+    /**
      * All labels defined in this function (name -> info).
      */
     val labels: MutableMap<String, LabelInfo> = mutableMapOf()
@@ -73,6 +81,11 @@ data class CompileContext(
      * All gotos not yet resolved (pending label definition).
      */
     val pendingGotos: MutableList<GotoInfo> = mutableListOf()
+
+    /**
+     * All resolved goto-label pairs for scope validation at endScope().
+     */
+    val resolvedGotos: MutableList<ResolvedGotoLabel> = mutableListOf()
 
     /**
      * Remove labels that were defined at the given scope level.
@@ -218,8 +231,7 @@ data class CompileContext(
 
     /**
      * Scope validation for goto.
-     * Right now this is a no-op (accept all gotos).
-     * You can add strict checks here if you need exact Lua semantics.
+     * Checks Lua's goto/label scoping rules.
      */
     fun validateGotoScope(
         gotoScopeLevel: Int,
@@ -229,6 +241,8 @@ data class CompileContext(
         labelName: String,
         isForward: Boolean,
         gotoLine: Int = -1,
+        gotoInstructionIndex: Int = -1,
+        labelInstructionIndex: Int = -1,
     ) {
         // Lua rule: you cannot jump INTO a deeper scope with local variables
         // Key: it's about scope depth, not just local count
@@ -244,11 +258,97 @@ data class CompileContext(
                     token = Token(TokenType.IDENTIFIER, labelName, labelName, if (gotoLine > 0) gotoLine else 1, 1),
                 )
             }
-            // If at same scope level, jumping forward over local declarations is OK
+
+            // At same scope level: Lua allows jumping forward over local declarations
+            // within the same block. The "no jumping into scope" rule only applies
+            // when jumping INTO a nested block (which is already checked above).
+            //
+            // However, there's a subtle case we need to handle: jumping from inside
+            // a nested scope OUT to a label in an outer scope, when there are locals
+            // declared in the outer scope between the inner block and the label.
+            // But this is naturally prevented by the scope level check and is handled
+            // at function compilation time.
         } else {
             // Backward jump: from label to goto (label was already seen)
             // Jumping backwards/out of scopes is always allowed
             // We just need to close any <close> variables (already handled by emitCloseVariables)
+        }
+    }
+
+    /**
+     * Validate resolved goto-label pairs at scope exit.
+     * This checks Lua's rule: you can't jump over local variable declarations
+     * if there are statements after the label that execute in the scope of those locals.
+     */
+    fun validateGotosAtScopeExit(
+        scopeLevel: Int,
+        endPc: Int,
+        isRepeatUntilBlock: Boolean = false,
+    ) {
+        val iterator = resolvedGotos.iterator()
+        while (iterator.hasNext()) {
+            val pair = iterator.next()
+            val gotoInfo = pair.gotoInfo
+            val labelInfo = pair.labelInfo
+
+            // Only validate gotos/labels at this scope level
+            if (labelInfo.scopeLevel != scopeLevel) {
+                continue
+            }
+
+            // Remove this pair from the list since we're processing it
+            iterator.remove()
+
+            // Check if goto jumped over any local variables
+            // that were declared between goto and label
+            val jumpedOverLocal =
+                if (gotoInfo.instructionIndex < labelInfo.instructionIndex) {
+                    // Forward jump
+                    scopeManager.locals.any { local ->
+                        local.scopeLevel == scopeLevel &&
+                            local.startPc > gotoInfo.instructionIndex &&
+                            local.startPc <= labelInfo.instructionIndex
+                    }
+                } else {
+                    // Backward jump - not a problem
+                    false
+                }
+
+            if (jumpedOverLocal) {
+                // Check if there are statements after the label
+                // If label is at end of block (labelIndex == endPc - 1), it's OK
+                // EXCEPT for repeat-until blocks where the condition is semantically part of the block
+                val hasStatementsAfterLabel = labelInfo.instructionIndex < endPc - 1
+
+                if (hasStatementsAfterLabel || isRepeatUntilBlock) {
+                    // Find the first local that was jumped over
+                    val firstJumpedLocal =
+                        scopeManager.locals.find { local ->
+                            local.scopeLevel == scopeLevel &&
+                                local.startPc > gotoInfo.instructionIndex &&
+                                local.startPc <= labelInfo.instructionIndex
+                        }
+
+                    val lineInfo = if (gotoInfo.line > 0) " at line ${gotoInfo.line}" else ""
+                    throw ParserException(
+                        message = "<goto ${gotoInfo.labelName}>$lineInfo jumps into the scope of local '${firstJumpedLocal?.name ?: "?"}'",
+                        token =
+                            Token(
+                                TokenType.IDENTIFIER,
+                                gotoInfo.labelName,
+                                gotoInfo.labelName,
+                                if (gotoInfo.line >
+                                    0
+                                ) {
+                                    gotoInfo.line
+                                } else {
+                                    1
+                                },
+                                1,
+                            ),
+                    )
+                }
+            }
         }
     }
 
