@@ -599,11 +599,20 @@ class MathLib : LuaLibrary {
     /**
      * Convert a 64-bit unsigned integer to a double in [0, 1).
      * This matches Lua 5.4's project64 function.
+     * 
+     * From Lua 5.4.8 lmathlib.c:
+     * - Takes the upper 53 bits (double mantissa size) 
+     * - Shifts right by 11 bits to discard lower bits: value >> 11
+     * - Divides by 2^53 to normalize to [0, 1)
+     * 
+     * This ensures the result has exactly 53 bits of precision and no extra bits.
      */
     private fun project64ToDouble(value: ULong): Double {
-        // Use the upper 53 bits (double mantissa size) to create a float in [0, 1)
-        // Divide by 2^64 to get value in [0, 1)
-        return (value.toDouble() / ULong.MAX_VALUE.toDouble()) * (1.0 - Double.MIN_VALUE)
+        // Shift right by 11 bits to keep only upper 53 bits
+        // Then multiply by 2^-53 (same as dividing by 2^53)
+        val upper53Bits = value shr 11
+        // Use exact power of 2 division: 2^-53 = 1.1102230246251565e-16
+        return upper53Bits.toDouble() * 1.1102230246251565e-16
     }
 
     /**
