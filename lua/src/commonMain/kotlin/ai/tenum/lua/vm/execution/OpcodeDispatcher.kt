@@ -233,8 +233,29 @@ internal class OpcodeDispatcher(
             }
 
             OpCode.CALL -> {
-                CallOpcodes.executeCall(instr, registers, execFrame, env, pc, setCallContext)
-                DispatchResult.Continue
+                when (
+                    val result =
+                        CallOpcodes.executeCall(
+                            instr,
+                            registers,
+                            execFrame,
+                            env,
+                            pc,
+                            setCallContext,
+                            debugTracer.isTrampolineEnabled(),
+                        )
+                ) {
+                    is CallOpcodes.CallResult.Completed -> DispatchResult.Continue
+                    is CallOpcodes.CallResult.Trampoline -> {
+                        DispatchResult.CallTrampoline(
+                            newProto = result.newProto,
+                            newArgs = result.newArgs,
+                            newUpvalues = result.newUpvalues,
+                            savedFunc = result.resolvedFunc,
+                            callInstruction = instr,
+                        )
+                    }
+                }
             }
 
             OpCode.TAILCALL -> {
