@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.1
       - name: Validate wrapper
-        uses: gradle/wrapper-validation-action@v3.6.2
+        uses: gradle/actions/wrapper-validation@v5.0.0
 
   lint-format:
     name: Lint & Formatting
