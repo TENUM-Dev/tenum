@@ -140,7 +140,7 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
             "math.lua",
             //ignore random seed tests
             817..853,
-            //Disable slow tests
+            // Disable slow random bit distribution/statistical randomness tests
             855..1012,
         )
     }
