@@ -51,7 +51,7 @@ bignum = "com.ionspin.kotlin:bignum:0.3.10"
 
 pedestal-weak = "dev.opensavvy.pedestal:weak:3.1.1"
 
-logback = "ch.qos.logback:logback-classic:1.5.21"
+logback = "ch.qos.logback:logback-classic:1.5.22"
 
 [bundles]
 kotlin-test = [
