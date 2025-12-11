@@ -7,7 +7,7 @@ koTest = "6.0.7"
 benchmark = "0.4.14"
 cpd = "3.5"
 okio = "3.16.4"
-datetime = "0.6.1"
+datetime = "0.7.1-0.6.x-compat"
 kover = "0.9.3"
 
 [libraries]
