@@ -43,7 +43,16 @@ tasks.named<Cpd>("cpdCheck") {
 kover {
     merge {
         // Apply Kover to all subprojects and merge their reports into this root project
-        subprojects()
+        // exept test/integration and test/performance
+        subprojects {
+            setOf(
+                "integration",
+                "performance",
+                "tests",
+            ).contains(
+                it.name,
+            ).not()
+        }
     }
     reports {
         total {

@@ -29,7 +29,7 @@ object MethodCallContext {
      * Mark that the current call is a method call.
      * Should only be called by CALL opcode implementation.
      */
-    internal fun set(value: Boolean) {
+    fun set(value: Boolean) {
         isMethodCallFlag = value
     }
 
@@ -37,7 +37,7 @@ object MethodCallContext {
      * Clear the method call context.
      * Should be called after the native function returns.
      */
-    internal fun clear() {
+    fun clear() {
         isMethodCallFlag = false
     }
 }

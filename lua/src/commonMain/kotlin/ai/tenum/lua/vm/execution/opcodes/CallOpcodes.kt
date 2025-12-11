@@ -29,7 +29,7 @@ object CallOpcodes {
      * @param results The return values to store
      * @return Updated call frame with return values accessible via debug.getlocal
      */
-    internal fun prepareFrameWithReturnValues(
+    internal inline fun prepareFrameWithReturnValues(
         currentFrame: ai.tenum.lua.vm.CallFrame,
         returnFtransfer: Int,
         results: List<LuaValue<*>>,
@@ -56,21 +56,62 @@ object CallOpcodes {
     }
 
     /**
-     * Result of tail call execution.
+     * Result of call execution - unified for both CALL and TAILCALL.
      */
-    sealed class TailCallResult {
-        /** Perform tail call optimization - replace current frame */
-        data class TailCall(
+    sealed class CallResult {
+        /** Call completed - results stored in registers (CALL only) */
+        object Completed : CallResult()
+
+        /** Trampoline into compiled function */
+        data class Trampoline(
             val newProto: Proto,
             val newArgs: List<LuaValue<*>>,
             val newUpvalues: List<Upvalue>,
             val resolvedFunc: LuaCompiledFunction,
-        ) : TailCallResult()
+        ) : CallResult()
 
-        /** Return from current function with these values */
+        /** Return from current function with values (TAILCALL to native function) */
         data class Return(
             val values: List<LuaValue<*>>,
-        ) : TailCallResult()
+        ) : CallResult()
+    }
+
+    /**
+     * Resolve a value to a callable function, handling __call metamethods.
+     * Returns the final callable function and adjusted arguments.
+     */
+    private inline fun resolveCallable(
+        funcVal: LuaValue<*>,
+        args: List<LuaValue<*>>,
+        env: ExecutionEnvironment,
+        pc: Int,
+        registerIndex: Int,
+    ): Pair<LuaFunction, List<LuaValue<*>>> {
+        var func = funcVal
+        var finalArgs = args
+
+        // Walk the __call chain to find the final callable
+        while (func !is LuaFunction) {
+            val callMeta = env.getMetamethod(func, "__call")
+            if (callMeta != null) {
+                // Add the table/value with __call as first argument
+                finalArgs = listOf(func) + finalArgs
+                func = callMeta
+            } else {
+                // No __call metamethod, generate error
+                val nameHint = env.getRegisterNameHint(registerIndex, pc)
+                val typeStr = func.type().name.lowercase()
+                val errorMsg =
+                    if (nameHint != null) {
+                        "attempt to call a $typeStr value ($nameHint)"
+                    } else {
+                        "attempt to call a $typeStr value"
+                    }
+                env.error(errorMsg, pc)
+            }
+        }
+
+        return func to finalArgs
     }
 
     /**
@@ -79,6 +120,8 @@ object CallOpcodes {
      *
      * If B=0, arguments are from A+1 to top.
      * If C=0, returns all results and sets top marker.
+     *
+     * Returns CallResult indicating whether to trampoline or if call completed.
      */
     fun executeCall(
         instr: Instruction,
@@ -87,7 +130,7 @@ object CallOpcodes {
         env: ExecutionEnvironment,
         pc: Int,
         setCallContext: (InferredFunctionName) -> Unit,
-    ) {
+    ): CallResult {
         var func = registers[instr.a]
         val collector = ArgumentCollector(registers, frame)
         val args = collector.collectArgs(instr.a + 1, instr.b)
@@ -114,41 +157,48 @@ object CallOpcodes {
             MethodCallContext.set(true)
         }
 
+        // Track if we're taking the trampoline path (to avoid clearing context in finally block)
+        var isTrampolining = false
+
         try {
-            // Check for __call metamethod if func is not a function
-            if (func !is LuaFunction) {
-                val metaMethod = env.getMetamethod(func, "__call")
-                if (metaMethod != null) {
-                    env.setMetamethodCallContext("__call")
-                    // callFunction will recursively handle chained __call metamethods
-                    val results = env.callFunction(metaMethod, listOf(func) + args)
-                    env.debug("    Results (via __call): $results")
-                    storeCallResults(instr, registers, frame, results, env)
-                } else {
-                    // Generate error with context
-                    // If SELF set methodCallErrorHint, use that instead of the function's hint
-                    val nameHint = methodErrorHint ?: env.getRegisterNameHint(instr.a, pc)
-                    val typeStr = func.type().name.lowercase()
-                    val errorMsg =
-                        if (nameHint != null) {
-                            "attempt to call a $typeStr value ($nameHint)"
-                        } else {
-                            "attempt to call a $typeStr value"
-                        }
-                    env.error(errorMsg, pc)
-                }
-            } else {
-                env.debug("  Call R[${instr.a}] with ${args.size} args")
-                val results = env.callFunction(func, args)
-                env.debug("    Results: $results")
-                storeCallResults(instr, registers, frame, results, env)
+            // Resolve to callable function (handles __call metamethods)
+            val (resolvedFunc, resolvedArgs) = resolveCallable(func, args, env, pc, instr.a)
+
+            env.debug("  Call R[${instr.a}] with ${resolvedArgs.size} args")
+
+            // Trampoline for compiled Lua functions
+            if (resolvedFunc is LuaCompiledFunction) {
+                env.debug("  Trampolining call to compiled function")
+                // Clear method context before trampolining
+                MethodCallContext.clear()
+                // Mark that we're trampolining so finally block doesn't clear the inferred name
+                isTrampolining = true
+                // NOTE: Do NOT clear call context (setCallContext) here!
+                // The inferred name must be preserved for the trampoline handler to use.
+                // It will be cleared by the handler after creating the CallFrame.
+                return CallResult.Trampoline(
+                    newProto = resolvedFunc.proto,
+                    newArgs = resolvedArgs,
+                    newUpvalues = resolvedFunc.upvalues,
+                    resolvedFunc = resolvedFunc,
+                )
             }
+
+            // Native functions: direct call
+            val results = env.callFunction(resolvedFunc, resolvedArgs)
+            env.debug("    Results: $results")
+            storeCallResults(instr, registers, frame, results, env)
         } finally {
             // Always clear method call context after the call completes
             MethodCallContext.clear()
-            // Clear call context for next call
-            setCallContext(InferredFunctionName.UNKNOWN)
+            // Clear call context for next call ONLY if not trampolining
+            // (trampoline handler will clear it after using the inferred name)
+            if (!isTrampolining) {
+                setCallContext(InferredFunctionName.UNKNOWN)
+            }
         }
+
+        return CallResult.Completed
     }
 
     /**
@@ -176,7 +226,7 @@ object CallOpcodes {
      * return R[A](R[A+1], ... ,R[A+B-1])
      *
      * If B=0, arguments are from A+1 to top.
-     * Returns TailCallResult indicating whether to perform TCO or fallback to regular return.
+     * Returns CallResult indicating whether to perform TCO or return directly.
      */
     fun executeTailCall(
         instr: Instruction,
@@ -184,51 +234,31 @@ object CallOpcodes {
         frame: ExecutionFrame,
         env: ExecutionEnvironment,
         pc: Int,
-        trampolineEnabled: Boolean,
-    ): TailCallResult {
-        var funcVal = registers[instr.a]
+    ): CallResult {
+        val funcVal = registers[instr.a]
         val collector = ArgumentCollector(registers, frame)
-        var args = collector.collectArgs(instr.a + 1, instr.b)
+        val args = collector.collectArgs(instr.a + 1, instr.b)
 
         env.debug("  Tail call R[${instr.a}] with ${args.size} args")
-        env.trace(instr.a, registers[instr.a], "TAILCALL-read")
+        env.trace(instr.a, funcVal, "TAILCALL-read")
 
-        // Walk the __call chain to find the final callable
-        // This preserves TCO through metamethod chains
-        while (funcVal !is LuaFunction) {
-            val callMeta = env.getMetamethod(funcVal, "__call")
-            if (callMeta != null) {
-                // Add the table/value with __call as first argument
-                args = listOf(funcVal) + args
-                funcVal = callMeta
-            } else {
-                // No __call metamethod, generate error
-                val nameHint = env.getRegisterNameHint(instr.a, pc)
-                val typeStr = funcVal.type().name.lowercase()
-                val errorMsg =
-                    if (nameHint != null) {
-                        "attempt to call a $typeStr value ($nameHint)"
-                    } else {
-                        "attempt to call a $typeStr value"
-                    }
-                env.error(errorMsg, pc)
-            }
-        }
+        // Resolve to callable function (handles __call metamethods)
+        val (resolvedFunc, resolvedArgs) = resolveCallable(funcVal, args, env, pc, instr.a)
 
-        // If target is compiled Lua function and trampoline enabled, perform TCO
-        if (trampolineEnabled && funcVal is LuaCompiledFunction) {
-            env.debug("  TCO: trampoline into closure id=${funcVal.hashCode()}")
-            return TailCallResult.TailCall(
-                newProto = funcVal.proto,
-                newArgs = args,
-                newUpvalues = funcVal.upvalues,
-                resolvedFunc = funcVal,
+        // Perform TCO for compiled Lua functions
+        if (resolvedFunc is LuaCompiledFunction) {
+            env.debug("  TCO: trampoline into closure id=${resolvedFunc.hashCode()}")
+            return CallResult.Trampoline(
+                newProto = resolvedFunc.proto,
+                newArgs = resolvedArgs,
+                newUpvalues = resolvedFunc.upvalues,
+                resolvedFunc = resolvedFunc,
             )
         }
 
-        // Fallback: regular return with function call result
+        // Native functions: direct return with call result
         // Use env.callFunction to ensure hooks are triggered
-        return TailCallResult.Return(env.callFunction(funcVal, args))
+        return CallResult.Return(env.callFunction(resolvedFunc, resolvedArgs))
     }
 
     /**

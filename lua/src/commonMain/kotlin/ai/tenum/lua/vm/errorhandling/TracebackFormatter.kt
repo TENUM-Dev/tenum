@@ -58,42 +58,14 @@ object TracebackFormatter {
             var i = effectiveStart
             var shownFrames = 0
             while (i < callStack.size && shownFrames < firstFrameCount) {
-                val frame = callStack[i]
-
-                // Check if this is the start of a tail call sequence
-                if (frame.isTailCall) {
-                    // Find the end of the tail call sequence
-                    val tailStart = i
-                    while (i < callStack.size && callStack[i].isTailCall) {
-                        i++
-                    }
-
-                    // Show the first tail-called frame
-                    formatFrame(callStack[tailStart], useUpvalueDescriptor)
-
-                    // Insert tail call marker if there was more than one tail call
-                    val tailCallCount = i - tailStart
-                    if (tailCallCount > 1) {
-                        appendLine()
-                        append("\t(...tail calls...)")
-                    }
-
-                    // Add newline after this frame group
-                    if (shouldTruncate || i < callStack.size) {
-                        appendLine()
-                    }
-                    shownFrames++
-                } else {
-                    // Regular frame (not tail called)
-                    formatFrame(frame, useUpvalueDescriptor)
-
-                    // Add newline: always if truncating, otherwise only if not the last frame
-                    if (shouldTruncate || i < callStack.size - 1) {
-                        appendLine()
-                    }
-                    i++
-                    shownFrames++
-                }
+                i =
+                    formatFrameOrTailCallSequence(
+                        callStack = callStack,
+                        startIndex = i,
+                        useUpvalueDescriptor = useUpvalueDescriptor,
+                        addNewlineAfter = shouldTruncate || i < callStack.size - 1,
+                    )
+                shownFrames++
             }
 
             // Insert truncation marker if needed
@@ -107,42 +79,62 @@ object TracebackFormatter {
 
             // Format last frames (or remaining frames if no truncation)
             while (i < callStack.size) {
-                val frame = callStack[i]
-
-                // Check if this is the start of a tail call sequence
-                if (frame.isTailCall) {
-                    // Find the end of the tail call sequence
-                    val tailStart = i
-                    while (i < callStack.size && callStack[i].isTailCall) {
-                        i++
-                    }
-
-                    // Show the first tail-called frame
-                    formatFrame(callStack[tailStart], useUpvalueDescriptor)
-
-                    // Insert tail call marker if there was more than one tail call
-                    val tailCallCount = i - tailStart
-                    if (tailCallCount > 1) {
-                        appendLine()
-                        append("\t(...tail calls...)")
-                    }
-
-                    // Add newline before next frame if there is one
-                    if (i < callStack.size) {
-                        appendLine()
-                    }
-                } else {
-                    // Regular frame (not tail called)
-                    formatFrame(frame, useUpvalueDescriptor)
-
-                    // Append newline after each frame except the last
-                    if (i < callStack.size - 1) {
-                        appendLine()
-                    }
-                    i++
-                }
+                i =
+                    formatFrameOrTailCallSequence(
+                        callStack = callStack,
+                        startIndex = i,
+                        useUpvalueDescriptor = useUpvalueDescriptor,
+                        addNewlineAfter = i < callStack.size - 1,
+                    )
             }
         }
+
+    /**
+     * Format a single frame or tail call sequence, returns the next index to process.
+     */
+    private fun StringBuilder.formatFrameOrTailCallSequence(
+        callStack: List<CallFrame>,
+        startIndex: Int,
+        useUpvalueDescriptor: Boolean,
+        addNewlineAfter: Boolean,
+    ): Int {
+        val frame = callStack[startIndex]
+        var nextIndex = startIndex
+
+        if (frame.isTailCall) {
+            // Find the end of the tail call sequence
+            val tailStart = startIndex
+            while (nextIndex < callStack.size && callStack[nextIndex].isTailCall) {
+                nextIndex++
+            }
+
+            // Show the first tail-called frame
+            formatFrame(callStack[tailStart], useUpvalueDescriptor)
+
+            // Insert tail call marker if there was more than one tail call
+            val tailCallCount = nextIndex - tailStart
+            if (tailCallCount > 1) {
+                appendLine()
+                append("\t(...tail calls...)")
+            }
+
+            // Add newline after this frame group if requested
+            if (addNewlineAfter) {
+                appendLine()
+            }
+        } else {
+            // Regular frame (not tail called)
+            formatFrame(frame, useUpvalueDescriptor)
+
+            // Add newline if requested
+            if (addNewlineAfter) {
+                appendLine()
+            }
+            nextIndex++
+        }
+
+        return nextIndex
+    }
 
     /**
      * Format a single call frame.

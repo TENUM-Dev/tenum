@@ -5,7 +5,7 @@ plugins {
 }
 
 
-group = "ai.plantitude.luak"
+group = "ai.tenum"
 
 allOpen {
     annotation("org.openjdk.jmh.annotations.State")

@@ -1,9 +1,8 @@
 package ai.tenum.lua.compat.advanced.errors
-
 // CPD-OFF: test file with intentional test setup duplications
-
 import ai.tenum.lua.compat.LuaCompatTestBase
-import kotlinx.coroutines.test.runTest
+import ai.tenum.lua.runtime.LuaNil
+import ai.tenum.lua.runtime.LuaString
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -95,7 +94,7 @@ class PcallXpcallErrorTest : LuaCompatTestBase() {
             """,
                 )
 
-            val errorMsg = (result as ai.tenum.lua.runtime.LuaString).value
+            val errorMsg = (result as LuaString).value
             // Should be exactly "pure message" - no source location, no stack trace
             assertLuaString(result, "pure message")
         }
@@ -120,7 +119,7 @@ class PcallXpcallErrorTest : LuaCompatTestBase() {
 
             // Result should be nil
             assertTrue(
-                result is ai.tenum.lua.runtime.LuaNil,
+                result is LuaNil,
                 "Expected nil but got: $result (${result::class.simpleName})",
             )
         }
@@ -139,7 +138,7 @@ class PcallXpcallErrorTest : LuaCompatTestBase() {
             """,
                 )
 
-            val errorMsg = (result as ai.tenum.lua.runtime.LuaString).value
+            val errorMsg = (result as LuaString).value
             // Should contain location prefix, not just the raw message
             assertTrue(
                 errorMsg != "with location",

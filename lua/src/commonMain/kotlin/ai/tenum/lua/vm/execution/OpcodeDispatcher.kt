@@ -233,14 +233,34 @@ internal class OpcodeDispatcher(
             }
 
             OpCode.CALL -> {
-                CallOpcodes.executeCall(instr, registers, execFrame, env, pc, setCallContext)
-                DispatchResult.Continue
+                when (
+                    val result =
+                        CallOpcodes.executeCall(
+                            instr,
+                            registers,
+                            execFrame,
+                            env,
+                            pc,
+                            setCallContext,
+                        )
+                ) {
+                    CallOpcodes.CallResult.Completed -> DispatchResult.Continue
+                    is CallOpcodes.CallResult.Trampoline -> {
+                        DispatchResult.CallTrampoline(
+                            newProto = result.newProto,
+                            newArgs = result.newArgs,
+                            newUpvalues = result.newUpvalues,
+                            savedFunc = result.resolvedFunc,
+                            callInstruction = instr,
+                        )
+                    }
+                    is CallOpcodes.CallResult.Return -> {
+                        error("CALL should not return Return result")
+                    }
+                }
             }
 
             OpCode.TAILCALL -> {
-                // Save function reference before delegating to CallOpcodes
-                val savedFunc = registers[instr.a]
-
                 when (
                     val result =
                         CallOpcodes.executeTailCall(
@@ -249,19 +269,21 @@ internal class OpcodeDispatcher(
                             execFrame,
                             env,
                             pc,
-                            debugTracer.isTrampolineEnabled(),
                         )
                 ) {
-                    is CallOpcodes.TailCallResult.Return -> {
+                    is CallOpcodes.CallResult.Return -> {
                         DispatchResult.Return(result.values)
                     }
-                    is CallOpcodes.TailCallResult.TailCall -> {
+                    is CallOpcodes.CallResult.Trampoline -> {
                         DispatchResult.TailCallTrampoline(
                             newProto = result.newProto,
                             newArgs = result.newArgs,
                             newUpvalues = result.newUpvalues,
                             savedFunc = result.resolvedFunc,
                         )
+                    }
+                    CallOpcodes.CallResult.Completed -> {
+                        error("TAILCALL should not return Completed")
                     }
                 }
             }

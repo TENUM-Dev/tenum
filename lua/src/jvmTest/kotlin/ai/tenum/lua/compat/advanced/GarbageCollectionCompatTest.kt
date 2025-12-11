@@ -3,7 +3,6 @@ package ai.tenum.lua.compat.advanced
 import ai.tenum.lua.compat.LuaCompatTestBase
 import ai.tenum.lua.runtime.LuaBoolean
 import ai.tenum.lua.runtime.LuaNumber
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue

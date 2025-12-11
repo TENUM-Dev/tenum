@@ -13,5 +13,6 @@ include(
     ":lua",
     ":cli",
     ":clinpm",
-    ":performance",
+    ":tests:integration",
+    ":tests:performance",
 )

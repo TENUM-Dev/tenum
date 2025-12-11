@@ -12,15 +12,20 @@ permissions:
 jobs:
   open-release-pr:
     runs-on: ubuntu-latest
-    env:
-      BOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
     steps:
+      - name: Generate token from GitHub App
+        uses: actions/create-github-app-token@v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout dev
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
         with:
           ref: dev
           fetch-depth: 0
-          token: ${{ env.BOT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Configure git
         run: |
@@ -47,7 +52,7 @@ jobs:
         if: steps.diff.outputs.has_diff == 'true'
         uses: peterjgrainger/action-create-branch@v3.0.0
         env:
-          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           branch: ${{ env.RELEASE_BRANCH }}
           sha: ${{ env.DEV_SHA }}
@@ -55,7 +60,7 @@ jobs:
       - name: Create or reuse release PR
         id: pr
         if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -84,10 +89,9 @@ jobs:
 
       - name: Approve PR
         if: steps.pr.outputs.number != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
-          # Use GITHUB_TOKEN so approval comes from github-actions, not the PR author PAT
-          github-token: ${{ env.BOT_TOKEN}}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
             await github.rest.pulls.createReview({
@@ -102,10 +106,9 @@ jobs:
 
       - name: Enable auto-merge
         if: steps.pr.outputs.node_id != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v8.0.0
         with:
-          # Use BOT_TOKEN so actor has push rights on the PR branch when enabling auto-merge
-          github-token: ${{ env.BOT_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const prNodeId = process.env.PR_ID;
             await github.graphql(

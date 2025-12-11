@@ -166,12 +166,12 @@ Performance benchmarks should be run:
 Performance testing ensures [TENUM](../README.md) delivers fast, responsive applications across all platforms. Benchmarks validate that the Lua interpreter maintains high performance while adding full-stack capabilities.
 
 Related modules:
-- [luak](../luak/) - Core Lua interpreter being benchmarked
-- [cli](../cli/) - CLI tools for running benchmarks
+- [lua](../../lua/) - Core Lua 5.4.8 interpreter being benchmarked
+- [cli](../../cli/) - CLI tools for running benchmarks
 
 ## Contributing
 
-When adding new features to LuaK:
+When adding new features to the Lua interpreter:
 1. Add corresponding benchmarks
 2. Ensure no performance regressions
 3. Document performance characteristics

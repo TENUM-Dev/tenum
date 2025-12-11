@@ -1,9 +1,7 @@
 package ai.tenum.lua.compat.advanced.errors
 
 // CPD-OFF: test file with intentional test setup duplications
-
 import ai.tenum.lua.compat.LuaCompatTestBase
-import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 

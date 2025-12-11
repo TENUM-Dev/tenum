@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Validate wrapper
-        uses: gradle/wrapper-validation-action@v3
+        uses: gradle/actions/wrapper-validation@v5.0.0
 
   lint-format:
     name: Lint & Formatting
@@ -24,14 +24,14 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Run ktlint
@@ -43,14 +43,14 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Run Kover
@@ -62,18 +62,18 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
-      #- name: Run CPD
-      #  run: ./gradlew cpdCheck --stacktrace --no-daemon
+      - name: Run CPD
+        run: ./gradlew cpdCheck --no-daemon
 
   build-test-JVM:
     name: Build & Test (JVM)
@@ -81,14 +81,14 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build & Test JVM targets
@@ -101,19 +101,19 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
-      #- name: Build & Test JS targets
-      #  run: |
-      #    ./gradlew kotlinUpgradeYarnLock jsNodeTest --no-daemon
+      - name: Build & Test JS targets
+        run: |
+          ./gradlew kotlinUpgradeYarnLock jsNodeTest --no-daemon
 
   build-test-linux:
     name: Build & Test (Linux)
@@ -121,19 +121,19 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
-      #- name: Build Linux targets
-      #  run: |
-      #    ./gradlew linuxX64Test --no-daemon
+      - name: Build Linux targets
+        run: |
+          ./gradlew linuxX64Test --no-daemon
 
   build-test-windows:
     name: Build & Test (Windows)
@@ -141,18 +141,18 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
-      #- name: Build Windows targets
-      #  shell: pwsh
-      #  run: |
-      #    ./gradlew.bat mingwX64Test --no-daemon
+        uses: gradle/actions/setup-gradle@v5.0.0
+      - name: Build Windows targets
+        shell: pwsh
+        run: |
+          ./gradlew.bat mingwX64Test --no-daemon
 
   build-test-macos:
     name: Build & Test (macOS)
@@ -160,19 +160,19 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
-      #- name: Build macOS targets
-      #  run: |
-      #    ./gradlew macosX64Test --no-daemon
+      - name: Build macOS targets
+        run: |
+          ./gradlew macosX64Test --no-daemon
 
   build-test-macos-arm:
     name: Build & Test (macOS ARM)
@@ -180,19 +180,19 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         run: chmod +x gradlew
-      #- name: Build macOS arm targets
-      #  run: |
-      #    ./gradlew macosArm64Test --no-daemon
+      - name: Build macOS arm targets
+        run: |
+          ./gradlew macosArm64Test --no-daemon
   installers:
     name: Build Installers
     if: false
@@ -211,14 +211,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
       - name: Make gradlew executable
         if: runner.os != 'Windows'
         run: chmod +x gradlew

@@ -8,7 +8,6 @@ import ai.tenum.lua.runtime.LuaValue
  * Handles:
  * - Debug logging with configurable output
  * - Register write tracing for debugging
- * - Trampoline tail-call optimization control
  */
 class DebugTracer {
     /**
@@ -25,11 +24,6 @@ class DebugTracer {
      * Register index to trace writes (null = no tracing)
      */
     private var traceRegisterIndex: Int? = null
-
-    /**
-     * Trampoline tail-call optimization enabled/disabled
-     */
-    private var trampolineEnabled: Boolean = true
 
     /**
      * Enable debug logging with optional custom logger.
@@ -61,21 +55,6 @@ class DebugTracer {
             debugLogger(messageBuilder())
         }
     }
-
-    /**
-     * Enable/disable trampoline tail-call optimization.
-     *
-     * @param enabled true to enable TCO, false to disable
-     */
-    fun enableTrampoline(enabled: Boolean) {
-        trampolineEnabled = enabled
-        debug { "Trampoline TCO ${if (enabled) "enabled" else "disabled"}" }
-    }
-
-    /**
-     * Check if trampoline TCO is enabled.
-     */
-    fun isTrampolineEnabled(): Boolean = trampolineEnabled
 
     /**
      * Enable register write tracing for a specific register index.
