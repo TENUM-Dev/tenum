@@ -135,8 +135,9 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_main_lua() = runTest(timeout = 60.seconds) { executeTestFile("main.lua") }
 
     @Test
-    @Ignore
-    fun test_math_lua() = runTest(timeout = 60.seconds) { executeTestFile("math.lua") }
+    fun test_math_lua() = runTest(timeout = 60.seconds) {
+        executeTestFile("math.lua")
+    }
 
     @Test
     @Ignore
