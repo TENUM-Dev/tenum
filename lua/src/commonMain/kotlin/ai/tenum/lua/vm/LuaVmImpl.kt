@@ -211,9 +211,9 @@ class LuaVmImpl(
 
     /**
      * Call depth counter for stack overflow detection.
-     * Tracks recursive call depth to prevent native stack overflow.
+     * Tracks the depth of the trampoline execution stack to prevent unbounded growth.
      * Matches Lua 5.4's LUAI_MAXCCALLS behavior (typically 200 for testing, 1000+ for production).
-     * Note: Tail calls use trampoline and don't increment this counter.
+     * All Lua function calls (including tail calls) use the trampoline loop.
      */
     private var callDepth = 0
     private val maxCallDepth = 1000
@@ -286,8 +286,6 @@ class LuaVmImpl(
         set(value) {
             debugTracer.debugLogger = value
         }
-
-    fun enableTrampoline(enabled: Boolean) = debugTracer.enableTrampoline(enabled)
 
     fun enableRegisterTrace(index: Int?) = debugTracer.enableRegisterTrace(index)
 
