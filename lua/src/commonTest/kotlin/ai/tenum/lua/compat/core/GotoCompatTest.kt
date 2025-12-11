@@ -263,4 +263,62 @@ class GotoCompatTest : LuaCompatTestBase() {
                 """.trimIndent()
             assertLuaNumber(code, 6.0) // 1 + 2 + 3
         }
+
+    @Test
+    fun testBackwardGotoResetsLocal() =
+        runTest {
+            // Test from goto.lua line 115-127: bug in 5.2 -> 5.3.2
+            // When we jump backward to ::L1::, local y should be reset to nil
+            // This tests that CLOSE is emitted before backward goto
+            val code =
+                """
+                local x
+                ::L1::
+                local y
+                assert(y == nil)
+                y = true
+                if x == nil then
+                    x = 1
+                    goto L1
+                else
+                    x = x + 1
+                end
+                assert(x == 2 and y == true)
+                return x
+                """.trimIndent()
+            assertLuaNumber(code, 2.0)
+        }
+
+    @Test
+    fun testLabelBeforeLocalEmitsLoadnil() =
+        runTest {
+            // FOCUSED TEST: Label immediately before local should emit LOADNIL at label PC
+            // This is the minimal reproduction of the backward goto bug
+            val code =
+                """
+                ::L1::
+                local y
+                y = 42
+                return y
+                """.trimIndent()
+            assertLuaNumber(code, 42.0)
+        }
+
+    @Test
+    fun testBackwardGotoToLabelBeforeLocal() =
+        runTest {
+            // FOCUSED TEST: Backward goto should re-initialize local to nil
+            val code =
+                """
+                local x = 0
+                ::L1::
+                local y
+                if y ~= nil then error("y should be nil") end
+                y = true
+                x = x + 1
+                if x < 2 then goto L1 end
+                return x
+                """.trimIndent()
+            assertLuaNumber(code, 2.0)
+        }
 }

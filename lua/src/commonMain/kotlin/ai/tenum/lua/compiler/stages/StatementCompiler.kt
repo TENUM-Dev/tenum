@@ -363,7 +363,8 @@ class StatementCompiler {
         // - We pre-allocate R[1] and R[2]
         // - AND operator can't steal R[2] as a temp
         // - R[2] gets properly NILed
-        if (varCount > exprCount && !willUseMultiReturn) {
+        val shouldPreallocate = varCount > exprCount && !willUseMultiReturn
+        if (shouldPreallocate) {
             // Pre-allocate all variable registers
             for (i in 0 until varCount) {
                 ctx.registerAllocator.allocateTemp()
@@ -374,7 +375,7 @@ class StatementCompiler {
         for (i in 0 until exprCount) {
             val expr = statement.expressions[i]
             val targetReg =
-                if (varCount > exprCount && !willUseMultiReturn) {
+                if (shouldPreallocate) {
                     // Use pre-allocated register
                     firstValueReg + i
                 } else {
@@ -398,12 +399,24 @@ class StatementCompiler {
         }
 
         // The registers holding expression results are now at the top of the stack.
-        val actualExprCount = ctx.registerAllocator.usedCount - firstValueReg
+        // When registers were pre-allocated, actualExprCount should still be exprCount
+        val actualExprCount =
+            if (shouldPreallocate) {
+                exprCount
+            } else {
+                ctx.registerAllocator.usedCount - firstValueReg
+            }
 
         // 2. Nil-fill any remaining locals that don't have an initializer.
         for (i in actualExprCount until varCount) {
-            val nilReg = ctx.registerAllocator.allocateTemp()
-            ctx.emit(OpCode.LOADNIL, nilReg, 1, 0)
+            val nilReg =
+                if (shouldPreallocate) {
+                    // Use pre-allocated register
+                    firstValueReg + i
+                } else {
+                    ctx.registerAllocator.allocateTemp()
+                }
+            ctx.emit(OpCode.LOADNIL, nilReg, nilReg, 0)
         }
 
         // 3. The registers from firstValueReg to stackTop are now our local variables.
@@ -976,7 +989,7 @@ class StatementCompiler {
             }
             // Only emit LOADNIL for non-call case when we have fewer than 3 expressions
             for (i in exprCount until 3) {
-                ctx.emit(OpCode.LOADNIL, tempRegs[i], 1, 0)
+                ctx.emit(OpCode.LOADNIL, tempRegs[i], tempRegs[i], 0)
             }
         }
 
@@ -1238,10 +1251,11 @@ class StatementCompiler {
             ctx.emit(OpCode.CLOSE, minCaptured, 0, 0)
         }
 
+        val labelInfo = ctx.labels[statement.label]
+
         val gotoJumpIndex = ctx.instructions.size
         ctx.emit(OpCode.JMP, 0, 0, 0)
 
-        val labelInfo = ctx.labels[statement.label]
         if (labelInfo != null) {
             val gotoInfo =
                 CompileContext.GotoInfo(
