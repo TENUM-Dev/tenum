@@ -80,8 +80,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
                 594..609,
                 // We use the kotlin gc
                 903..916,
-                // Current state
-                1002..1055,
             )
         }
 

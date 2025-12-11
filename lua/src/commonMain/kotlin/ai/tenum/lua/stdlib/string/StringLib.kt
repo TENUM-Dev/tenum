@@ -1,6 +1,7 @@
 package ai.tenum.lua.stdlib.string
 
 import ai.tenum.lua.compiler.io.ChunkWriter
+import ai.tenum.lua.compiler.util.DebugInfoStripping
 import ai.tenum.lua.runtime.LuaBoolean
 import ai.tenum.lua.runtime.LuaCompiledFunction
 import ai.tenum.lua.runtime.LuaDouble
@@ -358,10 +359,7 @@ class StringLib : LuaLibrary {
         // If stripping debug info, create a modified proto
         val proto =
             if (strip) {
-                originalProto.copy(
-                    source = "=?",
-                    lineEvents = emptyList(),
-                )
+                DebugInfoStripping.stripDebugInfo(originalProto)
             } else {
                 originalProto
             }

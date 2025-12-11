@@ -115,8 +115,41 @@ Keep your repos; use our hosting only if you want it.
 
 ### Now
 - ✅ Kotlin Multiplatform Lua interpreter
-- 🚧 Fix lua [Test suite](https://www.lua.org/tests/) 
-- 🚧 Continious diployment to npm
+- ✅ Continious diployment to npm
+- 🚧 Fix lua [Test suite](https://www.lua.org/tests/)
+  - ✅ **api.lua** - API compatibility tests
+  - ✅ **attrib.lua** - Attribute and metamethod tests
+  - ✅ **big.lua** - Large number handling
+  - ✅ **bitwise.lua** - Bitwise operations
+  - ✅ **bwcoercion.lua** - Bitwise coercion
+  - ✅ **calls.lua** - Function calls (partial - bytecode differences)
+  - ✅ **closure.lua** - Closures and upvalues
+  - ✅ **constructs.lua** - Language constructs
+  - ✅ **db.lua** - Debug library (partial - instruction count differences)
+  - ✅ **errors.lua** - Error handling (partial - parser limit tests skipped)
+  - ✅ **literals.lua** - Literal values (partial - string internalization differences)
+  - ✅ **main.lua** - Main entry point tests
+  - ✅ **sort.lua** - Table sorting
+  - ✅ **strings.lua** - String operations (partial - formatting differences)
+  - ✅ **tpack.lua** - Table pack/unpack
+  - ✅ **tracegc.lua** - Garbage collection traces
+  - ✅ **vararg.lua** - Variable arguments
+  - ✅ **verybig.lua** - Very large number operations
+  - ⏸️ **coroutine.lua** - Coroutines (failing at eqtab check)
+  - ❌ **code.lua** - Code generation tests
+  - ❌ **cstack.lua** - C stack tests (not applicable)
+  - ❌ **events.lua** - Event handling
+  - ❌ **files.lua** - File I/O operations
+  - ❌ **gc.lua** - Garbage collection (not implemented)
+  - ❌ **gengc.lua** - Generational GC (not implemented)
+  - ❌ **goto.lua** - Goto statements
+  - ❌ **heavy.lua** - Heavy computation tests
+  - ❌ **locals.lua** - Local variable tests
+  - ❌ **math.lua** - Math library
+  - ❌ **nextvar.lua** - Next variable iteration
+  - ❌ **pm.lua** - Pattern matching
+  - ❌ **utf8.lua** - UTF-8 support
+  - ⏭️ **all.lua** - Complete test orchestrator (skipped)
 - 🚧 Create binarry installer
   - 🚧 Windows
   - 🚧 MacOs

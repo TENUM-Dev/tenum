@@ -362,8 +362,9 @@ class LuaVmImpl(
             }
 
         // For LINE events, pass the line number; for other events, pass nil
+        // If line is -1 (stripped debug info), pass nil even for LINE events
         // This matches Lua 5.4 behavior where call/return events don't have meaningful line numbers
-        val lineArg = if (event == HookEvent.LINE) LuaNumber.of(line) else LuaNil
+        val lineArg = if (event == HookEvent.LINE && line >= 0) LuaNumber.of(line) else LuaNil
 
         try {
             hookFunc.call(listOf(LuaString(eventName), lineArg))
@@ -631,7 +632,10 @@ class LuaVmImpl(
         // - Coroutines: currentCoroutine is set → skip LINE hook at lineDefined
         val isCoroutineContext = coroutineStateManager.getCurrentCoroutine() != null
         if (currentProto.lineDefined > 0 && !isCoroutineContext) {
-            triggerHook(HookEvent.LINE, currentProto.lineDefined)
+            // For stripped functions (no lineEvents), pass -1 to indicate no debug info
+            // This will cause the hook to receive nil for the line parameter
+            val lineForHook = if (currentProto.lineEvents.isEmpty()) -1 else currentProto.lineDefined
+            triggerHook(HookEvent.LINE, lineForHook)
         }
 
         // Track current upvalues for this execution context and _ENV
@@ -845,7 +849,9 @@ class LuaVmImpl(
                         // Trigger CALL hook for the new function
                         triggerHook(HookEvent.CALL, currentProto.lineDefined)
                         if (currentProto.lineDefined > 0 && !isCoroutineContext) {
-                            triggerHook(HookEvent.LINE, currentProto.lineDefined)
+                            // For stripped functions (no lineEvents), pass -1 to indicate no debug info
+                            val lineForHook = if (currentProto.lineEvents.isEmpty()) -1 else currentProto.lineDefined
+                            triggerHook(HookEvent.LINE, lineForHook)
                         }
 
                         // Continue execution in callee (pc will be incremented to 0)

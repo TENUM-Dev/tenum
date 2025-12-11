@@ -88,13 +88,19 @@ data class CallFrame(
             // Use explicitly set top from call time
             base + top
         } else if (proto != null) {
-            // Heuristic: count active locals + buffer for temporaries (db.lua:410-418)
-            val activeLocalCount =
-                proto.localVars.count { local ->
-                    local.startPc <= pc && pc < local.endPc
-                }
-            // Allow access up to last active local + 1 temporary slot
-            base + activeLocalCount + 1
+            // When debug info is stripped, localVars is empty, so fall back to maxStackSize
+            if (proto.localVars.isEmpty()) {
+                // Use maxStackSize as a conservative upper bound for stripped functions
+                base + proto.maxStackSize
+            } else {
+                // Heuristic: count active locals + buffer for temporaries (db.lua:410-418)
+                val activeLocalCount =
+                    proto.localVars.count { local ->
+                        local.startPc <= pc && pc < local.endPc
+                    }
+                // Allow access up to last active local + 1 temporary slot
+                base + activeLocalCount + 1
+            }
         } else {
             // Native function: use register array size
             registers.size

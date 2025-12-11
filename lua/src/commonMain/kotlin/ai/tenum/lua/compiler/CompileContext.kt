@@ -7,6 +7,8 @@ import ai.tenum.lua.compiler.helper.RegisterAllocator
 import ai.tenum.lua.compiler.helper.ScopeManager
 import ai.tenum.lua.compiler.helper.UpvalueResolver
 import ai.tenum.lua.compiler.model.Instruction
+import ai.tenum.lua.compiler.model.LineEvent
+import ai.tenum.lua.compiler.model.LineEventKind
 import ai.tenum.lua.compiler.model.LineInfo
 import ai.tenum.lua.compiler.model.LocalLifetime
 import ai.tenum.lua.compiler.model.LocalVarInfo
@@ -302,6 +304,15 @@ data class CompileContext(
         }
 
         childCtx.emitCloseVariables(0)
+
+        // Emit lineEvent for lastLineDefined (the 'end' line) before RETURN
+        // This matches Lua 5.4.8 behavior where lastLineDefined is always in activelines
+        val actualEndLine = if (endLine > 0) endLine else childCtx.currentLine
+        if (actualEndLine > 0 && actualEndLine != childCtx.currentLine) {
+            childCtx.currentLine = actualEndLine
+            childCtx.lineInfo.add(LineEvent(childCtx.instructions.size, actualEndLine, LineEventKind.EXECUTION))
+        }
+
         childCtx.emit(OpCode.RETURN, 0, 1, 0)
 
         val localVarInfo =
