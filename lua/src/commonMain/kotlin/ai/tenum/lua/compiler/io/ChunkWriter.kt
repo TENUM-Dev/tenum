@@ -29,7 +29,8 @@ object ChunkWriter {
     fun dump(proto: Proto): ByteArray {
         val buffer = Buffer()
         writeHeader(buffer)
-        writeFunction(buffer, proto)
+        // Write the main function - pass null as parentSource to indicate this is the top level
+        writeFunction(buffer, proto, parentSource = null)
         return buffer.readByteArray()
     }
 
@@ -69,9 +70,12 @@ object ChunkWriter {
     private fun writeFunction(
         sink: BufferedSink,
         proto: Proto,
+        parentSource: String?,
     ) {
-        // Source name (write the source, not the function name)
-        writeString(sink, proto.source)
+        // Source name - write NULL (empty string) if same as parent (Lua 5.4 deduplication)
+        // For main function (parentSource == null), always write the source
+        val sourceToWrite = if (parentSource != null && proto.source == parentSource) "" else proto.source
+        writeString(sink, sourceToWrite)
 
         // Line info - write the function definition line numbers
         sink.writeIntLe(proto.lineDefined)
@@ -91,7 +95,8 @@ object ChunkWriter {
         // Constants
         sink.writeIntLe(proto.constants.size)
         for (constant in proto.constants) {
-            writeConstant(sink, constant)
+            // Pass current function's source as parent for nested functions
+            writeConstant(sink, constant, proto.source)
         }
 
         // Upvalues
@@ -136,6 +141,7 @@ object ChunkWriter {
     private fun writeConstant(
         sink: BufferedSink,
         value: LuaValue<*>,
+        parentSource: String,
     ) {
         when (value) {
             is LuaNil -> {
@@ -155,8 +161,9 @@ object ChunkWriter {
             }
             is LuaCompiledFunction -> {
                 // Serialize a compiled function constant inline
+                // Pass parent source for deduplication
                 sink.writeByte(ChunkFormat.LUA_TFUNCTION)
-                writeFunction(sink, value.proto)
+                writeFunction(sink, value.proto, parentSource)
             }
             else -> {
                 // Unsupported constant type - write nil

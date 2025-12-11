@@ -94,12 +94,17 @@ object ChunkReader {
         }
 
         // Read the function
-        return readFunction(source)
+        return readFunction(source, parentSource = null)
     }
 
-    private fun readFunction(source: BufferedSource): Proto {
+    private fun readFunction(
+        source: BufferedSource,
+        parentSource: String?,
+    ): Proto {
         // Source name (this is the source file/chunk name, not the function name)
-        val sourceName = readString(source)
+        val rawSourceName = readString(source)
+        // If empty and we have a parent source, inherit it (Lua 5.4 deduplication)
+        val sourceName = if (rawSourceName.isEmpty() && parentSource != null) parentSource else rawSourceName
         // debug prints removed
 
         // Line info
@@ -125,7 +130,7 @@ object ChunkReader {
         // debug prints removed
         val constants = mutableListOf<LuaValue<*>>()
         for (i in 0 until constantsSize) {
-            constants.add(readConstant(source))
+            constants.add(readConstant(source, sourceName))
         }
 
         // Upvalues
@@ -215,7 +220,10 @@ object ChunkReader {
         }
     }
 
-    private fun readConstant(source: BufferedSource): LuaValue<*> {
+    private fun readConstant(
+        source: BufferedSource,
+        parentSource: String,
+    ): LuaValue<*> {
         val type = source.readByte().toInt() and 0xFF
         return when (type) {
             LUA_TNIL -> LuaNil
@@ -233,7 +241,8 @@ object ChunkReader {
             }
             LUA_TFUNCTION -> {
                 // Read an inline serialized function Proto and wrap as LuaCompiledFunction
-                val proto = readFunction(source)
+                // Nested functions inherit parent source if they have empty source
+                val proto = readFunction(source, parentSource = parentSource)
                 val luaCompiledFunction = LuaCompiledFunction(proto)
                 luaCompiledFunction
             }
