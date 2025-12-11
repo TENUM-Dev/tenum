@@ -637,8 +637,14 @@ class MathLib : LuaLibrary {
         return if (rangeSize > 0) {
             // Normal case: range size fits in a Long
             // Use rejection sampling to avoid modulo bias
-            val randomValue = nextRandom()
-            from + (randomValue % rangeSize.toULong()).toLong()
+            val range = rangeSize.toULong()
+            val max = ULong.MAX_VALUE
+            val limit = max - (max % range)
+            var randomValue: ULong
+            do {
+                randomValue = nextRandom()
+            } while (randomValue >= limit)
+            from + (randomValue % range).toLong()
         } else {
             // Range size overflow: range is very large
             // Split the range in two and choose randomly
