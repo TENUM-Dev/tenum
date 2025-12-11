@@ -29,7 +29,7 @@ object CallOpcodes {
      * @param results The return values to store
      * @return Updated call frame with return values accessible via debug.getlocal
      */
-    internal fun prepareFrameWithReturnValues(
+    internal inline fun prepareFrameWithReturnValues(
         currentFrame: ai.tenum.lua.vm.CallFrame,
         returnFtransfer: Int,
         results: List<LuaValue<*>>,
@@ -74,11 +74,29 @@ object CallOpcodes {
     }
 
     /**
+     * Result of regular call execution.
+     */
+    sealed class CallResult {
+        /** Call completed - results stored in registers */
+        object Completed : CallResult()
+
+        /** Trampoline call to compiled function */
+        data class Trampoline(
+            val newProto: Proto,
+            val newArgs: List<LuaValue<*>>,
+            val newUpvalues: List<Upvalue>,
+            val resolvedFunc: LuaCompiledFunction,
+        ) : CallResult()
+    }
+
+    /**
      * CALL: Call a function with fixed or variable arguments and results.
      * R[A], ... ,R[A+C-2] := R[A](R[A+1], ... ,R[A+B-1])
      *
      * If B=0, arguments are from A+1 to top.
      * If C=0, returns all results and sets top marker.
+     *
+     * Returns CallResult indicating whether to trampoline or if call completed.
      */
     fun executeCall(
         instr: Instruction,
@@ -87,7 +105,8 @@ object CallOpcodes {
         env: ExecutionEnvironment,
         pc: Int,
         setCallContext: (InferredFunctionName) -> Unit,
-    ) {
+        trampolineEnabled: Boolean,
+    ): CallResult {
         var func = registers[instr.a]
         val collector = ArgumentCollector(registers, frame)
         val args = collector.collectArgs(instr.a + 1, instr.b)
@@ -114,6 +133,9 @@ object CallOpcodes {
             MethodCallContext.set(true)
         }
 
+        // Track if we're taking the trampoline path (to avoid clearing context in finally block)
+        var isTrampolining = false
+
         try {
             // Check for __call metamethod if func is not a function
             if (func !is LuaFunction) {
@@ -139,6 +161,26 @@ object CallOpcodes {
                 }
             } else {
                 env.debug("  Call R[${instr.a}] with ${args.size} args")
+
+                // Check if we can trampoline for compiled functions
+                if (trampolineEnabled && func is LuaCompiledFunction) {
+                    env.debug("  Trampolining call to compiled function")
+                    // Clear method context before trampolining
+                    MethodCallContext.clear()
+                    // Mark that we're trampolining so finally block doesn't clear the inferred name
+                    isTrampolining = true
+                    // NOTE: Do NOT clear call context (setCallContext) here!
+                    // The inferred name must be preserved for the trampoline handler to use.
+                    // It will be cleared by the handler after creating the CallFrame.
+                    return CallResult.Trampoline(
+                        newProto = func.proto,
+                        newArgs = args,
+                        newUpvalues = func.upvalues,
+                        resolvedFunc = func,
+                    )
+                }
+
+                // Non-trampoline path: regular recursive call
                 val results = env.callFunction(func, args)
                 env.debug("    Results: $results")
                 storeCallResults(instr, registers, frame, results, env)
@@ -146,9 +188,14 @@ object CallOpcodes {
         } finally {
             // Always clear method call context after the call completes
             MethodCallContext.clear()
-            // Clear call context for next call
-            setCallContext(InferredFunctionName.UNKNOWN)
+            // Clear call context for next call ONLY if not trampolining
+            // (trampoline handler will clear it after using the inferred name)
+            if (!isTrampolining) {
+                setCallContext(InferredFunctionName.UNKNOWN)
+            }
         }
+
+        return CallResult.Completed
     }
 
     /**

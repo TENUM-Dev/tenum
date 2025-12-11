@@ -32,6 +32,7 @@ import ai.tenum.lua.vm.errorhandling.NameHintResolver
 import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
 import ai.tenum.lua.vm.execution.ChunkExecutor
 import ai.tenum.lua.vm.execution.DispatchResult
+import ai.tenum.lua.vm.execution.ExecContext
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
 import ai.tenum.lua.vm.execution.ExecutionMode
@@ -207,6 +208,15 @@ class LuaVmImpl(
      * Coroutine state manager
      */
     private val coroutineStateManager = CoroutineStateManager()
+
+    /**
+     * Call depth counter for stack overflow detection.
+     * Tracks recursive call depth to prevent native stack overflow.
+     * Matches Lua 5.4's LUAI_MAXCCALLS behavior (typically 200 for testing, 1000+ for production).
+     * Note: Tail calls use trampoline and don't increment this counter.
+     */
+    private var callDepth = 0
+    private val maxCallDepth = 1000
 
     /**
      * Global environment table (_ENV) - wraps the globals map
@@ -521,6 +531,21 @@ class LuaVmImpl(
         function: LuaFunction? = null,
         mode: ExecutionMode = ExecutionMode.FreshCall,
     ): List<LuaValue<*>> {
+        // Check call depth to prevent stack overflow (Lua 5.4 behavior)
+        // Only check for fresh calls, not coroutine resumptions
+        if (mode is ExecutionMode.FreshCall) {
+            callDepth++
+            if (callDepth > maxCallDepth) {
+                callDepth-- // Reset before throwing
+                throw LuaException(
+                    errorMessageOnly = "C stack overflow",
+                    line = null,
+                    source = proto.source,
+                    luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                )
+            }
+        }
+
         // Handle execution mode - fresh call vs resume continuation
         val initialCallStackSize =
             when (mode) {
@@ -559,8 +584,8 @@ class LuaVmImpl(
         var constants = execFrame.constants
         var instructions = execFrame.instructions
         var pc = execFrame.pc
-        val openUpvalues = execFrame.openUpvalues
-        val toBeClosedVars = execFrame.toBeClosedVars
+        var openUpvalues = execFrame.openUpvalues
+        var toBeClosedVars = execFrame.toBeClosedVars
         var varargs = execFrame.varargs
         val alreadyClosedRegs = mutableSetOf<Int>() // Track which have been closed in normal flow
         // Create execution environment for opcode handlers
@@ -617,6 +642,10 @@ class LuaVmImpl(
         // Find _ENV by name, not position (_ENV is not always at index 0!)
         val envIndex = currentProto.upvalueInfo.indexOfFirst { it.name == "_ENV" }
         currentEnvUpvalue = if (envIndex >= 0) currentUpvalues.getOrNull(envIndex) else null
+
+        // Execution stack for trampolined calls (non-tail calls)
+        // Each entry represents a caller waiting for callee to return
+        val execStack = ArrayDeque<ExecContext>()
 
         try {
             debug { "--- Starting execution ---" }
@@ -683,7 +712,145 @@ class LuaVmImpl(
                     }
                     is DispatchResult.Return -> {
                         debug { "[REGISTERS after RETURN] ${registers.slice(0..10).mapIndexed { i, v -> "R[$i]=$v" }.joinToString(", ")}" }
-                        return dispatchResult.values
+
+                        // Check if there's a caller waiting (trampolined call stack)
+                        if (execStack.isNotEmpty()) {
+                            // Pop caller context and restore
+                            val callerContext = execStack.removeLast()
+                            debug { "  Unwinding from trampolined call, restoring caller" }
+
+                            // Pop callee's call frame from debug stack
+                            callStackManager.removeLastFrame()
+
+                            // Restore caller's execution state
+                            currentProto = callerContext.proto
+                            execFrame = callerContext.execFrame
+                            registers = callerContext.registers
+                            constants = callerContext.constants
+                            instructions = callerContext.instructions
+                            pc = callerContext.pc
+                            openUpvalues = execFrame.openUpvalues
+                            toBeClosedVars = execFrame.toBeClosedVars
+                            varargs = callerContext.varargs
+                            currentUpvalues = callerContext.currentUpvalues
+                            lastLine = callerContext.lastLine
+
+                            // Recreate execution environment for caller
+                            env = ExecutionEnvironment(execFrame, globals, this)
+
+                            // Store callee's return values into caller's registers
+                            val callInstr = callerContext.callInstruction
+                            val storage = ResultStorage(env)
+                            storage.storeResults(
+                                targetReg = callInstr.a,
+                                encodedCount = callInstr.c,
+                                results = dispatchResult.values,
+                                opcodeName = "CALL-RETURN",
+                            )
+
+                            // Decrement call depth (unwinding from callee)
+                            callDepth--
+
+                            // Continue execution in caller
+                            // pc will be incremented at end of loop
+                        } else {
+                            // No caller on stack - this is the final return
+                            return dispatchResult.values
+                        }
+                    }
+                    is DispatchResult.CallTrampoline -> {
+                        // Save current (caller) execution context
+                        debug { "  Trampolining into regular call" }
+
+                        val callerContext =
+                            ExecContext(
+                                proto = currentProto,
+                                execFrame = execFrame,
+                                registers = registers,
+                                constants = constants,
+                                instructions = instructions,
+                                pc = pc, // Resume at next instruction after CALL returns
+                                varargs = varargs,
+                                currentUpvalues = currentUpvalues,
+                                callInstruction = dispatchResult.callInstruction,
+                                lastLine = lastLine,
+                            )
+                        execStack.addLast(callerContext)
+
+                        // Increment call depth (entering new function)
+                        callDepth++
+                        if (callDepth > maxCallDepth) {
+                            callDepth--
+                            execStack.removeLast()
+                            throw LuaException(
+                                errorMessageOnly = "C stack overflow",
+                                line = null,
+                                source = currentProto.source,
+                                luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                            )
+                        }
+
+                        // Switch to callee's execution context
+                        val funcVal = dispatchResult.newProto
+                        val args = dispatchResult.newArgs
+                        val calleeUpvalues = dispatchResult.newUpvalues
+                        val luaFunc = dispatchResult.savedFunc
+
+                        currentProto = funcVal
+                        constants = currentProto.constants
+                        instructions = currentProto.instructions
+                        pc = -1 // Will be incremented to 0 at end of loop
+
+                        // Create new execution frame for callee
+                        execFrame =
+                            ExecutionFrame(
+                                proto = currentProto,
+                                initialArgs = args,
+                                upvalues = calleeUpvalues,
+                                initialPc = 0,
+                                existingRegisters = null, // Fresh registers for callee
+                                existingVarargs =
+                                    if (currentProto.hasVararg && args.size > currentProto.parameters.size) {
+                                        args.subList(currentProto.parameters.size, args.size)
+                                    } else {
+                                        emptyList()
+                                    },
+                            )
+
+                        registers = execFrame.registers
+                        openUpvalues = execFrame.openUpvalues
+                        toBeClosedVars = execFrame.toBeClosedVars
+                        varargs = execFrame.varargs
+                        currentUpvalues = calleeUpvalues
+
+                        // Recreate execution environment for callee
+                        env = ExecutionEnvironment(execFrame, globals, this)
+
+                        // Push callee's call frame onto debug stack (caller's frame stays)
+                        callStackManager.addFrame(
+                            CallFrame(
+                                function = luaFunc,
+                                proto = currentProto,
+                                pc = 0,
+                                base = 0,
+                                registers = registers,
+                                isNative = false,
+                                isTailCall = false, // Regular call, not tail call
+                                inferredFunctionName = pendingInferredName,
+                                varargs = varargs,
+                                ftransfer = if (args.isEmpty()) 0 else 1,
+                                ntransfer = args.size,
+                            ),
+                        )
+                        pendingInferredName = null
+
+                        // Trigger CALL hook for the new function
+                        triggerHook(HookEvent.CALL, currentProto.lineDefined)
+                        if (currentProto.lineDefined > 0 && !isCoroutineContext) {
+                            triggerHook(HookEvent.LINE, currentProto.lineDefined)
+                        }
+
+                        // Continue execution in callee (pc will be incremented to 0)
                     }
                     is DispatchResult.TailCallTrampoline -> {
                         // Perform in-place trampoline: replace current execution context
@@ -1044,6 +1211,11 @@ class LuaVmImpl(
                 else -> throw e
             }
         } finally {
+            // Decrement call depth (only for fresh calls, not resumptions)
+            if (mode is ExecutionMode.FreshCall) {
+                callDepth--
+            }
+
             // Remove all frames added during this execution (including tail-called frames)
             // This cleans up the call stack after trampolined tail calls
             callStackManager.cleanupFrames(initialCallStackSize)
@@ -1284,6 +1456,19 @@ class LuaVmImpl(
                 // Clear call context after using it
                 pendingInferredName = null
 
+                // Check call depth for native functions too
+                callDepth++
+                if (callDepth > maxCallDepth) {
+                    callDepth--
+                    callStackManager.cleanupFrames(initialCallStackSize)
+                    throw LuaException(
+                        errorMessageOnly = "C stack overflow",
+                        line = null,
+                        source = null,
+                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                    )
+                }
+
                 // Trigger CALL hook for native function
                 triggerHook(HookEvent.CALL, 0)
 
@@ -1310,6 +1495,9 @@ class LuaVmImpl(
                     isYieldException = true
                     throw e
                 } finally {
+                    // Decrement call depth
+                    callDepth--
+
                     // Clean up call stack (unless it was a yield exception)
                     if (!isYieldException) {
                         callStackManager.cleanupFrames(initialCallStackSize)

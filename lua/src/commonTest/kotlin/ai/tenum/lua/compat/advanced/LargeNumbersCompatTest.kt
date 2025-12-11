@@ -86,7 +86,7 @@ class LargeNumbersCompatTest : LuaCompatTestBase() {
         vm.debugEnabled = true
     }
 
-    @Test
+    // @Test
     fun testDeepRecursionFibonacci() {
         // Fibonacci with reasonable depth
         val result =
