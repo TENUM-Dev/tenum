@@ -12,15 +12,20 @@ permissions:
 jobs:
   sync-dev-pr:
     runs-on: ubuntu-latest
-    env:
-      BOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
     steps:
+      - name: Generate token from GitHub App
+        uses: actions/create-github-app-token@v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ env.BOT_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Check for changes from main to dev
         id: diff
@@ -66,7 +71,7 @@ jobs:
         if: steps.pr.outputs.number != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
             await github.rest.pulls.createReview({
@@ -83,7 +88,7 @@ jobs:
         if: steps.pr.outputs.node_id != ''
         uses: actions/github-script@v8
         with:
-          github-token: ${{ env.BOT_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const prNodeId = process.env.PR_ID;
             await github.graphql(
