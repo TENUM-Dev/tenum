@@ -45,7 +45,13 @@ kover {
         // Apply Kover to all subprojects and merge their reports into this root project
         // exept test/integration and test/performance
         subprojects {
-            it.name != "integration" && it.name != "performance"
+            setOf(
+                "integration",
+                "performance",
+                "tests"
+            ).contains(
+                it.name
+            ).not()
         }
     }
     reports {
