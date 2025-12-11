@@ -48,9 +48,9 @@ kover {
             setOf(
                 "integration",
                 "performance",
-                "tests"
+                "tests",
             ).contains(
-                it.name
+                it.name,
             ).not()
         }
     }

@@ -72,8 +72,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Make gradlew executable
         run: chmod +x gradlew
-      #- name: Run CPD
-      #  run: ./gradlew cpdCheck --stacktrace --no-daemon
+      - name: Run CPD
+        run: ./gradlew cpdCheck --no-daemon
 
   build-test-JVM:
     name: Build & Test (JVM)

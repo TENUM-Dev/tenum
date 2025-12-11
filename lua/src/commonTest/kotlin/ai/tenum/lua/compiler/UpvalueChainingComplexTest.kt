@@ -1,6 +1,5 @@
 package ai.tenum.lua.compiler
 
-import ai.tenum.lua.runtime.LuaDouble
 import ai.tenum.lua.runtime.LuaNumber
 import ai.tenum.lua.vm.LuaVmImpl
 import kotlin.test.Test

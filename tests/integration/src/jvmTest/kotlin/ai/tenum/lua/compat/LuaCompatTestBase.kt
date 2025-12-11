@@ -1,4 +1,5 @@
 package ai.tenum.lua.compat
+// CPD-OFF: test file with intentional test setup duplications
 
 import ai.tenum.lua.runtime.LuaBoolean
 import ai.tenum.lua.runtime.LuaNil

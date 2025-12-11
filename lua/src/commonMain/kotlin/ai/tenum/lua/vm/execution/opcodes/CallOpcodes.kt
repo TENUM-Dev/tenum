@@ -95,7 +95,7 @@ object CallOpcodes {
      *
      * If B=0, arguments are from A+1 to top.
      * If C=0, returns all results and sets top marker.
-     * 
+     *
      * Returns CallResult indicating whether to trampoline or if call completed.
      */
     fun executeCall(
@@ -135,7 +135,7 @@ object CallOpcodes {
 
         // Track if we're taking the trampoline path (to avoid clearing context in finally block)
         var isTrampolining = false
-        
+
         try {
             // Check for __call metamethod if func is not a function
             if (func !is LuaFunction) {
@@ -161,7 +161,7 @@ object CallOpcodes {
                 }
             } else {
                 env.debug("  Call R[${instr.a}] with ${args.size} args")
-                
+
                 // Check if we can trampoline for compiled functions
                 if (trampolineEnabled && func is LuaCompiledFunction) {
                     env.debug("  Trampolining call to compiled function")
@@ -179,7 +179,7 @@ object CallOpcodes {
                         resolvedFunc = func,
                     )
                 }
-                
+
                 // Non-trampoline path: regular recursive call
                 val results = env.callFunction(func, args)
                 env.debug("    Results: $results")
@@ -194,7 +194,7 @@ object CallOpcodes {
                 setCallContext(InferredFunctionName.UNKNOWN)
             }
         }
-        
+
         return CallResult.Completed
     }
 

@@ -9,7 +9,7 @@ import ai.tenum.lua.runtime.Upvalue
 /**
  * Saved execution context for a caller when trampolining into a callee.
  * Holds all state needed to restore the caller after the callee returns.
- * 
+ *
  * Note: openUpvalues and toBeClosedVars are NOT saved here because they are
  * global state that must persist across stack frames (upvalues can be shared
  * between closures created in different frames).

@@ -712,16 +712,16 @@ class LuaVmImpl(
                     }
                     is DispatchResult.Return -> {
                         debug { "[REGISTERS after RETURN] ${registers.slice(0..10).mapIndexed { i, v -> "R[$i]=$v" }.joinToString(", ")}" }
-                        
+
                         // Check if there's a caller waiting (trampolined call stack)
                         if (execStack.isNotEmpty()) {
                             // Pop caller context and restore
                             val callerContext = execStack.removeLast()
                             debug { "  Unwinding from trampolined call, restoring caller" }
-                            
+
                             // Pop callee's call frame from debug stack
                             callStackManager.removeLastFrame()
-                            
+
                             // Restore caller's execution state
                             currentProto = callerContext.proto
                             execFrame = callerContext.execFrame
@@ -734,10 +734,10 @@ class LuaVmImpl(
                             varargs = callerContext.varargs
                             currentUpvalues = callerContext.currentUpvalues
                             lastLine = callerContext.lastLine
-                            
+
                             // Recreate execution environment for caller
                             env = ExecutionEnvironment(execFrame, globals, this)
-                            
+
                             // Store callee's return values into caller's registers
                             val callInstr = callerContext.callInstruction
                             val storage = ResultStorage(env)
@@ -747,10 +747,10 @@ class LuaVmImpl(
                                 results = dispatchResult.values,
                                 opcodeName = "CALL-RETURN",
                             )
-                            
+
                             // Decrement call depth (unwinding from callee)
                             callDepth--
-                            
+
                             // Continue execution in caller
                             // pc will be incremented at end of loop
                         } else {
@@ -761,21 +761,22 @@ class LuaVmImpl(
                     is DispatchResult.CallTrampoline -> {
                         // Save current (caller) execution context
                         debug { "  Trampolining into regular call" }
-                        
-                        val callerContext = ExecContext(
-                            proto = currentProto,
-                            execFrame = execFrame,
-                            registers = registers,
-                            constants = constants,
-                            instructions = instructions,
-                            pc = pc, // Resume at next instruction after CALL returns
-                            varargs = varargs,
-                            currentUpvalues = currentUpvalues,
-                            callInstruction = dispatchResult.callInstruction,
-                            lastLine = lastLine,
-                        )
+
+                        val callerContext =
+                            ExecContext(
+                                proto = currentProto,
+                                execFrame = execFrame,
+                                registers = registers,
+                                constants = constants,
+                                instructions = instructions,
+                                pc = pc, // Resume at next instruction after CALL returns
+                                varargs = varargs,
+                                currentUpvalues = currentUpvalues,
+                                callInstruction = dispatchResult.callInstruction,
+                                lastLine = lastLine,
+                            )
                         execStack.addLast(callerContext)
-                        
+
                         // Increment call depth (entering new function)
                         callDepth++
                         if (callDepth > maxCallDepth) {
@@ -788,41 +789,43 @@ class LuaVmImpl(
                                 luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
                             )
                         }
-                        
+
                         // Switch to callee's execution context
                         val funcVal = dispatchResult.newProto
                         val args = dispatchResult.newArgs
                         val calleeUpvalues = dispatchResult.newUpvalues
                         val luaFunc = dispatchResult.savedFunc
-                        
+
                         currentProto = funcVal
                         constants = currentProto.constants
                         instructions = currentProto.instructions
                         pc = -1 // Will be incremented to 0 at end of loop
-                        
+
                         // Create new execution frame for callee
-                        execFrame = ExecutionFrame(
-                            proto = currentProto,
-                            initialArgs = args,
-                            upvalues = calleeUpvalues,
-                            initialPc = 0,
-                            existingRegisters = null, // Fresh registers for callee
-                            existingVarargs = if (currentProto.hasVararg && args.size > currentProto.parameters.size) {
-                                args.subList(currentProto.parameters.size, args.size)
-                            } else {
-                                emptyList()
-                            },
-                        )
-                        
+                        execFrame =
+                            ExecutionFrame(
+                                proto = currentProto,
+                                initialArgs = args,
+                                upvalues = calleeUpvalues,
+                                initialPc = 0,
+                                existingRegisters = null, // Fresh registers for callee
+                                existingVarargs =
+                                    if (currentProto.hasVararg && args.size > currentProto.parameters.size) {
+                                        args.subList(currentProto.parameters.size, args.size)
+                                    } else {
+                                        emptyList()
+                                    },
+                            )
+
                         registers = execFrame.registers
                         openUpvalues = execFrame.openUpvalues
                         toBeClosedVars = execFrame.toBeClosedVars
                         varargs = execFrame.varargs
                         currentUpvalues = calleeUpvalues
-                        
+
                         // Recreate execution environment for callee
                         env = ExecutionEnvironment(execFrame, globals, this)
-                        
+
                         // Push callee's call frame onto debug stack (caller's frame stays)
                         callStackManager.addFrame(
                             CallFrame(
@@ -837,16 +840,16 @@ class LuaVmImpl(
                                 varargs = varargs,
                                 ftransfer = if (args.isEmpty()) 0 else 1,
                                 ntransfer = args.size,
-                            )
+                            ),
                         )
                         pendingInferredName = null
-                        
+
                         // Trigger CALL hook for the new function
                         triggerHook(HookEvent.CALL, currentProto.lineDefined)
                         if (currentProto.lineDefined > 0 && !isCoroutineContext) {
                             triggerHook(HookEvent.LINE, currentProto.lineDefined)
                         }
-                        
+
                         // Continue execution in callee (pc will be incremented to 0)
                     }
                     is DispatchResult.TailCallTrampoline -> {
