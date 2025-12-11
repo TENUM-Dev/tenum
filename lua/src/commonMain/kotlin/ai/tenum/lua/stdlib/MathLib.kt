@@ -540,10 +540,10 @@ class MathLib : LuaLibrary {
                     when {
                         n == 0L -> {
                             // Special case: random(0) returns a random integer in [mininteger, maxinteger]
-                            // Return the current state, then advance it
-                            val currentState = randomState
-                            nextRandom() // Advance state for next call
-                            LuaNumber.of(currentState.toLong())
+                            // Use splitmix64 (I2Int) transformation like Lua 5.4 for better bit distribution
+                            val randomValue = nextRandom()
+                            val transformed = splitmix64(randomValue)
+                            LuaNumber.of(transformed.toLong())
                         }
                         n > 0 -> {
                             // Generate in range [1, n] inclusive
@@ -599,12 +599,12 @@ class MathLib : LuaLibrary {
     /**
      * Convert a 64-bit unsigned integer to a double in [0, 1).
      * This matches Lua 5.4's project64 function.
-     * 
+     *
      * From Lua 5.4.8 lmathlib.c:
-     * - Takes the upper 53 bits (double mantissa size) 
+     * - Takes the upper 53 bits (double mantissa size)
      * - Shifts right by 11 bits to discard lower bits: value >> 11
      * - Divides by 2^53 to normalize to [0, 1)
-     * 
+     *
      * This ensures the result has exactly 53 bits of precision and no extra bits.
      */
     private fun project64ToDouble(value: ULong): Double {
