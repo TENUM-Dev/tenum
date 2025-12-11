@@ -8,7 +8,7 @@ benchmark = "0.4.14"
 cpd = "3.5"
 okio = "3.16.4"
 datetime = "0.7.1-0.6.x-compat"
-kover = "0.9.3"
+kover = "0.9.4"
 
 [libraries]
 appdirs = "ca.gosyer:kotlin-multiplatform-appdirs:2.0.0"
