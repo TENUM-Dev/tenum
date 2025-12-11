@@ -73,9 +73,9 @@ object ChunkWriter {
         // Source name (write the source, not the function name)
         writeString(sink, proto.source)
 
-        // Line info
-        sink.writeIntLe(proto.lineInfo.firstOrNull()?.line ?: 0) // linedefined
-        sink.writeIntLe(proto.lineInfo.lastOrNull()?.line ?: 0) // lastlinedefined
+        // Line info - write the function definition line numbers
+        sink.writeIntLe(proto.lineDefined)
+        sink.writeIntLe(proto.lastLineDefined)
 
         // Function info
         sink.writeByte(proto.parameters.size) // numparams

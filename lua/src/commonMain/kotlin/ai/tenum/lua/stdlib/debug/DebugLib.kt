@@ -460,18 +460,15 @@ class DebugLib : LuaLibrary {
             // Active lines - build a table mapping line numbers to true
             val activelinesTable = LuaTable()
             if (func is LuaCompiledFunction) {
-                // Extract all unique line numbers from lineInfo (actual executable lines)
-                // Exclude linedefined (function declaration line) as it's not an active line
+                // Extract all unique line numbers from lineInfo (PC -> line mappings)
+                // activelines contains the actual executable lines recorded in lineEvents
+                // Note: For stripped functions, lineInfo is empty, so activelines will be empty
                 val uniqueLines =
                     func.proto.lineInfo
                         .map { it.line }
-                        .toSet() - func.proto.lineDefined
+                        .toSet()
                 for (line in uniqueLines) {
                     activelinesTable[LuaNumber.of(line)] = LuaBoolean.TRUE
-                }
-                // Also include lastLineDefined (the 'end' line)
-                if (func.proto.lastLineDefined > 0) {
-                    activelinesTable[LuaNumber.of(func.proto.lastLineDefined)] = LuaBoolean.TRUE
                 }
             }
             // For native functions or null, activelines should be nil (not an empty table)
@@ -678,8 +675,17 @@ class DebugLib : LuaLibrary {
      */
     private fun getUpvalueImpl(args: List<LuaValue<*>>): List<LuaValue<*>> {
         val access = getUpvalueAccessFromArgs(args) ?: return listOf(LuaNil)
+        val func = parseFuncAndIndex(args)?.first
 
-        return listOf<LuaValue<*>>(LuaString(access.name), access.upvalue.get())
+        // For Lua functions with stripped debug info, empty names become "(no name)"
+        // For native functions, empty names stay as "" (Lua 5.4 behavior)
+        val displayName =
+            if (access.name.isEmpty() && func is LuaCompiledFunction) {
+                "(no name)"
+            } else {
+                access.name
+            }
+        return listOf<LuaValue<*>>(LuaString(displayName), access.upvalue.get())
     }
 
     /**
@@ -692,10 +698,19 @@ class DebugLib : LuaLibrary {
      */
     private fun setUpvalueImpl(args: List<LuaValue<*>>): List<LuaValue<*>> {
         val access = getUpvalueAccessFromArgs(args) ?: return listOf(LuaNil)
+        val func = parseFuncAndIndex(args)?.first
         val value = args.getOrNull(2) ?: LuaNil
 
         access.upvalue.set(value)
-        return listOf<LuaValue<*>>(LuaString(access.name))
+        // For Lua functions with stripped debug info, empty names become "(no name)"
+        // For native functions, empty names stay as "" (Lua 5.4 behavior)
+        val displayName =
+            if (access.name.isEmpty() && func is LuaCompiledFunction) {
+                "(no name)"
+            } else {
+                access.name
+            }
+        return listOf<LuaValue<*>>(LuaString(displayName))
     }
 
     /**

@@ -2,7 +2,6 @@ package ai.tenum.lua.compiler.io
 
 import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.LineEvent
-import ai.tenum.lua.compiler.model.LineEventKind
 import ai.tenum.lua.compiler.model.LocalVarInfo
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.compiler.model.UpvalueInfo
@@ -99,8 +98,8 @@ object ChunkReader {
     }
 
     private fun readFunction(source: BufferedSource): Proto {
-        // Source name
-        val name = readString(source)
+        // Source name (this is the source file/chunk name, not the function name)
+        val sourceName = readString(source)
         // debug prints removed
 
         // Line info
@@ -175,15 +174,13 @@ object ChunkReader {
         val parameters = (0 until numParams).map { "param$it" }
 
         // Build line info
-        val lineInfo =
-            if (lineDefined > 0) {
-                listOf(LineEvent(0, lineDefined, LineEventKind.EXECUTION))
-            } else {
-                emptyList()
-            }
+        // Note: We don't reconstruct lineInfo from lineDefined because stripped functions
+        // should have no line events (currentline will be -1 during execution) even though
+        // lineDefined/lastLineDefined are preserved for debug.getinfo.
+        val lineInfo = emptyList<LineEvent>()
 
         return Proto(
-            name = name,
+            name = "", // Function name is inferred from context, not stored in chunk
             instructions = instructions,
             constants = constants,
             upvalueInfo = upvalueInfo,
@@ -192,7 +189,7 @@ object ChunkReader {
             maxStackSize = maxStackSize,
             localVars = localVars,
             lineEvents = lineInfo,
-            source = name,
+            source = sourceName,
             lineDefined = lineDefined,
             lastLineDefined = lastLineDefined,
         )

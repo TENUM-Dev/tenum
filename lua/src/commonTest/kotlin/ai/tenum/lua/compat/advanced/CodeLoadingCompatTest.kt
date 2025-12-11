@@ -171,6 +171,100 @@ class CodeLoadingCompatTest : LuaCompatTestBase() {
         )
     }
 
+    @Test
+    fun testStringDumpStripDebugInfo() {
+        // Test from db.lua:1000-1002 - stripping debug info should still work
+        val result =
+            execute(
+                """
+            local prog = [[
+                local debug = require'debug'
+                local a = 12
+                
+                local n, v = debug.getlocal(1, 1)
+                assert(n == "(temporary)" and v == debug, "getlocal(1,1) failed: n=" .. tostring(n) .. " v type=" .. type(v))
+                n, v = debug.getlocal(1, 2)
+                assert(n == "(temporary)" and v == 12, "getlocal(1,2) failed: n=" .. tostring(n) .. " v=" .. tostring(v))
+                
+                local f = function () local x; return a end
+                n, v = debug.getupvalue(f, 1)
+                assert(n == "(no name)" and v == 12, "getupvalue failed: n=" .. tostring(n) .. " v=" .. tostring(v))
+                assert(debug.setupvalue(f, 1, 13) == "(no name)", "setupvalue failed")
+                assert(a == 13, "a should be 13 after setupvalue, got " .. tostring(a))
+                
+                local t = debug.getinfo(f)
+                assert(t.name == nil and t.linedefined > 0 and
+                       t.lastlinedefined == t.linedefined and
+                       t.short_src == "?", "getinfo(f) failed: name=" .. tostring(t.name) .. " linedefined=" .. tostring(t.linedefined) .. " lastlinedefined=" .. tostring(t.lastlinedefined) .. " short_src=" .. tostring(t.short_src))
+                assert(debug.getinfo(1).currentline == -1, "currentline should be -1, got " .. tostring(debug.getinfo(1).currentline))
+                
+                return a
+            ]]
+            
+            -- load 'prog' without debug info
+            local f = assert(load(string.dump(load(prog), true)))
+            return f()
+        """,
+            )
+        assertLuaNumber(result, 13.0)
+    }
+
+    @Test
+    fun testStrippedFunctionActivelines() {
+        // Test from db.lua:54-59 - stripped functions should have empty activelines
+        // This regression was: activelines incorrectly included lastLineDefined even when lineEvents was empty
+        val result =
+            execute(
+                """
+            local func = load(string.dump(load("print(10)"), true))
+            local actl = debug.getinfo(func, "L").activelines
+            assert(type(actl) == "table", "activelines should be a table, got: " .. type(actl))
+            
+            -- Count entries in activelines table
+            local count = 0
+            for k, v in pairs(actl) do
+                count = count + 1
+            end
+            
+            assert(count == 0, "stripped function should have 0 active lines, got: " .. tostring(count))
+            return count
+        """,
+            )
+        assertLuaNumber(result, 0.0)
+    }
+
+    @Test
+    fun testActivelinesIncludesLastLineDefined() {
+        // Test that lastLineDefined is in activelines (Lua 5.4.8 behavior)
+        val result =
+            execute(
+                """
+            -- Multi-line function: lastlinedefined should be in activelines
+            local f = function()
+                local x = 1
+                return x
+            end
+            
+            local info = debug.getinfo(f, "SL")
+            assert(info.lastlinedefined > info.linedefined, "Should be multi-line function")
+            assert(info.activelines[info.lastlinedefined], 
+                   "lastlinedefined (" .. info.lastlinedefined .. ") should be in activelines")
+            assert(not info.activelines[info.linedefined], 
+                   "linedefined (" .. info.linedefined .. ") should NOT be in activelines for multi-line function")
+            
+            -- Inline function: linedefined == lastlinedefined, should be in activelines
+            local g = function() end
+            local info2 = debug.getinfo(g, "SL")
+            assert(info2.linedefined == info2.lastlinedefined, "Should be inline function")
+            assert(info2.activelines[info2.linedefined], 
+                   "linedefined/lastlinedefined should be in activelines for inline function")
+            
+            return 0
+        """,
+            )
+        assertLuaNumber(result, 0.0)
+    }
+
     // ============================================
     // Binary chunk format verification
     // ============================================
