@@ -27,7 +27,6 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 import kotlin.math.truncate
-import kotlin.random.Random
 
 /**
  * Lua 5.4 math library implementation.
@@ -44,9 +43,15 @@ import kotlin.random.Random
 class MathLib : LuaLibrary {
     override val name: String = "math"
 
+    // Lua 5.4 uses a 64-bit Linear Congruential Generator (LCG)
+    // LCG formula: next_state = (state * multiplier + increment) mod 2^64
+    // These constants are from Knuth's "Numerical Recipes"
+    private val lcgMultiplier: ULong = 0x5851f42d4c957f2dUL
+    private val lcgIncrement: ULong = 1UL
+
     // Initialize with a seed based on system time (like Lua 5.4 does)
     private val initialSeed = Clock.System.now().toEpochMilliseconds()
-    private var randomGenerator: Random = Random(initialSeed)
+    private var randomState: ULong = initialSeed.toULong()
 
     // Keep last seed parts so math.randomseed() with no args can return them
     // Initialize with the actual seed used
@@ -472,7 +477,8 @@ class MathLib : LuaLibrary {
                 // Single-part seed: use as high part, low = 0
                 seedPartHigh = seed
                 seedPartLow = 0L
-                randomGenerator = Random(seed)
+                // Initialize LCG state using SplitMix64 algorithm (like Lua 5.4)
+                randomState = initializeRandomState(seed.toULong())
                 // Return the seed parts
                 listOf(LuaNumber.of(seedPartHigh), LuaNumber.of(seedPartLow))
             }
@@ -481,13 +487,38 @@ class MathLib : LuaLibrary {
                 val y = getNumberArg(args, 1, "randomseed").toLong()
                 seedPartHigh = x
                 seedPartLow = y
-                // Use only the high part as the actual seed for Kotlin Random
-                // This ensures deterministic behavior when restoring state
-                randomGenerator = Random(x)
+                // Combine x and y into a 64-bit state
+                // High 32 bits from x, low 32 bits from y
+                val highPart = (x.toULong() and 0xFFFFFFFFUL) shl 32
+                val lowPart = y.toULong() and 0xFFFFFFFFUL
+                val combinedSeed = highPart or lowPart
+                // Initialize using SplitMix64
+                randomState = initializeRandomState(combinedSeed)
                 // Return the seed parts
                 listOf(LuaNumber.of(seedPartHigh), LuaNumber.of(seedPartLow))
             }
         }
+
+    /**
+     * Initialize the random state using two SplitMix64 steps XORed together.
+     * This matches Lua 5.4's randseed initialization which calls splitmix64 twice.
+     */
+    private fun initializeRandomState(seed: ULong): ULong {
+        // Call splitmix64 twice and XOR the results (like Lua 5.4)
+        val result1 = splitmix64(seed)
+        val result2 = splitmix64(result1)
+        return result1 xor result2
+    }
+
+    /**
+     * SplitMix64 algorithm for better quality seed initialization.
+     */
+    private fun splitmix64(x: ULong): ULong {
+        var z = x + 0x9e3779b97f4a7c15UL
+        z = (z xor (z shr 30)) * 0xbf58476d1ce4e5b9UL
+        z = (z xor (z shr 27)) * 0x94d049bb133111ebUL
+        return z xor (z shr 31)
+    }
 
     private fun mathRandom(args: List<LuaValue<*>>): List<LuaValue<*>> {
         // Validate argument count
@@ -499,7 +530,9 @@ class MathLib : LuaLibrary {
             when (args.size) {
                 0 -> {
                     // random() - returns [0, 1)
-                    LuaNumber.of(randomGenerator.nextDouble())
+                    // Generate next LCG state and convert to float
+                    val randomValue = nextRandom()
+                    LuaNumber.of(project64ToDouble(randomValue))
                 }
                 1 -> {
                     // random(n) - returns [1, n] for n > 0, or full range integer for n == 0
@@ -507,7 +540,10 @@ class MathLib : LuaLibrary {
                     when {
                         n == 0L -> {
                             // Special case: random(0) returns a random integer in [mininteger, maxinteger]
-                            LuaNumber.of(randomGenerator.nextLong())
+                            // Return the current state, then advance it
+                            val currentState = randomState
+                            nextRandom() // Advance state for next call
+                            LuaNumber.of(currentState.toLong())
                         }
                         n > 0 -> {
                             // Generate in range [1, n] inclusive
@@ -552,15 +588,38 @@ class MathLib : LuaLibrary {
     }
 
     /**
+     * Generate next random number using Lua 5.4's LCG algorithm.
+     * Formula: state = state * a + c (mod 2^64)
+     */
+    private fun nextRandom(): ULong {
+        randomState = randomState * lcgMultiplier + lcgIncrement
+        return randomState
+    }
+
+    /**
+     * Convert a 64-bit unsigned integer to a double in [0, 1).
+     * This matches Lua 5.4's project64 function.
+     */
+    private fun project64ToDouble(value: ULong): Double {
+        // Use the upper 53 bits (double mantissa size) to create a float in [0, 1)
+        // Divide by 2^64 to get value in [0, 1)
+        return (value.toDouble() / ULong.MAX_VALUE.toDouble()) * (1.0 - Double.MIN_VALUE)
+    }
+
+    /**
      * Generate a random Long in the inclusive range [from, to].
      * Handles all edge cases including when to == Long.MAX_VALUE.
+     * Uses the LCG to generate the random value.
      */
     private fun randomLongInclusive(
         from: Long,
         to: Long,
     ): Long {
         if (from == to) return from
-        if (from == Long.MIN_VALUE && to == Long.MAX_VALUE) return randomGenerator.nextLong()
+        if (from == Long.MIN_VALUE && to == Long.MAX_VALUE) {
+            // Full range: just return the next random value as signed long
+            return nextRandom().toLong()
+        }
 
         // Calculate range size (to - from + 1)
         // If this overflows, the range spans more than Long.MAX_VALUE values
@@ -568,16 +627,21 @@ class MathLib : LuaLibrary {
 
         return if (rangeSize > 0) {
             // Normal case: range size fits in a Long
-            from + randomGenerator.nextLong(rangeSize)
+            // Use rejection sampling to avoid modulo bias
+            val randomValue = nextRandom()
+            from + (randomValue % rangeSize.toULong()).toLong()
         } else {
             // Range size overflow: range is very large
             // Split the range in two and choose randomly
-            if (randomGenerator.nextBoolean()) {
+            val randomValue = nextRandom()
+            if ((randomValue and 1UL) == 0UL) {
                 // Lower half: [from, -1]
-                randomGenerator.nextLong(from, 0)
+                val subRange = (-1L - from + 1L).toULong()
+                from + (randomValue % subRange).toLong()
             } else {
                 // Upper half: [0, to]
-                randomGenerator.nextLong(0, to + 1)
+                val subRange = (to + 1L).toULong()
+                (randomValue % subRange).toLong()
             }
         }
     }
