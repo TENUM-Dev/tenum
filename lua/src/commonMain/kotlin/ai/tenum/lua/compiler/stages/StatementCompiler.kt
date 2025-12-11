@@ -1240,18 +1240,36 @@ class StatementCompiler {
         // This uses ctx.emitCloseVariables, which now emits CLOSE with mode = 2.
         ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
 
-        // Close ALL captured variables in the current scope (and deeper)
-        // This is necessary because goto can jump backward to before these variables were declared
-        // Example: local y=2; goto l4a; ::l4a:: -- goto jumps to before y's scope
-        val minCaptured =
-            ctx.scopeManager.locals
-                .filter { it.scopeLevel >= ctx.scopeManager.currentScopeLevel && it.isCaptured && it.isActive }
-                .minOfOrNull { it.register }
-        if (minCaptured != null) {
-            ctx.emit(OpCode.CLOSE, minCaptured, 0, 0)
-        }
-
         val labelInfo = ctx.labels[statement.label]
+        
+        // For backward goto: close ALL captured variables declared AFTER the label
+        // This ensures each iteration creates new upvalue instances
+        // Example: ::l1:: local b; ... goto l1  -- must CLOSE b before jumping back
+        if (labelInfo != null) {
+            // Backward goto detected: label already exists
+            // Get all active locals and filter those declared after the label
+            val allActiveLocals = ctx.scopeManager.locals
+            // Locals declared after the label are those with index >= labelInfo.localCount
+            val localsAfterLabel = allActiveLocals.drop(labelInfo.localCount)
+            val minCapturedAfterLabel =
+                localsAfterLabel
+                    .filter { it.isCaptured }
+                    .minOfOrNull { it.register }
+            if (minCapturedAfterLabel != null) {
+                ctx.emit(OpCode.CLOSE, minCapturedAfterLabel, 0, 0)
+            }
+        } else {
+            // Forward goto: label not yet seen
+            // Close ALL captured variables in the current scope (and deeper)
+            // This is necessary because goto can jump forward out of scope
+            val minCaptured =
+                ctx.scopeManager.locals
+                    .filter { it.scopeLevel >= ctx.scopeManager.currentScopeLevel && it.isCaptured && it.isActive }
+                    .minOfOrNull { it.register }
+            if (minCaptured != null) {
+                ctx.emit(OpCode.CLOSE, minCaptured, 0, 0)
+            }
+        }
 
         val gotoJumpIndex = ctx.instructions.size
         ctx.emit(OpCode.JMP, 0, 0, 0)
