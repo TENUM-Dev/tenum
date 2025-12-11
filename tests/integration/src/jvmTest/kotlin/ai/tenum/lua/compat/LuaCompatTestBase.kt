@@ -7,6 +7,7 @@ import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.vm.LuaVmImpl
 import okio.fakefilesystem.FakeFileSystem
+import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
@@ -17,8 +18,8 @@ import kotlin.test.fail
  * Base class for Lua 5.4.8 compatibility tests
  */
 abstract class LuaCompatTestBase {
-    var fileSystem: FakeFileSystem = FakeFileSystem()
-    var vm: LuaVmImpl = LuaVmImpl(fileSystem)
+    lateinit var vm: LuaVmImpl
+    lateinit var fileSystem: FakeFileSystem
 
     @BeforeTest
     fun setUp() {
@@ -127,7 +128,7 @@ abstract class LuaCompatTestBase {
         val result = execute(code)
         assertTrue(result is LuaNumber, "Expected number but got ${result::class.simpleName}")
         val actual = result.toDouble()
-        assertTrue(kotlin.math.abs(actual - expected) <= tolerance, "$message: expected $expected ± $tolerance, got $actual")
+        assertTrue(abs(actual - expected) <= tolerance, "$message: expected $expected ± $tolerance, got $actual")
     }
 
     /**

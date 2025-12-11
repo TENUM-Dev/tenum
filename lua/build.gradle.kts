@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-group = "ai.plantitude.luak"
+group = "ai.tenum.lua"
 
 kotlin {
     sourceSets {

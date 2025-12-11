@@ -29,7 +29,7 @@ object CallOpcodes {
      * @param results The return values to store
      * @return Updated call frame with return values accessible via debug.getlocal
      */
-    internal fun prepareFrameWithReturnValues(
+    internal inline fun prepareFrameWithReturnValues(
         currentFrame: ai.tenum.lua.vm.CallFrame,
         returnFtransfer: Int,
         results: List<LuaValue<*>>,
