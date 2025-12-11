@@ -11,7 +11,7 @@ This package provides npm/Node.js integration for TENUM, making it easy to use t
 ### Published Package (when available)
 
 ```bash
-npm install -g @tenum/tenum
+npm install -g @tenum-dev/tenum
 ```
 
 ### Local Development Build
@@ -75,10 +75,11 @@ This package bridges Kotlin Multiplatform and Node.js:
 ```
 clinpm/
 ├── src/
-│   ├── index.ts          # Main Node.js entry point
+│   ├── tenum.ts          # Main entry point
 │   ├── lua.ts            # Lua VM wrapper
-│   ├── luak-cli.d.ts     # TypeScript definitions
-│   └── luak-cli.js       # Kotlin/JS output (generated)
+│   ├── luac.ts           # Lua compiler wrapper
+│   ├── tenum-cli.d.ts    # TypeScript definitions
+│   └── tenum-cli.js      # Kotlin/JS output (generated)
 ├── dist/                 # Built artifacts
 ├── package.json
 ├── tsconfig.json
@@ -109,13 +110,13 @@ tlua -e "print('test')"
 
 ## Part of TENUM
 
-This is the npm integration layer for [TENUM](../README.md) – a full-stack Lua ecosystem. The package makes TENUM accessible to the JavaScript/TypeScript ecosystem while maintaining full Lua compatibility.
+This is the npm integration layer for [TENUM](https://github.com/TENUM-Dev/tenum) – a full-stack Lua ecosystem. The package makes TENUM accessible to the JavaScript/TypeScript ecosystem while maintaining full Lua compatibility.
 
 Related modules:
-- [lua](../lua/README.md) - Core Lua interpreter
-- [cli](../cli/README.md) - Command-line interface
+- [lua](https://github.com/TENUM-Dev/tenum/tree/main/lua) - Core Lua 5.4.8 interpreter
+- [cli](https://github.com/TENUM-Dev/tenum/tree/main/cli) - Command-line interface
 
 
 ## License
 
-Part of the TENUM project. See root [LICENSE](../LICENSE.md) for details.
+Part of the TENUM project. See [LICENSE](https://github.com/TENUM-Dev/tenum/blob/main/LICENSE.md) for details.
