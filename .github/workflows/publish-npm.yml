@@ -20,25 +20,25 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.1.0
         with:
           distribution: temurin
           java-version: 21
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v5.0.0
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.2.0
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload npm package to GitHub release
         if: steps.prepare_package.outputs.skip_publish != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.5.0
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: ${{ steps.prepare_package.outputs.tarball_path }}
