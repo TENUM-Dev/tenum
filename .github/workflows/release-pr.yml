@@ -1,0 +1,125 @@
+name: Release PR
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  open-release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate token from GitHub App
+        uses: actions/create-github-app-token@v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout dev
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure changes exist vs main
+        id: diff
+        run: |
+          git fetch origin main dev --prune
+          if git diff --quiet origin/main..origin/dev; then
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set release branch vars
+        if: steps.diff.outputs.has_diff == 'true'
+        run: |
+          echo "RELEASE_BRANCH=release" >> "$GITHUB_ENV"
+          echo "DEV_SHA=$(git rev-parse origin/dev)" >> "$GITHUB_ENV"
+
+      - name: Create release branch on remote
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: peterjgrainger/action-create-branch@v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          branch: ${{ env.RELEASE_BRANCH }}
+          sha: ${{ env.DEV_SHA }}
+
+      - name: Create or reuse release PR
+        id: pr
+        if: steps.diff.outputs.has_diff == 'true' && env.RELEASE_BRANCH != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+            const head = process.env.RELEASE_BRANCH;
+            const base = "main";
+            const title = `Release: ${head}`;
+            const body = "Automated release PR from dev (release branch) to main.";
+
+            const existing = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: "open",
+              head: `${owner}:${head}`,
+              base,
+              per_page: 1
+            });
+
+            let pr = existing.data[0];
+            if (!pr) {
+              pr = (await github.rest.pulls.create({ owner, repo, head, base, title, body })).data;
+            }
+
+            core.setOutput("number", pr.number.toString());
+            core.setOutput("node_id", pr.node_id);
+
+      - name: Approve PR
+        if: steps.pr.outputs.number != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              event: "APPROVE",
+              body: "Automated approval for release PR"
+            });
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.node_id != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const prNodeId = process.env.PR_ID;
+            await github.graphql(
+              `
+              mutation($prId: ID!) {
+                enablePullRequestAutoMerge(input: { pullRequestId: $prId, mergeMethod: MERGE }) {
+                  clientMutationId
+                }
+              }
+              `,
+              { prId: prNodeId }
+            );
+        env:
+          PR_ID: ${{ steps.pr.outputs.node_id }}

@@ -38,15 +38,21 @@ tasks.named<Cpd>("cpdCheck") {
     setSource(files(kotlinSourceDirs))
     include("**/*.kt")
     exclude("**/build/**", "**/.gradle/**", "**/node_modules/**", "**/generated/sources/buildConfig/**")
-
-    // BuildConfig sources for :cli are generated; ensure they are created before CPD runs
-    dependsOn(project(":cli").tasks.named("generateBuildConfig"))
 }
 
 kover {
     merge {
         // Apply Kover to all subprojects and merge their reports into this root project
-        subprojects()
+        // exept test/integration and test/performance
+        subprojects {
+            setOf(
+                "integration",
+                "performance",
+                "tests",
+            ).contains(
+                it.name,
+            ).not()
+        }
     }
     reports {
         total {

@@ -1,0 +1,32 @@
+name: Release Branch
+
+on:
+  push:
+    branches:
+      - release
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  semantic-release:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: ${{ secrets.DEPENDABOT_TOKEN }}
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ env.BOT_TOKEN }}
+          
+      - name: Run semantic-release
+        uses: codfish/semantic-release-action@v4.0.1
+        with:
+          additional-packages: |
+            ['@semantic-release/changelog', '@semantic-release/git']
+        env:
+          GITHUB_TOKEN: ${{ env.BOT_TOKEN }}
+          GH_TOKEN: ${{ env.BOT_TOKEN }}

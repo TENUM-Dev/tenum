@@ -1,0 +1,105 @@
+name: Sync dev from main
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-dev-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate token from GitHub App
+        uses: actions/create-github-app-token@v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Check for changes from main to dev
+        id: diff
+        run: |
+          git fetch origin main dev --prune
+          if git diff --quiet origin/dev..origin/main; then
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or reuse sync PR
+        id: pr
+        if: steps.diff.outputs.has_diff == 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+            const head = "main";
+            const base = "dev";
+            const title = "Sync: main -> dev";
+            const body = "Automated sync PR from main to dev.";
+
+            const existing = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: "open",
+              head: `${owner}:${head}`,
+              base,
+              per_page: 1
+            });
+
+            let pr = existing.data[0];
+            if (!pr) {
+              pr = (await github.rest.pulls.create({ owner, repo, head, base, title, body })).data;
+            }
+
+            core.setOutput("number", pr.number.toString());
+            core.setOutput("node_id", pr.node_id);
+
+      - name: Approve PR
+        if: steps.pr.outputs.number != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              event: "APPROVE",
+              body: "Automated approval for sync PR"
+            });
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.node_id != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const prNodeId = process.env.PR_ID;
+            await github.graphql(
+              `
+              mutation($prId: ID!) {
+                enablePullRequestAutoMerge(input: { pullRequestId: $prId, mergeMethod: SQUASH }) {
+                  clientMutationId
+                }
+              }
+              `,
+              { prId: prNodeId }
+            );
+        env:
+          PR_ID: ${{ steps.pr.outputs.node_id }}

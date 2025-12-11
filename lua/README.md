@@ -4,7 +4,7 @@ A complete Lua 5.4.8 interpreter implementation in Kotlin Multiplatform, powerin
 
 ## Overview
 
-LuaK is a full implementation of the Lua 5.4 programming language, written in Kotlin and targeting multiple platforms (JVM, JS, Native) through Kotlin Multiplatform. The project follows a classic interpreter architecture: Lexer → Parser → Compiler → VM.
+This is a full implementation of the Lua 5.4 programming language, written in Kotlin and targeting multiple platforms (JVM, JS, Native) through Kotlin Multiplatform. The project follows a classic interpreter architecture: Lexer → Parser → Compiler → VM.
 
 ## Architecture
 

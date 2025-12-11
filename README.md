@@ -76,10 +76,16 @@ Performance testing suite to ensure TENUM stays fast.
 ./gradlew build
 
 # Run Lua interpreter tests
-./gradlew :luak:jvmTest
+./gradlew :lua:jvmTest
 
 # Install local CLI tools
 ./gradlew :clinpm:installLocal
+```
+
+### Or Install via npm
+
+```bash
+npm install -g @tenum-dev/tenum
 ```
 
 ### Run a Lua script
@@ -177,3 +183,4 @@ Federico and Jochen, who hold several software patents, are the founders committ
 
 Made with ❤️ in Munich, Germany  
 Copyright © 2025, Plentitude AI GmbH
+

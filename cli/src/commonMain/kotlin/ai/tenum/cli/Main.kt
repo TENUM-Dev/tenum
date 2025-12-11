@@ -19,9 +19,13 @@ fun main(args: Array<String>) {
 /**
  * Build the CLI instance. Exposed so tests can inject a fake FileSystem.
  */
-fun createCli(): CliktCommand =
+fun createCli(
+    fileSystem: FileSystem = createFileSystem(),
+): CliktCommand =
     Tenum()
         .subcommands(
-            Lua(),
-            Luac(),
+            Lua(fileSystem),
+            Luac(fileSystem),
         )
+
+expect fun createFileSystem(): FileSystem

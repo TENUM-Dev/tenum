@@ -1,0 +1,31 @@
+name: Auto Update PRs
+
+on:
+  push:
+    branches:
+      - 'dev'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Automatically update PR
+        uses: adRise/update-pr-branch@v0.10.2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          base: 'dev'
+          required_approval_count: 1
+          require_passed_checks: true
+          allow_ongoing_checks: true
+          sort: 'created'
+          direction: 'desc'
+          require_auto_merge_enabled: true

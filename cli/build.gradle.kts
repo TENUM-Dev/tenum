@@ -7,7 +7,7 @@ plugins {
     id("tenum.conventions.common")
     alias(libs.plugins.shadow)
     distribution
-    id("com.github.gmazzo.buildconfig") version "5.7.1"
+    id("com.github.gmazzo.buildconfig") version "6.0.6"
 }
 
 fun KotlinNativeTargetWithHostTests.configureTarget() =
@@ -65,10 +65,10 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                implementation(project(":lua"))
                 implementation(libs.appdirs)
                 implementation(libs.github.ajalt.clikt)
                 implementation(libs.okio)
-                //implementation(libs.ktmath)
 
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.collections.immutable)

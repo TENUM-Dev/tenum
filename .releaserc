@@ -1,5 +1,5 @@
 {
-  "branches": ["main"],
+  "branches": ["release"],
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
@@ -10,10 +10,20 @@
           "headerCorrespondence": ["type", "scope", "subject"]
         },
         "releaseRules": [
+          { "type": "feat", "release": "minor" },
+          { "type": "Feat", "release": "minor" },
+          { "type": "fix", "release": "patch" },
+          { "type": "Fix", "release": "patch" },
+          { "type": "perf", "release": "patch" },
           { "type": "bump", "release": "patch" },
           { "type": "chore", "scope": "deps", "release": "patch" },
+          { "type": "chore", "scope": "deps-dev", "release": "patch" },
           { "type": "build", "scope": "deps", "release": "patch" },
-          { "type": "ci", "scope": "deps", "release": "patch" }
+          { "type": "build", "scope": "deps-dev", "release": "patch" },
+          { "type": "ci", "scope": "deps", "release": "patch" },
+          { "type": "ci", "scope": "deps-dev", "release": "patch" },
+          { "type": "core", "scope": "deps", "release": "patch" },
+          { "type": "core", "scope": "deps-dev", "release": "patch" }
         ]
       }
     ],
@@ -33,11 +43,15 @@
     ],
     [
       "@semantic-release/git",
-      { "assets": ["CHANGELOG.md"] }
+      { 
+        "assets": ["CHANGELOG.md"],
+        "message": "chore(release): ${nextRelease.version}\n\n${nextRelease.notes}"
+      }
     ],
     [
       "@semantic-release/github",
       { "labels": ["release"] }
     ]
+  
   ]
 }
