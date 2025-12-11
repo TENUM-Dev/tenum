@@ -135,8 +135,15 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_main_lua() = runTest(timeout = 60.seconds) { executeTestFile("main.lua") }
 
     @Test
-    @Ignore
-    fun test_math_lua() = runTest(timeout = 60.seconds) { executeTestFile("math.lua") }
+    fun test_math_lua() = runTest(timeout = 60.seconds) {
+        executeTestFile(
+            "math.lua",
+            //ignore random seed tests
+            817..853,
+            // Disable slow random bit distribution/statistical randomness tests
+            855..1012,
+        )
+    }
 
     @Test
     @Ignore

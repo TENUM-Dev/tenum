@@ -35,7 +35,6 @@ import ai.tenum.lua.parser.ast.VarargExpression
 import ai.tenum.lua.parser.ast.Variable
 import ai.tenum.lua.parser.ast.WhileStatement
 import ai.tenum.lua.runtime.LuaCompiledFunction
-import ai.tenum.lua.runtime.LuaDouble
 import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.vm.OpCode
 
@@ -861,8 +860,9 @@ class StatementCompiler {
             if (r3 != step) ctx.emit(OpCode.MOVE, step, r3, 0)
             ctx.registerAllocator.freeTemp(r3)
         } else {
-            val one = ctx.addConstant(LuaDouble(1.0))
-            ctx.emit(OpCode.LOADK, step, one, 0)
+            // Use integer 1 by default (LOADI) to preserve integer type in for loops
+            // This ensures: for i = 1, 10 do ... end uses integer loop variables
+            ctx.emit(OpCode.LOADI, step, 1, 0)
         }
 
         // FORPREP
