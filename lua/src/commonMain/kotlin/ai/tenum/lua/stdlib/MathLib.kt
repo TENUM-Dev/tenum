@@ -45,7 +45,7 @@ class MathLib : LuaLibrary {
 
     // Lua 5.4 uses a 64-bit Linear Congruential Generator (LCG)
     // LCG formula: next_state = (state * multiplier + increment) mod 2^64
-    // These constants are from Knuth's "Numerical Recipes"
+    // These constants are from Knuth's MMIX (see TAOCP Vol 2, 3rd Ed, p. 106)
     private val lcgMultiplier: ULong = 0x5851f42d4c957f2dUL
     private val lcgIncrement: ULong = 1UL
 
