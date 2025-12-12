@@ -80,3 +80,38 @@ subprojects {
         }
     }
 }
+
+// Provide standard Java lifecycle-style aggregates for tooling (CodeQL, IDEs) in a KMP build
+val aggregatedClasses =
+    tasks.register("classes") {
+        group = "build"
+        description = "Aggregate class generation across all subprojects and targets."
+    }
+
+val aggregatedTestClasses =
+    tasks.register("testClasses") {
+        group = "verification"
+        description = "Aggregate test class generation across all subprojects and targets."
+    }
+
+// Wire dependencies after all projects are evaluated so that task discovery works reliably
+gradle.projectsEvaluated {
+    aggregatedClasses.configure {
+        dependsOn(
+            subprojects.flatMap { sub ->
+                sub.tasks.matching { task ->
+                    task.name.endsWith("Classes") && !task.name.contains("Test")
+                }
+            },
+        )
+    }
+    aggregatedTestClasses.configure {
+        dependsOn(
+            subprojects.flatMap { sub ->
+                sub.tasks.matching { task ->
+                    task.name.endsWith("TestClasses")
+                }
+            },
+        )
+    }
+}
