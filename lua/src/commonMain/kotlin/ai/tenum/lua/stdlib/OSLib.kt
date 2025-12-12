@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package ai.tenum.lua.stdlib
 
 import ai.tenum.lua.runtime.LuaBoolean
@@ -16,8 +14,10 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.number
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.toStdlibInstant
 import okio.Path.Companion.toPath
 import kotlin.random.Random
 
@@ -177,8 +177,8 @@ class OSLib : LuaLibrary {
                 // Return table with date/time components
                 val table = LuaTable()
                 table[LuaString("year")] = LuaNumber.of(localDateTime.year)
-                table[LuaString("month")] = LuaNumber.of(localDateTime.monthNumber)
-                table[LuaString("day")] = LuaNumber.of(localDateTime.dayOfMonth)
+                table[LuaString("month")] = LuaNumber.of(localDateTime.month.number)
+                table[LuaString("day")] = LuaNumber.of(localDateTime.day)
                 table[LuaString("hour")] = LuaNumber.of(localDateTime.hour)
                 table[LuaString("min")] = LuaNumber.of(localDateTime.minute)
                 table[LuaString("sec")] = LuaNumber.of(localDateTime.second)
@@ -205,7 +205,7 @@ class OSLib : LuaLibrary {
         result = result.replace("%y", (dt.year % 100).toString().padStart(2, '0'))
 
         // Month
-        result = result.replace("%m", dt.monthNumber.toString().padStart(2, '0'))
+        result = result.replace("%m", dt.month.number.toString().padStart(2, '0'))
         result =
             result.replace(
                 "%B",
@@ -223,8 +223,8 @@ class OSLib : LuaLibrary {
             )
 
         // Day
-        result = result.replace("%d", dt.dayOfMonth.toString().padStart(2, '0'))
-        result = result.replace("%e", dt.dayOfMonth.toString().padStart(2, ' '))
+        result = result.replace("%d", dt.day.toString().padStart(2, '0'))
+        result = result.replace("%e", dt.day.toString().padStart(2, ' '))
 
         // Hour
         result = result.replace("%H", dt.hour.toString().padStart(2, '0'))
@@ -241,7 +241,7 @@ class OSLib : LuaLibrary {
                 .lowercase()
                 .replaceFirstChar { it.uppercase() }
         result = result.replace("%A", weekdayName)
-        result = result.replace("%a", weekdayName.substring(0, 3))
+        result = result.replace("%a", weekdayName.take(3))
         result = result.replace("%w", (dt.dayOfWeek.isoDayNumber % 7).toString()) // 0=Sunday in Lua
 
         // Day of year
@@ -251,15 +251,16 @@ class OSLib : LuaLibrary {
         result =
             result.replace(
                 "%c",
-                "$weekdayName ${dt.month.name.substring(0, 3)} ${dt.dayOfMonth} ${dt.hour}:${dt.minute}:${dt.second} ${dt.year}",
+                "$weekdayName ${dt.month.name.substring(0, 3)} ${dt.day} ${dt.hour}:${dt.minute}:${dt.second} ${dt.year}",
             )
         result =
             result.replace(
                 "%x",
-                "${dt.monthNumber.toString().padStart(
+                "${
+                    dt.month.number.toString().padStart(
                     2,
                     '0',
-                )}/${dt.dayOfMonth.toString().padStart(2, '0')}/${dt.year.toString().substring(2)}",
+                )}/${dt.day.toString().padStart(2, '0')}/${dt.year.toString().substring(2)}",
             )
         result =
             result.replace(
@@ -353,7 +354,7 @@ class OSLib : LuaLibrary {
 
     private fun tmpnameImpl(): LuaValue<*> {
         tmpnameCounter++
-        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val timestamp = Clock.System.now().toStdlibInstant().nanosecondsOfSecond
         val random = Random.nextInt(1000, 9999)
         return LuaString("lua_tmp_${timestamp}_${tmpnameCounter}_$random")
     }

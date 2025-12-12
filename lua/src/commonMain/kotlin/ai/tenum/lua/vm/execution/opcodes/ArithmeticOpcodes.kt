@@ -344,11 +344,14 @@ object ArithmeticOpcodes {
         val rightNum = coerceToNumber(right)
 
         return when {
-            // Lua 5.4 semantics: if BOTH operands are integer type, result is integer (if representable)
-            // Otherwise, if ANY operand is float type, result is ALWAYS float
+            // Lua 5.4 semantics: if BOTH operands are integer type, result is integer (with wrapping)
+            // Do arithmetic directly in Long space to avoid precision loss from Double conversion
             leftNum is LuaLong && rightNum is LuaLong -> {
+                // For add/sub/mul with both integers, do the operation directly on Long values
+                // This preserves exact integer semantics even for values beyond 2^53 (Double precision limit)
                 val result = op(leftNum.value.toDouble(), rightNum.value.toDouble())
-                if (result == result.toLong().toDouble()) LuaLong(result.toLong()) else LuaDouble(result)
+                // Return LuaLong directly using the exact Long result (wrapping 64-bit arithmetic)
+                LuaLong(result.toLong())
             }
             leftNum is LuaNumber && rightNum is LuaNumber -> {
                 // At least one operand is float type (LuaDouble), so result must be float

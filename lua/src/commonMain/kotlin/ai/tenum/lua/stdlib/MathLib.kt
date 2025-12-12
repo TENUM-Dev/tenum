@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package ai.tenum.lua.stdlib
 
 import ai.tenum.lua.runtime.LuaBoolean
@@ -14,6 +12,8 @@ import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.vm.library.LuaLibrary
 import ai.tenum.lua.vm.library.LuaLibraryContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlinx.datetime.toStdlibInstant
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.acos
@@ -52,7 +52,7 @@ class MathLib : LuaLibrary {
     private val lcgIncrement: ULong = 1UL
 
     // Initialize with a seed based on system time (like Lua 5.4 does)
-    private val initialSeed = Clock.System.now().toEpochMilliseconds()
+    private val initialSeed = Clock.System.now().toStdlibInstant().nanosecondsOfSecond
     private var randomState: ULong = initialSeed.toULong()
 
     // Keep last seed parts so math.randomseed() with no args can return them

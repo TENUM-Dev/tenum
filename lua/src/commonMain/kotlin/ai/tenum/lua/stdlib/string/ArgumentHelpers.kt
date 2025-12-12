@@ -145,35 +145,29 @@ object ArgumentHelpers {
 
     /**
      * Convert a number to string with proper Lua formatting.
-     * Lua formats numbers as integers (without decimal point) when they are exactly
-     * representable as integers and within a reasonable display range.
-     * For large numbers or floats, Lua's default uses a format similar to "%.14g" in C.
-     *
-     * Note: This is a simplified version. Lua's actual formatting is more complex
-     * and platform-dependent, using sprintf with LUA_NUMBER_FMT (typically "%.14g").
+     * Lua formats integers as plain text (no decimal point) regardless of size.
+     * For floats, Lua uses "%.14g" format which automatically chooses between
+     * decimal or scientific notation based on the value.
      */
     fun numberToString(num: Number): String {
-        val d = num.toDouble()
+        // Handle Long/Integer types directly to avoid precision loss via Double conversion
+        return when (num) {
+            is Long -> num.toString()
+            is Int -> num.toString()
+            else -> {
+                val d = num.toDouble()
 
-        // Handle special cases
-        if (!d.isFinite()) {
-            return d.toString()
-        }
+                // Handle special cases
+                if (!d.isFinite()) {
+                    return d.toString()
+                }
 
-        // Display as integer only when both conditions hold:
-        // 1) |num| < 1e14 (Lua prints 1e14 and above in scientific notation)
-        // 2) It is an exact integer within double precision range
-        val absNum = kotlin.math.abs(d)
-        if (absNum < 1e14) {
-            val asLong = d.toLong()
-            if (asLong.toDouble() == d) {
-                return asLong.toString()
+                // Use Lua's "%.14g" format which automatically chooses between
+                // integer, decimal, or scientific notation based on the value
+                // This matches Lua 5.4's lua_number2strx behavior
+                StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
             }
         }
-
-        // Use Lua's "%.14g" format: 14 significant digits with automatic e/f selection
-        // This matches Lua 5.4's lua_number2strx behavior
-        return StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
     }
 
     /**
@@ -183,7 +177,8 @@ object ArgumentHelpers {
     fun coerceToString(value: LuaValue<*>?): String =
         when (value) {
             is LuaString -> value.value
-            is LuaNumber -> numberToString(value.value)
+            is LuaLong -> value.value.toString() // Handle LuaLong directly to preserve integer format
+            is LuaDouble -> numberToString(value.value)
             is LuaNil, null -> ""
             else -> value.toString()
         }
