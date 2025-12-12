@@ -160,18 +160,13 @@ object ArgumentHelpers {
             return d.toString()
         }
 
-        // Check if it's within the safe integer range (|num| < 2^53)
-        // Beyond this threshold, IEEE 754 doubles lose integer precision,
-        // so Lua 5.4 uses scientific notation to indicate potential precision loss
-        val maxPreciseInteger = 9007199254740992.0 // 2^53
+        // Display as integer only when both conditions hold:
+        // 1) |num| < 1e14 (Lua prints 1e14 and above in scientific notation)
+        // 2) It is an exact integer within double precision range
         val absNum = kotlin.math.abs(d)
-        
-        // Use scientific notation for |num| >= 2^53 (where precision loss can occur)
-        if (absNum < maxPreciseInteger) {
-            // Within safe integer range - check if it's an exact integer
+        if (absNum < 1e14) {
             val asLong = d.toLong()
             if (asLong.toDouble() == d) {
-                // Exact round-trip - safe to display as integer
                 return asLong.toString()
             }
         }
