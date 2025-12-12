@@ -148,23 +148,23 @@ object ArgumentHelpers {
      * Lua formats numbers as integers (without decimal point) when they are exactly
      * representable as integers and within a reasonable display range.
      * For large numbers or floats, Lua's default uses a format similar to "%.14g" in C.
-     * 
+     *
      * Note: This is a simplified version. Lua's actual formatting is more complex
      * and platform-dependent, using sprintf with LUA_NUMBER_FMT (typically "%.14g").
      */
     fun numberToString(num: Number): String {
         val d = num.toDouble()
-        
+
         // Handle special cases
         if (!d.isFinite()) {
             return d.toString()
         }
-        
+
         // Check if it's a reasonably small integer that can be displayed without loss
-        // Lua uses scientific notation for very large numbers.
-        // The boundary is around 10^14 (100 trillion). We use 10^16 to be safe and include 2^53
+        // Lua uses scientific notation for very large numbers (>= 1e14).
+        // Use 10^14 as the boundary to match Lua 5.4's behavior
         // First check the magnitude before trying toLong() to avoid rounding issues
-        if (d >= -9999999999999999.0 && d <= 9999999999999999.0) {
+        if (d >= -99999999999999.0 && d < 100000000000000.0) {
             // Within reasonable range - check if it's an exact integer
             val asLong = d.toLong()
             if (asLong.toDouble() == d) {
@@ -172,7 +172,7 @@ object ArgumentHelpers {
                 return asLong.toString()
             }
         }
-        
+
         // Use Kotlin's default double formatting
         // This approximates Lua's "%.14g" format
         return d.toString()
