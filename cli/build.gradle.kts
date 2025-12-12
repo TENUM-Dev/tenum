@@ -5,7 +5,6 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithHostTests
 
 plugins {
     id("tenum.conventions.common")
-    alias(libs.plugins.shadow)
     distribution
     id("com.github.gmazzo.buildconfig") version "6.0.6"
 }
@@ -114,7 +113,7 @@ kotlin {
                 )
             classpath(classes)
         }
-        tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
+        /*tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
             archiveBaseName.set(project.name)
             archiveClassifier.set("")
             archiveVersion.set("")
@@ -125,10 +124,10 @@ kotlin {
                     jvmTarget.compilations.getByName("main").compileDependencyFiles,
                     jvmTarget.compilations.getByName("main").runtimeDependencyFiles,
                 ).map { it as Configuration }
-        }
+        }*/
     }
 }
-tasks.register<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("ShadowJar") {
+/*tasks.register<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("ShadowJar") {
     group = "build"
     archiveClassifier.set("")
     from(sourceSets["jvmMain"].output)
@@ -148,4 +147,4 @@ distributions {
             }
         }
     }
-}
+}*/
