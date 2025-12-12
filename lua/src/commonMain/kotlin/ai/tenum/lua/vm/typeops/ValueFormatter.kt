@@ -31,22 +31,44 @@ object ValueFormatter {
         }
 
     /**
-     * Formats a double value, using integer format when exactly representable.
+     * Formats a double value following Lua 5.4 semantics.
+     * Uses integer format for exact integers < 2^53, scientific notation for larger values.
      */
     private fun formatDouble(num: Double): String {
-        // Only format as integer if it's exactly representable
-        // Doubles have full integer precision only up to 2^53
+        // Handle special cases
+        if (!num.isFinite()) {
+            return num.toString()
+        }
+
+        // Lua uses scientific notation for numbers with absolute value >= 2^53
+        // to indicate potential precision loss
+        // For smaller numbers, check if it's an exact integer
         val maxPreciseInteger = 9007199254740992.0 // 2^53
-        return if (num >= -maxPreciseInteger && num <= maxPreciseInteger) {
+        val absNum = kotlin.math.abs(num)
+
+        // Use scientific notation for |num| >= 2^53 (where precision loss can occur)
+        return if (absNum < maxPreciseInteger) {
+            // Check if it's an exact integer within safe range
             val asLong = num.toLong()
             if (asLong.toDouble() == num) {
                 asLong.toString()
             } else {
-                num.toString()
+                // Not an exact integer - use Lua's %.14g format
+                ai.tenum.lua.stdlib.string.StringFormatting.formatGStyle(
+                    num,
+                    precision = 14,
+                    lowercase = true,
+                    alternateForm = false,
+                )
             }
         } else {
-            // Beyond double precision bounds, use float format
-            num.toString()
+            // Beyond 2^53 - use scientific notation to match Lua 5.4
+            ai.tenum.lua.stdlib.string.StringFormatting.formatGStyle(
+                num,
+                precision = 14,
+                lowercase = true,
+                alternateForm = false,
+            )
         }
     }
 }

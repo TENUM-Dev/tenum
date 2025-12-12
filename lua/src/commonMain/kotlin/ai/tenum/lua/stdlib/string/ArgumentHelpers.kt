@@ -160,12 +160,15 @@ object ArgumentHelpers {
             return d.toString()
         }
 
-        // Check if it's a reasonably small integer that can be displayed without loss
-        // Lua uses scientific notation for very large numbers (>= 1e14).
-        // Use 10^14 as the boundary to match Lua 5.4's behavior
-        // First check the magnitude before trying toLong() to avoid rounding issues
-        if (d >= -99999999999999.0 && d < 100000000000000.0) {
-            // Within reasonable range - check if it's an exact integer
+        // Check if it's within the safe integer range (|num| < 2^53)
+        // Beyond this threshold, IEEE 754 doubles lose integer precision,
+        // so Lua 5.4 uses scientific notation to indicate potential precision loss
+        val maxPreciseInteger = 9007199254740992.0 // 2^53
+        val absNum = kotlin.math.abs(d)
+        
+        // Use scientific notation for |num| >= 2^53 (where precision loss can occur)
+        if (absNum < maxPreciseInteger) {
+            // Within safe integer range - check if it's an exact integer
             val asLong = d.toLong()
             if (asLong.toDouble() == d) {
                 // Exact round-trip - safe to display as integer
@@ -173,9 +176,9 @@ object ArgumentHelpers {
             }
         }
 
-        // Use Kotlin's default double formatting
-        // This approximates Lua's "%.14g" format
-        return d.toString()
+        // Use Lua's "%.14g" format: 14 significant digits with automatic e/f selection
+        // This matches Lua 5.4's lua_number2strx behavior
+        return StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
     }
 
     /**

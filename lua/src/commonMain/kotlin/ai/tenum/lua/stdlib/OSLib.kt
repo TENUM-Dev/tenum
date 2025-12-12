@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package ai.tenum.lua.stdlib
 
 import ai.tenum.lua.runtime.LuaBoolean
