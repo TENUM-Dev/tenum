@@ -1218,13 +1218,13 @@ class StatementCompiler {
     }
 
     fun compileBreakStatement(ctx: CompileContext) {
-        // Close captured upvalues in the loop scope before breaking
+        // Close captured upvalues AND <close> variables in the loop scope before breaking
         val loopScopeLevel = ctx.scopeManager.getCurrentLoopScopeLevel()
         if (loopScopeLevel != null) {
-            // Find minimum captured register in the loop scope and inner scopes
+            // Find minimum captured or <close> register in the loop scope and inner scopes
             val minCaptured =
                 ctx.scopeManager.locals
-                    .filter { it.scopeLevel >= loopScopeLevel && it.isCaptured && it.isActive }
+                    .filter { it.scopeLevel >= loopScopeLevel && (it.isCaptured || it.isClose) && it.isActive }
                     .minOfOrNull { it.register }
             if (minCaptured != null) {
                 ctx.emit(OpCode.CLOSE, minCaptured, 0, 0)
@@ -1240,17 +1240,26 @@ class StatementCompiler {
         statement: GotoStatement,
         ctx: CompileContext,
     ) {
-        // Close all <close> locals that belong to the current scope (and below)
-        // before jumping out via 'goto'.
-        // This uses ctx.emitCloseVariables, which now emits CLOSE with mode = 2.
-        ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
-
         // Check if label is visible from current scope (respects lexical scoping rules)
         val labelInfo = ctx.findLabelVisibleFrom(statement.label, ctx.scopeManager.getCurrentScopeStack())
+
+        // Close all <close> locals that we're jumping over
+        // For backward goto: close from label's scope + 1 (all vars declared after label)
+        // For forward goto: close from current scope (all vars in current scope and deeper)
+        val closeScopeLevel =
+            if (labelInfo != null) {
+                // Backward goto: close variables from labelScope + 1 (all variables declared after the label)
+                labelInfo.scopeLevel + 1
+            } else {
+                // Forward goto: close variables from current scope
+                ctx.scopeManager.currentScopeLevel
+            }
+        ctx.emitCloseVariables(closeScopeLevel)
 
         // For backward goto: close ALL captured variables declared AFTER the label
         // This ensures each iteration creates new upvalue instances
         // Example: ::l1:: local b; ... goto l1  -- must CLOSE b before jumping back
+        // Note: <close> variables are already handled by emitCloseVariables above
         if (labelInfo != null) {
             // Backward goto detected: label already exists
             // Get all active locals and filter those declared after the label
@@ -1259,18 +1268,18 @@ class StatementCompiler {
             val localsAfterLabel = allActiveLocals.drop(labelInfo.localCount)
             val minCapturedAfterLabel =
                 localsAfterLabel
-                    .filter { it.isCaptured }
+                    .filter { it.isCaptured && !it.isClose }
                     .minOfOrNull { it.register }
             if (minCapturedAfterLabel != null) {
                 ctx.emit(OpCode.CLOSE, minCapturedAfterLabel, 0, 0)
             }
         } else {
             // Forward goto: label not yet seen
-            // Close ALL captured variables in the current scope (and deeper)
+            // Close ALL captured variables AND <close> variables in the current scope (and deeper)
             // This is necessary because goto can jump forward out of scope
             val minCaptured =
                 ctx.scopeManager.locals
-                    .filter { it.scopeLevel >= ctx.scopeManager.currentScopeLevel && it.isCaptured && it.isActive }
+                    .filter { it.scopeLevel >= ctx.scopeManager.currentScopeLevel && (it.isCaptured || it.isClose) && it.isActive }
                     .minOfOrNull { it.register }
             if (minCaptured != null) {
                 ctx.emit(OpCode.CLOSE, minCaptured, 0, 0)
