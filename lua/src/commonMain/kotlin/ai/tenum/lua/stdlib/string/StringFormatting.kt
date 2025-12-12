@@ -795,18 +795,18 @@ object StringFormatting {
                 formatFloatWithPrecision(mantissa, prec)
             }
 
-        // Format exponent with at least 3 digits (Lua 5.4 behavior)
+        // Format exponent with at least 2 digits (Lua 5.4 behavior)
         val expChar = if (uppercase) 'E' else 'e'
         val expSign = if (exponent >= 0) "+" else ""
         val expStr =
             abs(exponent)
                 .toString()
-                .padStart(3, '0')
+                .padStart(2, '0')
 
         val sign = if (isNegative) "-" else ""
         return "$sign$mantissaStr$expChar$expSign$expStr"
     }
-    
+
     /**
      * Format exponential for %g style (with trailing zero trimming).
      * This is used internally by formatGStyle.
@@ -862,7 +862,7 @@ object StringFormatting {
         val expStr =
             abs(exponent)
                 .toString()
-                .padStart(3, '0')
+                .padStart(2, '0')
 
         val sign = if (isNegative) "-" else ""
         return "$sign$mantissaStr$expChar$expSign$expStr"

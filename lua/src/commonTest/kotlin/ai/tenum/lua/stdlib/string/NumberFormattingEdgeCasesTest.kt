@@ -39,10 +39,10 @@ class NumberFormattingEdgeCasesTest : LuaCompatTestBase() {
 
             val result = (luaResult as LuaString).value
             val parts = result.split("|")
-            // Below 2^53: integer format
-            assertEquals("4503599627370496", parts[0], "2^52 should format as integer")
-            assertEquals("9007199254740991", parts[1], "2^53-1 should format as integer")
-            // At and above 2^53: scientific notation
+            // Numbers with >14 significant digits use scientific notation
+            assertTrue(parts[0].contains("e", ignoreCase = true), "2^52 should use scientific notation (16 digits), got: ${parts[0]}")
+            assertTrue(parts[1].contains("e", ignoreCase = true), "2^53-1 should use scientific notation (16 digits), got: ${parts[1]}")
+            // At and above 2^53: also scientific notation
             assertTrue(parts[2].contains("e", ignoreCase = true), "2^53 should use scientific notation, got: ${parts[2]}")
             assertTrue(parts[3].contains("e", ignoreCase = true), "2^53+1 should use scientific notation, got: ${parts[3]}")
             assertTrue(parts[4].contains("e", ignoreCase = true), "2^53+2 should use scientific notation, got: ${parts[4]}")
@@ -148,8 +148,8 @@ class NumberFormattingEdgeCasesTest : LuaCompatTestBase() {
             assert(s1 == s2, string.format("2^53 formats as '%s' but 2^53+3 formats as '%s'", s1, s2))
             
             -- The formatted string should use scientific notation
-            assert(s1:find("[eE]"), "Should use scientific notation")
-            assert(s1 == "9.007199254741e+15", "Expected exact format")
+            assert(s1:find("[eE]"), string.format("Should use scientific notation, got: '%s'", s1))
+            assert(s1 == "9.007199254741e+15", string.format("Expected '9.007199254741e+15', got: '%s'", s1))
             
             -- Verify string.format("%s", ...) produces same result
             assert(string.format("%s", p53) == s1)
@@ -168,7 +168,8 @@ class NumberFormattingEdgeCasesTest : LuaCompatTestBase() {
             val luaResult =
                 execute(
                     """
-            local vals = {42, 1000, 1e10, 2^46, 2^52}
+            -- Values with <=14 significant digits use plain format
+            local vals = {42, 1000, 1e10, 2^46, 99999999999999}
             for _, val in ipairs(vals) do
                 local str = tostring(val)
                 assert(not str:find("[eE]"), 

@@ -40,35 +40,13 @@ object ValueFormatter {
             return num.toString()
         }
 
-        // Lua uses scientific notation for numbers with absolute value >= 2^53
-        // to indicate potential precision loss
-        // For smaller numbers, check if it's an exact integer
-        val maxPreciseInteger = 9007199254740992.0 // 2^53
-        val absNum = kotlin.math.abs(num)
-
-        // Use scientific notation for |num| >= 2^53 (where precision loss can occur)
-        return if (absNum < maxPreciseInteger) {
-            // Check if it's an exact integer within safe range
-            val asLong = num.toLong()
-            if (asLong.toDouble() == num) {
-                asLong.toString()
-            } else {
-                // Not an exact integer - use Lua's %.14g format
-                ai.tenum.lua.stdlib.string.StringFormatting.formatGStyle(
-                    num,
-                    precision = 14,
-                    lowercase = true,
-                    alternateForm = false,
-                )
-            }
-        } else {
-            // Beyond 2^53 - use scientific notation to match Lua 5.4
-            ai.tenum.lua.stdlib.string.StringFormatting.formatGStyle(
-                num,
-                precision = 14,
-                lowercase = true,
-                alternateForm = false,
-            )
-        }
+        // Use Lua's %.14g format which automatically chooses between
+        // integer, decimal, or scientific notation based on the value
+        return ai.tenum.lua.stdlib.string.StringFormatting.formatGStyle(
+            num,
+            precision = 14,
+            lowercase = true,
+            alternateForm = false,
+        )
     }
 }
