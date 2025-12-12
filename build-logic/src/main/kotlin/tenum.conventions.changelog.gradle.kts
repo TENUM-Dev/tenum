@@ -3,7 +3,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.text.SimpleDateFormat
 import java.util.Date
-
+/*
 plugins {
     id("org.zkovari.changelog")
     id("com.diffplug.spotless-changelog")
@@ -108,3 +108,4 @@ spotlessChangelog {
     changelogFile("CHANGELOG.md")
     enforceCheck(true)
 }
+*/

@@ -6,13 +6,12 @@ plugins {
     alias(libs.plugins.cpd)
     alias(libs.plugins.kover)
     id("tenum.conventions.maven-publication")
-    id("tenum.conventions.changelog")
     alias(libs.plugins.kotlin.multiplatform) apply false
     id("tenum.conventions.common") apply false
     id("tenum.conventions.mpplib") apply false
 }
 
-group = "ai.plantitude.luak"
+group = "ai.tenum"
 
 repositories {
     mavenCentral()
@@ -27,6 +26,8 @@ private val kotlinSourceDirs =
                     ?.sourceSets
                     ?.flatMap { sourceSet -> sourceSet.kotlin.srcDirs }
                     ?.filter { it.exists() }
+                    // Skip generated sources (e.g., BuildConfig) to avoid extra task dependencies
+                    ?.filterNot { it.toString().replace("\\", "/").contains("/build/generated/") }
                     ?: emptyList()
             }.distinct()
     }
@@ -38,6 +39,11 @@ tasks.named<Cpd>("cpdCheck") {
     setSource(files(kotlinSourceDirs))
     include("**/*.kt")
     exclude("**/build/**", "**/.gradle/**", "**/node_modules/**", "**/generated/sources/buildConfig/**")
+
+    // Ensure generated BuildConfig sources exist before CPD runs
+    subprojects.forEach { sub ->
+        dependsOn(sub.tasks.matching { it.name == "generateBuildConfigClasses" })
+    }
 }
 
 kover {
