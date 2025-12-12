@@ -175,4 +175,30 @@ class GotoLabelScopeValidationTest : CompilerTestBase() {
         // Should compile successfully
         compile(code)
     }
+
+    @Test
+    fun `label shadowing - inner label shadows outer in nested scope`() {
+        // When a label with the same name is defined in a nested scope,
+        // gotos within that scope should jump to the inner label,
+        // but gotos from outer scopes should jump to the outer label
+        val code =
+            """
+            local function testLabelShadowing(a)
+              if a == 1 then
+                goto l1  -- Should jump to outer ::l1:: (line 9)
+              elseif a == 2 then
+                goto l1  -- Should jump to inner ::l1:: (line 6)
+                ::l1:: return "inner"
+              end
+              do return a end  
+              ::l1:: return "outer"
+            end
+            
+            assert(testLabelShadowing(1) == "outer")
+            assert(testLabelShadowing(2) == "inner")
+            """.trimIndent()
+
+        // Should compile successfully
+        compile(code)
+    }
 }

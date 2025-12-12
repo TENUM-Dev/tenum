@@ -662,9 +662,66 @@ class StatementCompiler {
         ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
         val scopeLevel = ctx.scopeManager.currentScopeLevel
         val endPc = ctx.instructions.size
+
+        // Store the end PC for all labels at this scope level
+        // This is needed for proper validation of "jump over local" rules
+        ctx.setLabelsScopeEndPc(scopeLevel, endPc)
+
+        // NOTE: Labels are NOT removed here - they persist for forward goto resolution at function end.
+        // Visibility is controlled by scopeStack matching in findLabelVisibleFrom().
+        // This allows gotos to find labels defined later in sibling or outer scopes.
+
+        // Validate already-resolved gotos (backward gotos)
         ctx.validateGotosAtScopeExit(scopeLevel, endPc, isRepeatUntilBlock)
-        ctx.removeLabelsAtScope(scopeLevel)
+
         return ctx.scopeManager.endScope(snapshot, endPc)
+    }
+
+    /**
+     * Resolve pending gotos that originated from the scope we're exiting.
+     * Only resolves gotos where:
+     * 1. The goto originated from within currentScopeStack (goto is in this scope or nested)
+     * 2. A visible label exists (checked by findLabelVisibleFrom)
+     *
+     * This is called at scope exit before labels are removed.
+     */
+    private fun resolvePendingGotosAtScope(
+        ctx: CompileContext,
+        currentScopeStack: List<Int>,
+    ) {
+        val currentScopeId = currentScopeStack.lastOrNull() ?: 0
+        val iterator = ctx.pendingGotos.iterator()
+        while (iterator.hasNext()) {
+            val gotoInfo = iterator.next()
+
+            // Only resolve gotos that originated from within the scope we're exiting
+            // Check if currentScopeId is in the goto's scope ancestry
+            if (currentScopeId !in gotoInfo.scopeStack) {
+                // This goto is from a sibling or unrelated scope, skip it
+                continue
+            }
+
+            // Find a label visible from the goto's scope
+            val labelInfo = ctx.findLabelVisibleFrom(gotoInfo.labelName, gotoInfo.scopeStack)
+
+            if (labelInfo != null) {
+                // Validate and patch
+                ctx.validateGotoScope(
+                    gotoScopeLevel = gotoInfo.scopeLevel,
+                    gotoLocalCount = gotoInfo.localCount,
+                    labelScopeLevel = labelInfo.scopeLevel,
+                    labelLocalCount = labelInfo.localCount,
+                    labelName = gotoInfo.labelName,
+                    isForward = true,
+                    gotoLine = gotoInfo.line,
+                    gotoInstructionIndex = gotoInfo.instructionIndex,
+                    labelInstructionIndex = labelInfo.instructionIndex,
+                )
+                ctx.patchJump(gotoInfo.instructionIndex, labelInfo.instructionIndex)
+                ctx.resolvedGotos.add(CompileContext.ResolvedGotoLabel(gotoInfo, labelInfo))
+                iterator.remove()
+            }
+        }
     }
 
     private fun compileBlockWithScope(
@@ -791,6 +848,7 @@ class StatementCompiler {
         val loopStart = ctx.instructions.size
         ctx.scopeManager.beginLoop()
         val bodySnapshot = ctx.scopeManager.beginScope()
+        ctx.scopeManager.markCurrentScopeAsRepeatUntil() // Mark for goto validation
         for (stmt in statement.block) {
             compileStatement(stmt, ctx)
         }
@@ -1193,14 +1251,10 @@ class StatementCompiler {
         for (stmt in statement.block) {
             compileStatement(stmt, ctx)
         }
-        ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
 
-        // Remove labels defined in this block (labels are block-scoped in Lua)
-        val scopeLevel = ctx.scopeManager.currentScopeLevel
-        val endPc = ctx.instructions.size
-        val bodyExit = ctx.scopeManager.endScope(bodySnapshot, endPc)
-        ctx.validateGotosAtScopeExit(scopeLevel, endPc)
-        ctx.removeLabelsAtScope(scopeLevel)
+        // Use endScopeWithValidation to ensure forward gotos are resolved
+        // before labels are removed (fixes "no visible label" errors)
+        val bodyExit = endScopeWithValidation(ctx, bodySnapshot, isRepeatUntilBlock = false)
 
         // Close captured variables
         if (bodyExit.minCapturedRegister != null) {
@@ -1240,8 +1294,9 @@ class StatementCompiler {
         // This uses ctx.emitCloseVariables, which now emits CLOSE with mode = 2.
         ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
 
-        val labelInfo = ctx.labels[statement.label]
-        
+        // Check if label is visible from current scope (respects lexical scoping rules)
+        val labelInfo = ctx.findLabelVisibleFrom(statement.label, ctx.scopeManager.getCurrentScopeStack())
+
         // For backward goto: close ALL captured variables declared AFTER the label
         // This ensures each iteration creates new upvalue instances
         // Example: ::l1:: local b; ... goto l1  -- must CLOSE b before jumping back
@@ -1280,6 +1335,7 @@ class StatementCompiler {
                     instructionIndex = gotoJumpIndex,
                     labelName = statement.label,
                     scopeLevel = ctx.scopeManager.currentScopeLevel,
+                    scopeStack = ctx.scopeManager.getCurrentScopeStack(),
                     localCount = ctx.scopeManager.activeLocalCount(),
                     line = statement.line,
                 )
@@ -1304,6 +1360,7 @@ class StatementCompiler {
                     instructionIndex = gotoJumpIndex,
                     labelName = statement.label,
                     scopeLevel = ctx.scopeManager.currentScopeLevel,
+                    scopeStack = ctx.scopeManager.getCurrentScopeStack(),
                     localCount = ctx.scopeManager.activeLocalCount(),
                     line = statement.line,
                 ),
@@ -1328,41 +1385,13 @@ class StatementCompiler {
         ctx: CompileContext,
     ) {
         val labelIndex = ctx.instructions.size
-        if (ctx.labels.containsKey(statement.name)) {
-            val existingLabel = ctx.labels[statement.name]!!
-            throw ParserException(
-                message = "label '${statement.name}' already defined on line ${existingLabel.line}",
-                token = Token(TokenType.IDENTIFIER, statement.name, statement.name, statement.line, 1),
-            )
-        }
-        val labelInfo =
-            CompileContext.LabelInfo(
-                instructionIndex = labelIndex,
-                scopeLevel = ctx.scopeManager.currentScopeLevel,
-                localCount = ctx.scopeManager.activeLocalCount(),
-                line = statement.line,
-            )
-        ctx.labels[statement.name] = labelInfo
-        val iterator = ctx.pendingGotos.iterator()
-        while (iterator.hasNext()) {
-            val gotoInfo = iterator.next()
-            if (gotoInfo.labelName == statement.name) {
-                ctx.validateGotoScope(
-                    gotoScopeLevel = gotoInfo.scopeLevel,
-                    gotoLocalCount = gotoInfo.localCount,
-                    labelScopeLevel = labelInfo.scopeLevel,
-                    labelLocalCount = labelInfo.localCount,
-                    labelName = statement.name,
-                    isForward = true,
-                    gotoLine = gotoInfo.line,
-                    gotoInstructionIndex = gotoInfo.instructionIndex,
-                    labelInstructionIndex = labelIndex,
-                )
-                ctx.patchJump(gotoInfo.instructionIndex, labelIndex)
-                // Record for later same-scope validation at endScope()
-                ctx.resolvedGotos.add(CompileContext.ResolvedGotoLabel(gotoInfo, labelInfo))
-                iterator.remove()
-            }
-        }
+
+        // This will throw if a label with the same name exists at the SAME scope level
+        ctx.registerLabel(statement.name, labelIndex, statement.line)
+
+        // DO NOT resolve forward gotos here!
+        // Pending gotos will be resolved at function end when all labels are known
+        // and we can find the correct visible label for each goto.
+        // This prevents incorrectly binding gotos to labels in sibling scopes (e.g., elseif branches)
     }
 }

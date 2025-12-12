@@ -72,6 +72,31 @@ class ScopeManager(
 
     var currentScopeLevel: Int = 0
 
+    // Stable scope identity tracking for goto/label resolution
+    private var scopeIdCounter: Int = 0
+    private val scopeStack: MutableList<Int> = mutableListOf(0) // Function scope is always 0
+    private val repeatUntilScopes: MutableSet<Int> = mutableSetOf() // Track which scopes are repeat-until blocks
+
+    /**
+     * Get the current scope ancestry as a list of scope IDs.
+     * This represents the lexical chain from function root to current scope.
+     */
+    fun getCurrentScopeStack(): List<Int> = scopeStack.toList()
+
+    /**
+     * Check if the current scope is inside a repeat-until block.
+     */
+    fun isInRepeatUntilBlock(): Boolean = scopeStack.any { it in repeatUntilScopes }
+
+    /**
+     * Mark the current scope as a repeat-until block.
+     * This affects validation of gotos that jump over locals in this scope.
+     */
+    fun markCurrentScopeAsRepeatUntil() {
+        val currentScopeId = scopeStack.lastOrNull() ?: 0
+        repeatUntilScopes.add(currentScopeId)
+    }
+
     /**
      * Start a new lexical block scope.
      *
@@ -81,7 +106,9 @@ class ScopeManager(
     fun beginScope(): Int {
         val snapshot = activeLocalsCount
         val newLevel = currentScopeLevel + 1
-        debug("beginScope: level $currentScopeLevel -> $newLevel, localsBefore=$snapshot")
+        scopeIdCounter++
+        scopeStack.add(scopeIdCounter)
+        debug("beginScope: level $currentScopeLevel -> $newLevel, scopeId=$scopeIdCounter, localsBefore=$snapshot")
         currentScopeLevel = newLevel
         return snapshot
     }
@@ -147,7 +174,9 @@ class ScopeManager(
 
         // Update active locals count
         activeLocalsCount = snapshotLocalSize
+        val exitedScopeId = scopeStack.removeLastOrNull()
         currentScopeLevel--
+        debug("endScope: exitedScopeId=$exitedScopeId, new level=$currentScopeLevel, removedCount=${removed.size}")
         // we added removed in reverse order; reverse to get decl order
         removed.reverse()
 
