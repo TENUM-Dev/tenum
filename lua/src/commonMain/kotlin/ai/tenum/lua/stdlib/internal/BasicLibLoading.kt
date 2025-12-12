@@ -574,7 +574,7 @@ internal class BasicLibLoading(
                 val pathVal = runtimePackageTable[LuaString("path")]
                 when (pathVal) {
                     is LuaString -> pathVal.value
-                    null -> context.packagePath.joinToString(";")
+                    is LuaNil -> context.packagePath.joinToString(";")
                     else -> throw RuntimeException("package.path must be a string")
                 }
             } else {

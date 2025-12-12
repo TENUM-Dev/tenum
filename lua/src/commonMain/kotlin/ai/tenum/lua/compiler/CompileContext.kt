@@ -9,7 +9,6 @@ import ai.tenum.lua.compiler.helper.UpvalueResolver
 import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.LineEvent
 import ai.tenum.lua.compiler.model.LineEventKind
-import ai.tenum.lua.compiler.model.LineInfo
 import ai.tenum.lua.compiler.model.LocalLifetime
 import ai.tenum.lua.compiler.model.LocalVarInfo
 import ai.tenum.lua.compiler.model.Proto
@@ -240,7 +239,7 @@ data class CompileContext(
     // ───────────────────────────────────────────────
 
     var currentLine: Int = 0
-    val lineInfo: MutableList<LineInfo> = mutableListOf()
+    val lineInfo: MutableList<LineEvent> = mutableListOf()
 
     // ───────────────────────────────────────────────
     //  LOCALS / SCOPES (unified via ScopeManager)

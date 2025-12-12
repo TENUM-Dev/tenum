@@ -460,11 +460,10 @@ class DebugLib : LuaLibrary {
             // Active lines - build a table mapping line numbers to true
             val activelinesTable = LuaTable()
             if (func is LuaCompiledFunction) {
-                // Extract all unique line numbers from lineInfo (PC -> line mappings)
-                // activelines contains the actual executable lines recorded in lineEvents
-                // Note: For stripped functions, lineInfo is empty, so activelines will be empty
+                // Extract all unique line numbers from lineEvents (PC -> line mappings)
+                // Note: For stripped functions, lineEvents can be empty, so activelines will be empty
                 val uniqueLines =
-                    func.proto.lineInfo
+                    func.proto.lineEvents
                         .map { it.line }
                         .toSet()
                 for (line in uniqueLines) {
@@ -841,7 +840,7 @@ class DebugLib : LuaLibrary {
                 // This prevents leaking frames from outside the coroutine boundary
                 val currentCo = libContext?.getCurrentCoroutine?.invoke()
                 val filteredByBoundary =
-                    if (currentCo != null && targetThread == null) {
+                    if (currentCo != null) {
                         // Only apply filtering when getting traceback of current thread (not another coroutine)
                         val callStackBase = currentCo.thread.callStackBase
                         // rawCallStack is most-recent-first, so we need to filter from the end
@@ -871,12 +870,8 @@ class DebugLib : LuaLibrary {
                             else -> {
                                 // For native functions, only keep those with meaningful names
                                 val nativeFunc = frame.function as? ai.tenum.lua.runtime.LuaNativeFunction
-                                val hasName =
-                                    nativeFunc?.name != null && nativeFunc.name.isNotEmpty() && nativeFunc.name != "native"
-                                val hasInferredName =
-                                    frame.inferredFunctionName?.name != null &&
-                                        frame.inferredFunctionName.name.isNotEmpty() &&
-                                        frame.inferredFunctionName.name != "?"
+                                val hasName = nativeFunc?.name?.let { it.isNotEmpty() && it != "native" } == true
+                                val hasInferredName = frame.inferredFunctionName?.name?.let { it.isNotEmpty() && it != "?" } == true
                                 hasName || hasInferredName
                             }
                         }

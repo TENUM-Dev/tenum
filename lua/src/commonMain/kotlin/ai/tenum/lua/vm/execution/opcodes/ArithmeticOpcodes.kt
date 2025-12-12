@@ -1,3 +1,5 @@
+@file:Suppress("NOTHING_TO_INLINE")
+
 package ai.tenum.lua.vm.execution.opcodes
 
 import ai.tenum.lua.compiler.model.Instruction
@@ -28,10 +30,11 @@ object ArithmeticOpcodes {
         regC: Int,
         pc: Int,
         env: ExecutionEnvironment,
-        noinline op: (Double, Double) -> Double,
+        noinline opLong: (Long, Long) -> Long,
+        noinline opDouble: (Double, Double) -> Double,
     ): LuaValue<*> =
         try {
-            binaryOp(left, right, env, op)
+            binaryOp(left, right, env, opLong, opDouble)
         } catch (e: RuntimeException) {
             handleArithmeticError(e, left, right, regB, regC, pc, env)
             LuaNil // unreachable, handleArithmeticError throws
@@ -58,7 +61,13 @@ object ArithmeticOpcodes {
             env.setRegister(instr.a, LuaLong(left.value + right.value))
         } else {
             // Float addition or type coercion
-            env.setRegister(instr.a, performBinaryOpWithErrorHandling(left, right, instr.b, instr.c, pc, env) { a, b -> a + b })
+            env.setRegister(
+                instr.a,
+                performBinaryOpWithErrorHandling(left, right, instr.b, instr.c, pc, env, { a, b -> a + b }, { a, b ->
+                    a +
+                        b
+                }),
+            )
         }
         env.debug("  R[${instr.a}] = R[${instr.b}] + R[${instr.c}] (${env.registers[instr.a]})")
         env.trace(instr.a, env.registers[instr.a], "DIV")
@@ -84,7 +93,13 @@ object ArithmeticOpcodes {
             // Integer subtraction with 64-bit wrap semantics
             env.setRegister(instr.a, LuaLong(left.value - right.value))
         } else {
-            env.setRegister(instr.a, performBinaryOpWithErrorHandling(left, right, instr.b, instr.c, pc, env) { a, b -> a - b })
+            env.setRegister(
+                instr.a,
+                performBinaryOpWithErrorHandling(left, right, instr.b, instr.c, pc, env, { a, b -> a - b }, { a, b ->
+                    a -
+                        b
+                }),
+            )
         }
         env.debug("  R[${instr.a}] = R[${instr.b}] - R[${instr.c}] (${env.registers[instr.a]})")
         env.trace(instr.a, env.registers[instr.a], "SUB")
@@ -111,7 +126,13 @@ object ArithmeticOpcodes {
             env.setRegister(instr.a, LuaLong(left.value * right.value))
         } else {
             // Float multiplication or type coercion
-            env.setRegister(instr.a, performBinaryOpWithErrorHandling(left, right, instr.b, instr.c, pc, env) { a, b -> a * b })
+            env.setRegister(
+                instr.a,
+                performBinaryOpWithErrorHandling(left, right, instr.b, instr.c, pc, env, { a, b -> a * b }, { a, b ->
+                    a *
+                        b
+                }),
+            )
         }
         env.debug("  R[${instr.a}] = R[${instr.b}] * R[${instr.c}] (${env.registers[instr.a]})")
         env.trace(instr.a, env.registers[instr.a], "MUL")
@@ -323,36 +344,39 @@ object ArithmeticOpcodes {
         left: LuaValue<*>,
         right: LuaValue<*>,
         metamethodName: String,
-        noinline op: (Double, Double) -> Double,
+        noinline opLong: (Long, Long) -> Long,
+        noinline opDouble: (Double, Double) -> Double,
     ): LuaValue<*> {
         // Check for metamethod first
         checkBinaryMetamethod(env, left, right, metamethodName)?.let { return it }
 
         // Perform standard arithmetic
-        return binaryOp(left, right, env, op)
+        return binaryOp(left, right, env, opLong, opDouble)
     }
 
     inline fun binaryOp(
         left: LuaValue<*>,
         right: LuaValue<*>,
         env: ExecutionEnvironment,
-        noinline op: (Double, Double) -> Double,
+        noinline opLong: (Long, Long) -> Long,
+        noinline opDouble: (Double, Double) -> Double,
     ): LuaValue<*> {
         val leftNum = coerceToNumber(left)
         val rightNum = coerceToNumber(right)
 
         return when {
-            // Lua 5.4 semantics: if BOTH operands are integer type, result is integer (if representable)
-            // Otherwise, if ANY operand is float type, result is ALWAYS float
+            // Lua 5.4 semantics: if BOTH operands are integer type, result is integer (with wrapping)
+            // Perform operation directly on Long values to preserve exact 64-bit wraparound semantics
             leftNum is LuaLong && rightNum is LuaLong -> {
-                val result = op(leftNum.value.toDouble(), rightNum.value.toDouble())
-                if (result == result.toLong().toDouble()) LuaLong(result.toLong()) else LuaDouble(result)
+                // Direct Long arithmetic - no conversion to Double, so no precision loss or saturation
+                // Kotlin Long arithmetic naturally wraps on overflow (64-bit two's complement)
+                LuaLong(opLong(leftNum.value, rightNum.value))
             }
             leftNum is LuaNumber && rightNum is LuaNumber -> {
                 // At least one operand is float type (LuaDouble), so result must be float
                 val leftVal = toDouble(leftNum)
                 val rightVal = toDouble(rightNum)
-                LuaDouble(op(leftVal, rightVal))
+                LuaDouble(opDouble(leftVal, rightVal))
             }
             leftNum !is LuaNumber -> throwArithmeticError(leftNum, left, env)
             rightNum !is LuaNumber -> throwArithmeticError(rightNum, right, env)

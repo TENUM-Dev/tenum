@@ -144,15 +144,29 @@ object ArgumentHelpers {
     }
 
     /**
-     * Convert a number to string with proper Lua formatting
-     * (integers without decimal point, floats with decimal)
+     * Convert a number to string with proper Lua formatting.
+     * Lua formats integers as plain text (no decimal point) regardless of size.
+     * For floats, Lua uses "%.14g" format which automatically chooses between
+     * decimal or scientific notation based on the value.
      */
     fun numberToString(num: Number): String {
-        val d = num.toDouble()
-        return if (d == d.toLong().toDouble()) {
-            d.toLong().toString()
-        } else {
-            d.toString()
+        // Handle Long/Integer types directly to avoid precision loss via Double conversion
+        return when (num) {
+            is Long -> num.toString()
+            is Int -> num.toString()
+            else -> {
+                val d = num.toDouble()
+
+                // Handle special cases
+                if (!d.isFinite()) {
+                    return d.toString()
+                }
+
+                // Use Lua's "%.14g" format which automatically chooses between
+                // integer, decimal, or scientific notation based on the value
+                // This matches Lua 5.4's lua_number2strx behavior
+                StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
+            }
         }
     }
 
@@ -163,7 +177,8 @@ object ArgumentHelpers {
     fun coerceToString(value: LuaValue<*>?): String =
         when (value) {
             is LuaString -> value.value
-            is LuaNumber -> numberToString(value.value)
+            is LuaLong -> value.value.toString() // Handle LuaLong directly to preserve integer format
+            is LuaDouble -> numberToString(value.value)
             is LuaNil, null -> ""
             else -> value.toString()
         }

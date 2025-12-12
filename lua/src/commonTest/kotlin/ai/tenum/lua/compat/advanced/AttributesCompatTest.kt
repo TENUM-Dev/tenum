@@ -49,6 +49,34 @@ class AttributesCompatTest : LuaCompatTestBase() {
     }
 
     @Test
+    fun testConstAssignmentCompileTimeError() {
+        // Test from locals.lua:189 - const reassignment should be caught at compile time by load()
+        val result =
+            execute(
+                """
+                local st, msg = load("local x, y <const>, z = 10, 20, 30; x = 11; y = 12")
+                return st == nil and msg ~= nil and string.find(msg, "attempt to assign to const variable 'y'") ~= nil
+            """,
+            )
+        assertTrue(result is LuaBoolean)
+        assertEquals(true, result.value, "Expected load() to fail with const assignment error for 'y'")
+    }
+
+    @Test
+    fun testConstFunctionDeclarationError() {
+        // Test from locals.lua:192 - function declaration should not overwrite const variable
+        val result =
+            execute(
+                """
+                local st, msg = load("local foo <const> = 10; function foo() end")
+                return st == nil and msg ~= nil and string.find(msg, "attempt to assign to const variable 'foo'") ~= nil
+            """,
+            )
+        assertTrue(result is LuaBoolean)
+        assertEquals(true, result.value, "Expected load() to fail with const assignment error for 'foo'")
+    }
+
+    @Test
     fun testConstMultipleVariables() {
         val result =
             execute(

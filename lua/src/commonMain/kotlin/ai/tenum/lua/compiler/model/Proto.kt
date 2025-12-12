@@ -93,16 +93,6 @@ data class LineEvent(
 )
 
 /**
- * Legacy alias for backward compatibility during migration
- * Maps a program counter (PC) to source line number
- * @param pc The instruction index
- * @param line The source line number (1-based)
- * @deprecated Use LineEvent with explicit kind instead
- */
-@Deprecated("Use LineEvent", ReplaceWith("LineEvent(pc, line, LineEventKind.EXECUTION)"))
-typealias LineInfo = LineEvent
-
-/**
  * Represents a compiled Lua function/chunk
  */
 data class Proto(
@@ -115,15 +105,8 @@ data class Proto(
     val maxStackSize: Int = 0,
     // Debug information (Phase 6.4 - Debug Library)
     val localVars: List<LocalVarInfo> = emptyList(), // Local variable names + scope
-    val lineEvents: List<LineEvent> = emptyList(), // PC → line event mapping (supports multiple events per PC)
+    val lineEvents: List<LineEvent> = emptyList(), // PC -> line event mapping (supports multiple events per PC)
     val source: String = "=(load)", // Source file name or description
     val lineDefined: Int = 0, // Line where function was defined
     val lastLineDefined: Int = 0, // Last line of function definition
-) {
-    /**
-     * Legacy accessor for backward compatibility
-     * @deprecated Use lineEvents instead
-     */
-    @Deprecated("Use lineEvents", ReplaceWith("lineEvents"))
-    val lineInfo: List<LineInfo> get() = lineEvents
-}
+)

@@ -117,8 +117,8 @@ class StringFormatHexTest : LuaCompatTestBase() {
             assert(string.sub(result, 1, 1) == " ", "Expected space at start, got: " .. result)
             -- Must contain E+ for exponential
             assert(string.find(result, "E%+"), "Expected 'E+' in output, got: " .. result)
-            -- Expected format: " 1E+nnn" where nnn is at least 2 digits
-            assert(#result >= 7, "Expected at least 7 chars, got " .. #result .. ": " .. result)
+            -- Expected format: " 1E+nn" where nn is 2 digits
+            assert(#result >= 6, "Expected at least 6 chars, got " .. #result .. ": " .. result)
         """,
         )
     }
@@ -136,8 +136,8 @@ class StringFormatHexTest : LuaCompatTestBase() {
             assert(string.sub(result, 1, 1) == " ", "Expected space at start, got: " .. result)
             -- Must contain e+ for exponential
             assert(string.find(result, "e%+"), "Expected 'e+' in output, got: " .. result)
-            -- Expected format: " 1e+nnn" where nnn is at least 2 digits
-            assert(#result >= 7, "Expected at least 7 chars, got " .. #result .. ": " .. result)
+            -- Expected format: " 1e+nn" where nn is 2 digits  
+            assert(#result >= 6, "Expected at least 6 chars, got " .. #result .. ": " .. result)
         """,
         )
     }

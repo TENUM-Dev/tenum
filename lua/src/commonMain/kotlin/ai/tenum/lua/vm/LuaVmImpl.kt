@@ -1,3 +1,5 @@
+@file:Suppress("NOTHING_TO_INLINE", "REDUNDANT_ELSE_IN_WHEN")
+
 package ai.tenum.lua.vm
 
 import ai.tenum.lua.compiler.model.LineEventKind
@@ -1118,8 +1120,8 @@ class LuaVmImpl(
                     for ((ci, c) in proto.constants.withIndex()) {
                         if (ci in (0..199)) println("  K[$ci] = $c")
                     }
-                    println("--- LineInfo entries (${proto.lineInfo.size}) ---")
-                    for (li in proto.lineInfo) println("  PC=${li.pc} -> line=${li.line}")
+                    println("--- Line events (${proto.lineEvents.size}) ---")
+                    for (li in proto.lineEvents) println("  PC=${li.pc} -> line=${li.line} kind=${li.kind}")
                     println("--- End proto dump ---")
                 }
             } catch (_: Exception) {

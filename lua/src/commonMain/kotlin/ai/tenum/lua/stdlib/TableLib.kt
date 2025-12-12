@@ -157,7 +157,7 @@ class TableLib : LuaLibrary {
                 for (index in i..j) {
                     val value = table[LuaNumber.of(index)]
                     // Check for nil - table.concat requires all values to be strings or numbers
-                    if (value is LuaNil || value == null) {
+                    if (value is LuaNil) {
                         // Lua 5.4 behavior: report the actual 1-based index where nil was found
                         throw RuntimeException("invalid value (nil) at index $index in table for 'concat'")
                     }

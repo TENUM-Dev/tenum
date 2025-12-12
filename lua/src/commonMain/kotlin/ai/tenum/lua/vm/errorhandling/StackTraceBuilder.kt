@@ -19,11 +19,11 @@ internal class StackTraceBuilder {
         pc: Int,
     ): Int? {
         // If no line info available (stripped debug info), return -1 for Lua 5.4 compatibility
-        if (proto.lineInfo.isEmpty()) {
+        if (proto.lineEvents.isEmpty()) {
             return -1
         }
-        // Find the most recent lineInfo entry for this PC
-        return proto.lineInfo.findLast { it.pc <= pc }?.line
+        // Find the most recent line event entry for this PC
+        return proto.lineEvents.findLast { it.pc <= pc }?.line
     }
 
     /**

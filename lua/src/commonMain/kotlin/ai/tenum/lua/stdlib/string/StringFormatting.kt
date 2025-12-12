@@ -744,24 +744,33 @@ object StringFormatting {
     }
 
     /**
-     * Format a number in exponential notation (e.g., 1.234567e+02)
+     * Core exponential formatting logic shared by both %e and %g formats.
      * @param value the number to format
-     * @param precision number of digits after decimal point (default 6)
+     * @param precision number of digits after decimal point
      * @param uppercase whether to use 'E' instead of 'e'
+     * @param trimTrailingZeros whether to trim trailing zeros from mantissa (for %g)
+     * @param includeZeroPrecision whether to include decimal zeros for value 0.0 (for %e)
      * @return formatted string
      */
-    fun formatExponential(
+    private fun formatExponentialCore(
         value: Double,
         precision: Int,
         uppercase: Boolean,
+        trimTrailingZeros: Boolean,
+        includeZeroPrecision: Boolean,
     ): String {
         // Handle special values
         if (value.isNaN()) return if (uppercase) "NAN" else "nan"
         if (value.isInfinite()) return if (uppercase) (if (value > 0) "INF" else "-INF") else (if (value > 0) "inf" else "-inf")
+
+        val expChar = if (uppercase) 'E' else 'e'
         if (value == 0.0) {
-            val expChar = if (uppercase) 'E' else 'e'
-            val prec = if (precision >= 0) precision else 6
-            return if (prec > 0) "0.${'0'.toString().repeat(prec)}$expChar+00" else "0$expChar+00"
+            return if (includeZeroPrecision) {
+                val prec = if (precision >= 0) precision else 6
+                if (prec > 0) "0.${'0'.toString().repeat(prec)}$expChar+00" else "0$expChar+00"
+            } else {
+                "0$expChar+00"
+            }
         }
 
         // Get sign and absolute value
@@ -792,19 +801,100 @@ object StringFormatting {
                     .toInt()
                     .toString()
             } else {
-                formatFloatWithPrecision(mantissa, prec)
+                val formatted = formatFloatWithPrecision(mantissa, prec)
+                if (trimTrailingZeros) formatted.trimEnd('0').trimEnd('.') else formatted
             }
 
-        // Format exponent with at least 3 digits (Lua 5.4 behavior)
-        val expChar = if (uppercase) 'E' else 'e'
+        // Format exponent with at least 2 digits (Lua 5.4 behavior)
         val expSign = if (exponent >= 0) "+" else ""
         val expStr =
             abs(exponent)
                 .toString()
-                .padStart(3, '0')
+                .padStart(2, '0')
 
         val sign = if (isNegative) "-" else ""
         return "$sign$mantissaStr$expChar$expSign$expStr"
+    }
+
+    /**
+     * Format a number in exponential notation (e.g., 1.234567e+02)
+     * @param value the number to format
+     * @param precision number of digits after decimal point (default 6)
+     * @param uppercase whether to use 'E' instead of 'e'
+     * @return formatted string
+     */
+    fun formatExponential(
+        value: Double,
+        precision: Int,
+        uppercase: Boolean,
+    ): String =
+        formatExponentialCore(
+            value = value,
+            precision = precision,
+            uppercase = uppercase,
+            trimTrailingZeros = false,
+            includeZeroPrecision = true,
+        )
+
+    /**
+     * Format exponential for %g style (with trailing zero trimming).
+     * This is used internally by formatGStyle.
+     */
+    private fun formatExponentialForG(
+        value: Double,
+        precision: Int,
+        uppercase: Boolean,
+    ): String =
+        formatExponentialCore(
+            value = value,
+            precision = precision,
+            uppercase = uppercase,
+            trimTrailingZeros = true,
+            includeZeroPrecision = false,
+        )
+
+    /**
+     * Format a number using %g style formatting with specified precision.
+     * This matches Lua's "%.14g" default number formatting.
+     *
+     * @param value the number to format
+     * @param precision number of significant digits (default 14 for Lua)
+     * @param lowercase whether to use lowercase 'e' (true) or uppercase 'E' (false)
+     * @param alternateForm whether to always include decimal point (# flag)
+     * @return formatted string
+     */
+    fun formatGStyle(
+        value: Double,
+        precision: Int = 14,
+        lowercase: Boolean = true,
+        alternateForm: Boolean = false,
+    ): String {
+        val shouldUseExp = shouldUseExponentialForG(value, precision)
+
+        return if (shouldUseExp) {
+            // Use exponential format
+            if (!alternateForm) {
+                // For %g, trim trailing zeros from mantissa
+                formatExponentialForG(value, precision - 1, !lowercase)
+            } else {
+                // For %#g, keep trailing zeros
+                formatExponential(value, precision - 1, !lowercase)
+            }
+        } else {
+            // Use decimal format - need to calculate the right precision
+            // For %g, precision means total significant digits, not decimal places
+            val absValue = abs(value)
+            val exponent =
+                if (absValue == 0.0) {
+                    0
+                } else {
+                    floor(log10(absValue)).toInt()
+                }
+            // Decimal places = precision - (digits before decimal) - 1
+            val decimalPlaces = maxOf(0, precision - exponent - 1)
+            val raw = formatFloatWithPrecision(value, decimalPlaces, alternateForm)
+            if (!alternateForm) raw.trimEnd('0').trimEnd('.') else raw
+        }
     }
 
     /**

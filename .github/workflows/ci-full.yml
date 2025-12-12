@@ -8,6 +8,9 @@ env:
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
   PKG_VERSION: ${{ github.event.release.tag_name || github.ref_name }}
 
+permissions:
+  contents: read
+
 jobs:
   wrapper-validation:
     name: Validate Gradle Wrapper

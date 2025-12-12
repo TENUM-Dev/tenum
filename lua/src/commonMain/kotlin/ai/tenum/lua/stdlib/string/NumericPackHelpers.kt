@@ -1,3 +1,5 @@
+@file:Suppress("NOTHING_TO_INLINE")
+
 package ai.tenum.lua.stdlib.string
 
 import ai.tenum.lua.runtime.LuaDouble
