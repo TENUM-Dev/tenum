@@ -142,10 +142,10 @@ Keep your repos; use our hosting only if you want it.
   - ❌ **files.lua** - File I/O operations
   - ❌ **gc.lua** - Garbage collection (not implemented)
   - ❌ **gengc.lua** - Generational GC (not implemented)
-  - ❌ **goto.lua** - Goto statements
+  - ✅ **goto.lua** - Goto statements
   - ❌ **heavy.lua** - Heavy computation tests
   - ❌ **locals.lua** - Local variable tests
-  - ❌ **math.lua** - Math library
+  - ✅ **math.lua** - Math library
   - ❌ **nextvar.lua** - Next variable iteration
   - ❌ **pm.lua** - Pattern matching
   - ❌ **utf8.lua** - UTF-8 support

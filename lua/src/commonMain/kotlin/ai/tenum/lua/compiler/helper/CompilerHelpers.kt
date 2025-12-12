@@ -434,10 +434,10 @@ object CompilerHelpers {
     ) {
         val breaks = ctx.scopeManager.endLoop()
 
-        // Remove labels defined in this block (labels are block-scoped in Lua)
+        // Labels persist until function end (function-scoped, not block-scoped)
+        // Visibility is controlled by scopeStack ancestry in findLabelVisibleFrom
         val scopeLevel = ctx.scopeManager.currentScopeLevel
         val bodyExit = ctx.scopeManager.endScope(bodySnapshot, ctx.instructions.size)
-        ctx.removeLabelsAtScope(scopeLevel)
 
         // Free registers used by locals in the loop body scope
         for (local in bodyExit.removedLocals) {

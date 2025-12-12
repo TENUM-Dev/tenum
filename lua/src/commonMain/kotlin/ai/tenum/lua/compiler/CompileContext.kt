@@ -208,26 +208,6 @@ data class CompileContext(
         }
     }
 
-    /**
-     * Remove labels that were defined at the given scope level.
-     * Called when exiting a block to implement block-scoped label semantics.
-     */
-    fun removeLabelsAtScope(scopeLevel: Int) {
-        val iterator = labelStacks.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            val stack = entry.value
-
-            // Remove all labels at this scope level from the stack
-            stack.removeAll { it.scopeLevel >= scopeLevel }
-
-            // If the stack is now empty, remove the entry entirely
-            if (stack.isEmpty()) {
-                iterator.remove()
-            }
-        }
-    }
-
     fun emit(
         code: OpCode,
         i: Int,
