@@ -662,11 +662,12 @@ class StatementCompiler {
     ): ScopeManager.ScopeExitInfo {
         ctx.emitCloseVariables(ctx.scopeManager.currentScopeLevel)
         val scopeLevel = ctx.scopeManager.currentScopeLevel
+        val scopeStack = ctx.scopeManager.getCurrentScopeStack()
         val endPc = ctx.instructions.size
 
-        // Store the end PC for all labels at this scope level
+        // Store the end PC for all labels at this scope using precise scope identity
         // This is needed for proper validation of "jump over local" rules at function end
-        ctx.setLabelsScopeEndPc(scopeLevel, endPc, isRepeatUntilBlock)
+        ctx.setLabelsScopeEndPc(scopeStack, endPc, isRepeatUntilBlock)
 
         // NOTE: Labels are NOT removed here - they persist for forward goto resolution at function end.
         // Visibility is controlled by scopeStack matching in findLabelVisibleFrom().

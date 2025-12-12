@@ -136,7 +136,7 @@ Keep your repos; use our hosting only if you want it.
   - ✅ **vararg.lua** - Variable arguments
   - ✅ **verybig.lua** - Very large number operations
   - ⏸️ **coroutine.lua** - Coroutines (failing at eqtab check)
-  - ❌ **code.lua** - Code generation tests
+  - ✅ **code.lua** - Code generation tests
   - ❌ **cstack.lua** - C stack tests (not applicable)
   - ❌ **events.lua** - Event handling
   - ❌ **files.lua** - File I/O operations

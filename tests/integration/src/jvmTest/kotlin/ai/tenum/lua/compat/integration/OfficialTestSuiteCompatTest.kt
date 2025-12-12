@@ -57,7 +57,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
         }
 
     @Test
-    @Ignore
     fun test_code_lua() = runTest(timeout = 60.seconds) { executeTestFile("code.lua") }
 
     @Test

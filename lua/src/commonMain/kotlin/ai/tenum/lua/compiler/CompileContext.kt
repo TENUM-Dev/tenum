@@ -45,11 +45,15 @@ data class CompileContext(
 
     /**
      * Info about a label site for goto resolution.
+     *
+     * Scope Identity:
+     * - scopeStack: Precise identity using stable scope IDs - use for identity matching
+     * - scopeLevel: Depth counter (how nested) - use only for depth comparisons
      */
     data class LabelInfo(
         val instructionIndex: Int,
-        val scopeLevel: Int,
-        val scopeStack: List<Int>, // Lexical scope ancestry
+        val scopeLevel: Int, // Depth counter - for comparisons only, NOT identity
+        val scopeStack: List<Int>, // Stable scope ID chain - for identity matching
         val localCount: Int,
         val line: Int,
         var isInRepeatUntilBlock: Boolean = false, // True if label is inside repeat-until block (set at scope exit)
@@ -77,11 +81,12 @@ data class CompileContext(
     )
 
     /**
-     * All labels defined in this function (name -> stack of label info).
-     * Labels are stack-scoped: inner labels shadow outer labels with the same name.
-     * When a scope exits, labels at that scope are removed, revealing outer labels.
+     * Registry of all labels defined in this function (name -> list of label info).
+     * Labels persist until function end (function-scoped, not block-scoped).
+     * Multiple labels with same name allowed if in different scopes (shadowing).
+     * Visibility controlled by scopeStack ancestry in findLabelVisibleFrom().
      */
-    private val labelStacks: MutableMap<String, MutableList<LabelInfo>> = mutableMapOf()
+    private val labelRegistry: MutableMap<String, MutableList<LabelInfo>> = mutableMapOf()
 
     /**
      * All gotos not yet resolved (pending label definition).
@@ -113,7 +118,7 @@ data class CompileContext(
                 isInRepeatUntilBlock = scopeManager.isInRepeatUntilBlock(),
             )
 
-        val stack = labelStacks.getOrPut(name) { mutableListOf() }
+        val labelList = labelRegistry.getOrPut(name) { mutableListOf() }
 
         // Check if any existing label would conflict with the new label
         // Uses stable scope IDs (from scopeStack) not depth-based scopeLevel
@@ -130,7 +135,7 @@ data class CompileContext(
         //   First  ::l:: has scopeStack=[0,1], scopeId=1
         //   Second ::l:: has scopeStack=[0], scopeId=0
         //   Is scopeId 1 in [0]? NO → OK (sibling scopes after first exited)
-        for (existingLabel in stack) {
+        for (existingLabel in labelList) {
             val existingScopeId = existingLabel.scopeStack.lastOrNull() ?: 0
 
             // Check if existing label's scope is in our ancestry (uses stable scope IDs)
@@ -150,8 +155,8 @@ data class CompileContext(
             // The outer ::l1:: is allowed even though ::l1:: exists in child scope [0,2]
         }
 
-        // Push the new label onto the stack
-        stack.add(labelInfo)
+        // Add the new label to the registry
+        labelList.add(labelInfo)
     }
 
     /**
@@ -159,9 +164,9 @@ data class CompileContext(
      * Returns null if no such label exists.
      */
     fun findLabel(name: String): LabelInfo? {
-        val stack = labelStacks[name] ?: return null
+        val labelList = labelRegistry[name] ?: return null
         // Return the last (most recent/innermost) label
-        return stack.lastOrNull()
+        return labelList.lastOrNull()
     }
 
     /**
@@ -176,10 +181,10 @@ data class CompileContext(
         name: String,
         fromScopeStack: List<Int>,
     ): LabelInfo? {
-        val stack = labelStacks[name] ?: return null
+        val labelList = labelRegistry[name] ?: return null
         // Find all visible labels (whose scope ID is in the goto's scope stack)
         val visibleLabels =
-            stack.filter { label ->
+            labelList.filter { label ->
                 val labelScopeId = label.scopeStack.lastOrNull() ?: 0
                 labelScopeId in fromScopeStack
             }
@@ -188,17 +193,22 @@ data class CompileContext(
     }
 
     /**
-     * Set the scopeEndPc for all labels at the given scope level.
+     * Set the scopeEndPc for all labels at the given scope.
      * Called when exiting a scope to record where the scope ended.
+     * Uses scopeStack for precise scope identity (not scopeLevel which is ambiguous for siblings).
      */
     fun setLabelsScopeEndPc(
-        scopeLevel: Int,
+        scopeStack: List<Int>,
         endPc: Int,
         isRepeatUntilBlock: Boolean = false,
     ) {
-        for (stack in labelStacks.values) {
-            for (label in stack) {
-                if (label.scopeLevel == scopeLevel && label.scopeEndPc < 0) {
+        val scopeId = scopeStack.lastOrNull() ?: 0
+        for (labelList in labelRegistry.values) {
+            for (label in labelList) {
+                // Match by exact scope ID (last element of scopeStack)
+                // This correctly handles sibling scopes at same depth
+                val labelScopeId = label.scopeStack.lastOrNull() ?: 0
+                if (labelScopeId == scopeId && label.scopeEndPc < 0) {
                     label.scopeEndPc = endPc
                     if (isRepeatUntilBlock) {
                         label.isInRepeatUntilBlock = true
