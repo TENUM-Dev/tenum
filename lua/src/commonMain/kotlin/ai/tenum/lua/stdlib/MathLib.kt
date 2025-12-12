@@ -51,7 +51,10 @@ class MathLib : LuaLibrary {
 
     // Initialize with a seed based on system time (like Lua 5.4 does)
     @OptIn(ExperimentalTime::class)
-    private val initialSeed = kotlin.time.Clock.System.now().nanosecondsOfSecond
+    private val initialSeed =
+        kotlin.time.Clock.System
+            .now()
+            .nanosecondsOfSecond
     private var randomState: ULong = initialSeed.toULong()
 
     // Keep last seed parts so math.randomseed() with no args can return them

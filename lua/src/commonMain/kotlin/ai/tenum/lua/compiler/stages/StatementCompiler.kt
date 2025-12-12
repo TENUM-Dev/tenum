@@ -1099,6 +1099,11 @@ class StatementCompiler {
                 // Check if there's a local variable with the function's name first
                 val localVar = ctx.findLocal(statement.name)
                 if (localVar != null) {
+                    // Check if the local variable is const/close before assigning
+                    if (ctx.isConstOrCloseVariable(statement.name)) {
+                        val errorToken = Token(TokenType.IDENTIFIER, statement.name, null, statement.line, 0)
+                        throw ParserException("attempt to assign to const variable '${statement.name}'", errorToken)
+                    }
                     // Assign to existing local variable
                     ctx.emit(OpCode.MOVE, localVar.register, reg, 0)
                 } else if (ctx.scopeManager.currentScopeLevel > 0) {

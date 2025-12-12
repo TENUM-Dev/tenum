@@ -15,7 +15,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.number
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.datetime.toStdlibInstant
 import okio.Path.Companion.toPath
 import kotlin.random.Random
 import kotlin.time.Clock
@@ -205,7 +204,13 @@ class OSLib : LuaLibrary {
         result = result.replace("%y", (dt.year % 100).toString().padStart(2, '0'))
 
         // Month
-        result = result.replace("%m", dt.month.number.toString().padStart(2, '0'))
+        result =
+            result.replace(
+                "%m",
+                dt.month.number
+                    .toString()
+                    .padStart(2, '0'),
+            )
         result =
             result.replace(
                 "%B",
@@ -258,9 +263,9 @@ class OSLib : LuaLibrary {
                 "%x",
                 "${
                     dt.month.number.toString().padStart(
-                    2,
-                    '0',
-                )}/${dt.day.toString().padStart(2, '0')}/${dt.year.toString().substring(2)}",
+                        2,
+                        '0',
+                    )}/${dt.day.toString().padStart(2, '0')}/${dt.year.toString().substring(2)}",
             )
         result =
             result.replace(
