@@ -85,7 +85,7 @@ jobs:
       shell: bash
       run: |
         chmod +x ./gradlew
-        ./gradlew --no-daemon build
+        ./gradlew --no-daemon kotlinUpgradeYarnLock build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4

@@ -14,7 +14,7 @@ kotlin {
     jvm { }
     js {
         nodejs { testTask { useMocha { timeout = "60s" } } }
-        if (useMochaInBrowser) {
+        /*if (useMochaInBrowser) {
             browser {
                 testTask { useMocha { timeout = "60s" } }
             }
@@ -48,7 +48,7 @@ kotlin {
                     }
                 }
             }
-        }
+        }*/
     }
     if (compileNative) {
         if (ideaActive) {
