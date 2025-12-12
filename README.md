@@ -136,16 +136,16 @@ Keep your repos; use our hosting only if you want it.
   - ✅ **vararg.lua** - Variable arguments
   - ✅ **verybig.lua** - Very large number operations
   - ⏸️ **coroutine.lua** - Coroutines (failing at eqtab check)
-  - ❌ **code.lua** - Code generation tests
+  - ✅ **code.lua** - Code generation tests
   - ❌ **cstack.lua** - C stack tests (not applicable)
   - ❌ **events.lua** - Event handling
   - ❌ **files.lua** - File I/O operations
   - ❌ **gc.lua** - Garbage collection (not implemented)
   - ❌ **gengc.lua** - Generational GC (not implemented)
-  - ❌ **goto.lua** - Goto statements
+  - ✅ **goto.lua** - Goto statements
   - ❌ **heavy.lua** - Heavy computation tests
   - ❌ **locals.lua** - Local variable tests
-  - ❌ **math.lua** - Math library
+  - ✅ **math.lua** - Math library
   - ❌ **nextvar.lua** - Next variable iteration
   - ❌ **pm.lua** - Pattern matching
   - ❌ **utf8.lua** - UTF-8 support
