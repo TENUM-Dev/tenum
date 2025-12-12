@@ -11,7 +11,7 @@ plugins {
     id("tenum.conventions.mpplib") apply false
 }
 
-group = "ai.plantitude.luak"
+group = "ai.tenum"
 
 repositories {
     mavenCentral()
