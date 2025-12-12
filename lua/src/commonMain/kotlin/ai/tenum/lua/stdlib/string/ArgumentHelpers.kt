@@ -149,11 +149,21 @@ object ArgumentHelpers {
      */
     fun numberToString(num: Number): String {
         val d = num.toDouble()
-        return if (d == d.toLong().toDouble()) {
-            d.toLong().toString()
-        } else {
-            d.toString()
+        // Check if the number can be exactly represented as an integer
+        // and is within the safe integer range for doubles (±2^53)
+        // Beyond this range, floating point cannot represent all integers exactly
+        if (d.isFinite()) {
+            val asLong = d.toLong()
+            // Verify exact round-trip conversion
+            if (asLong.toDouble() == d) {
+                // Additionally check if it's within safe integer range for display
+                // Numbers beyond ±9007199254740992 (2^53) may have precision issues
+                if (asLong >= -9007199254740992L && asLong <= 9007199254740992L) {
+                    return asLong.toString()
+                }
+            }
         }
+        return d.toString()
     }
 
     /**

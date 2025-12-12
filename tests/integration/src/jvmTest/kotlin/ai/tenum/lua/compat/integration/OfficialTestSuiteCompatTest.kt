@@ -126,7 +126,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
         }
 
     @Test
-    @Ignore
     fun test_locals_lua() = runTest(timeout = 60.seconds) { executeTestFile("locals.lua") }
 
     @Test
