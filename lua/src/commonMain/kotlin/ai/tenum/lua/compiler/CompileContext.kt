@@ -52,7 +52,7 @@ data class CompileContext(
         val scopeStack: List<Int>, // Lexical scope ancestry
         val localCount: Int,
         val line: Int,
-        val isInRepeatUntilBlock: Boolean = false, // True if label is inside repeat-until block
+        var isInRepeatUntilBlock: Boolean = false, // True if label is inside repeat-until block (set at scope exit)
         var scopeEndPc: Int = -1, // PC where the label's scope ends (set after scope ends)
     )
 
@@ -116,13 +116,25 @@ data class CompileContext(
         val stack = labelStacks.getOrPut(name) { mutableListOf() }
 
         // Check if any existing label would conflict with the new label
+        // Uses stable scope IDs (from scopeStack) not depth-based scopeLevel
         // Conflict occurs when:
         // - Existing label is an ancestor of new label (new is nested inside existing)
         // - Existing label is in the same scope as new label (exact duplicate)
+        //
+        // Example: do ::l:: do ::l:: end end
+        //   First  ::l:: has scopeStack=[0,1], scopeId=1
+        //   Second ::l:: has scopeStack=[0,1,2], scopeId=2
+        //   Is scopeId 1 in [0,1,2]? YES → ERROR (nested duplicate)
+        //
+        // Example: if a then ::l:: end ::l::
+        //   First  ::l:: has scopeStack=[0,1], scopeId=1
+        //   Second ::l:: has scopeStack=[0], scopeId=0
+        //   Is scopeId 1 in [0]? NO → OK (sibling scopes after first exited)
         for (existingLabel in stack) {
             val existingScopeId = existingLabel.scopeStack.lastOrNull() ?: 0
 
-            // Check if existing label is in our ancestry (includes same-scope case)
+            // Check if existing label's scope is in our ancestry (uses stable scope IDs)
+            // This includes same-scope case and correctly handles nested duplicates
             if (existingScopeId in labelInfo.scopeStack) {
                 throw ParserException(
                     message = "label '$name' already defined on line ${existingLabel.line}",
@@ -182,11 +194,15 @@ data class CompileContext(
     fun setLabelsScopeEndPc(
         scopeLevel: Int,
         endPc: Int,
+        isRepeatUntilBlock: Boolean = false,
     ) {
         for (stack in labelStacks.values) {
             for (label in stack) {
                 if (label.scopeLevel == scopeLevel && label.scopeEndPc < 0) {
                     label.scopeEndPc = endPc
+                    if (isRepeatUntilBlock) {
+                        label.isInRepeatUntilBlock = true
+                    }
                 }
             }
         }

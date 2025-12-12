@@ -651,8 +651,9 @@ class StatementCompiler {
     }
 
     /**
-     * Helper to end a scope with proper label and goto validation.
-     * Must be called before endScope() to ensure locals are still active for validation.
+     * Helper to end a scope with proper label tracking.
+     * Records scope end markers for validation at function end.
+     * Must be called before endScope() to ensure we capture the correct scope level.
      */
     private fun endScopeWithValidation(
         ctx: CompileContext,
@@ -664,64 +665,14 @@ class StatementCompiler {
         val endPc = ctx.instructions.size
 
         // Store the end PC for all labels at this scope level
-        // This is needed for proper validation of "jump over local" rules
-        ctx.setLabelsScopeEndPc(scopeLevel, endPc)
+        // This is needed for proper validation of "jump over local" rules at function end
+        ctx.setLabelsScopeEndPc(scopeLevel, endPc, isRepeatUntilBlock)
 
         // NOTE: Labels are NOT removed here - they persist for forward goto resolution at function end.
         // Visibility is controlled by scopeStack matching in findLabelVisibleFrom().
-        // This allows gotos to find labels defined later in sibling or outer scopes.
-
-        // Validate already-resolved gotos (backward gotos)
-        ctx.validateGotosAtScopeExit(scopeLevel, endPc, isRepeatUntilBlock)
+        // All goto validation (both forward and backward) happens at function end in resolveForwardGotos().
 
         return ctx.scopeManager.endScope(snapshot, endPc)
-    }
-
-    /**
-     * Resolve pending gotos that originated from the scope we're exiting.
-     * Only resolves gotos where:
-     * 1. The goto originated from within currentScopeStack (goto is in this scope or nested)
-     * 2. A visible label exists (checked by findLabelVisibleFrom)
-     *
-     * This is called at scope exit before labels are removed.
-     */
-    private fun resolvePendingGotosAtScope(
-        ctx: CompileContext,
-        currentScopeStack: List<Int>,
-    ) {
-        val currentScopeId = currentScopeStack.lastOrNull() ?: 0
-        val iterator = ctx.pendingGotos.iterator()
-        while (iterator.hasNext()) {
-            val gotoInfo = iterator.next()
-
-            // Only resolve gotos that originated from within the scope we're exiting
-            // Check if currentScopeId is in the goto's scope ancestry
-            if (currentScopeId !in gotoInfo.scopeStack) {
-                // This goto is from a sibling or unrelated scope, skip it
-                continue
-            }
-
-            // Find a label visible from the goto's scope
-            val labelInfo = ctx.findLabelVisibleFrom(gotoInfo.labelName, gotoInfo.scopeStack)
-
-            if (labelInfo != null) {
-                // Validate and patch
-                ctx.validateGotoScope(
-                    gotoScopeLevel = gotoInfo.scopeLevel,
-                    gotoLocalCount = gotoInfo.localCount,
-                    labelScopeLevel = labelInfo.scopeLevel,
-                    labelLocalCount = labelInfo.localCount,
-                    labelName = gotoInfo.labelName,
-                    isForward = true,
-                    gotoLine = gotoInfo.line,
-                    gotoInstructionIndex = gotoInfo.instructionIndex,
-                    labelInstructionIndex = labelInfo.instructionIndex,
-                )
-                ctx.patchJump(gotoInfo.instructionIndex, labelInfo.instructionIndex)
-                ctx.resolvedGotos.add(CompileContext.ResolvedGotoLabel(gotoInfo, labelInfo))
-                iterator.remove()
-            }
-        }
     }
 
     private fun compileBlockWithScope(

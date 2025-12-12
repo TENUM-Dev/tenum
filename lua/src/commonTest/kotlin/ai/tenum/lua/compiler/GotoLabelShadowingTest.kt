@@ -57,6 +57,24 @@ class GotoLabelShadowingTest : LuaCompatTestBase() {
         }
 
     @Test
+    fun `forward goto in do block`() =
+        runTest {
+            val code =
+                """
+                local result = "none"
+                do
+                  goto skip
+                  result = "skipped"
+                  ::skip::
+                  result = "reached"
+                end
+                assert(result == "reached", "forward goto in do block should work")
+                """.trimIndent()
+
+            execute(code)
+        }
+
+    @Test
     fun `label shadowing with multiple nesting levels`() =
         runTest {
             val code =
