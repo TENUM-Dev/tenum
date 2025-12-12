@@ -11,9 +11,6 @@ import ai.tenum.lua.runtime.LuaTable
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.vm.library.LuaLibrary
 import ai.tenum.lua.vm.library.LuaLibraryContext
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
-import kotlinx.datetime.toStdlibInstant
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.acos
@@ -29,6 +26,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 import kotlin.math.truncate
+import kotlin.time.ExperimentalTime
 
 /**
  * Lua 5.4 math library implementation.
@@ -52,12 +50,13 @@ class MathLib : LuaLibrary {
     private val lcgIncrement: ULong = 1UL
 
     // Initialize with a seed based on system time (like Lua 5.4 does)
-    private val initialSeed = Clock.System.now().toStdlibInstant().nanosecondsOfSecond
+    @OptIn(ExperimentalTime::class)
+    private val initialSeed = kotlin.time.Clock.System.now().nanosecondsOfSecond
     private var randomState: ULong = initialSeed.toULong()
 
     // Keep last seed parts so math.randomseed() with no args can return them
     // Initialize with the actual seed used
-    private var seedPartHigh: Long = initialSeed
+    private var seedPartHigh: Long = initialSeed.toLong()
     private var seedPartLow: Long = 0L
 
     override fun register(context: LuaLibraryContext) {

@@ -9,8 +9,6 @@ import ai.tenum.lua.runtime.LuaTable
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.vm.library.LuaLibrary
 import ai.tenum.lua.vm.library.LuaLibraryContext
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
@@ -20,6 +18,8 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.toStdlibInstant
 import okio.Path.Companion.toPath
 import kotlin.random.Random
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * OS Library for Lua 5.4 - Multiplatform implementation
@@ -354,7 +354,7 @@ class OSLib : LuaLibrary {
 
     private fun tmpnameImpl(): LuaValue<*> {
         tmpnameCounter++
-        val timestamp = Clock.System.now().toStdlibInstant().nanosecondsOfSecond
+        val timestamp = Clock.System.now().nanosecondsOfSecond
         val random = Random.nextInt(1000, 9999)
         return LuaString("lua_tmp_${timestamp}_${tmpnameCounter}_$random")
     }
