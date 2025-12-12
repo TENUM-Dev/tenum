@@ -144,25 +144,37 @@ object ArgumentHelpers {
     }
 
     /**
-     * Convert a number to string with proper Lua formatting
-     * (integers without decimal point, floats with decimal)
+     * Convert a number to string with proper Lua formatting.
+     * Lua formats numbers as integers (without decimal point) when they are exactly
+     * representable as integers and within a reasonable display range.
+     * For large numbers or floats, Lua's default uses a format similar to "%.14g" in C.
+     * 
+     * Note: This is a simplified version. Lua's actual formatting is more complex
+     * and platform-dependent, using sprintf with LUA_NUMBER_FMT (typically "%.14g").
      */
     fun numberToString(num: Number): String {
         val d = num.toDouble()
-        // Check if the number can be exactly represented as an integer
-        // and is within the safe integer range for doubles (±2^53)
-        // Beyond this range, floating point cannot represent all integers exactly
-        if (d.isFinite()) {
+        
+        // Handle special cases
+        if (!d.isFinite()) {
+            return d.toString()
+        }
+        
+        // Check if it's a reasonably small integer that can be displayed without loss
+        // Lua uses scientific notation for very large numbers.
+        // The boundary is around 10^14 (100 trillion). We use 10^16 to be safe and include 2^53
+        // First check the magnitude before trying toLong() to avoid rounding issues
+        if (d >= -9999999999999999.0 && d <= 9999999999999999.0) {
+            // Within reasonable range - check if it's an exact integer
             val asLong = d.toLong()
-            // Verify exact round-trip conversion
             if (asLong.toDouble() == d) {
-                // Additionally check if it's within safe integer range for display
-                // Numbers beyond ±9007199254740992 (2^53) may have precision issues
-                if (asLong >= -9007199254740992L && asLong <= 9007199254740992L) {
-                    return asLong.toString()
-                }
+                // Exact round-trip - safe to display as integer
+                return asLong.toString()
             }
         }
+        
+        // Use Kotlin's default double formatting
+        // This approximates Lua's "%.14g" format
         return d.toString()
     }
 

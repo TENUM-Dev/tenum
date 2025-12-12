@@ -4,6 +4,7 @@ import ai.tenum.lua.stdlib.string.ArgumentHelpers
 import kotlin.math.pow
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class NumberToStringTest {
     
