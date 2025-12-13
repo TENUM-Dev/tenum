@@ -393,9 +393,13 @@ class OSLib : LuaLibrary {
                 else -> 0
             }
 
-        // In a real implementation, this would call exitProcess(code)
-        // For testing purposes, we throw an exception instead
-        throw RuntimeException("os.exit called with code $code")
+        val closeState = (args.getOrNull(1) as? LuaBoolean)?.value ?: true
+
+        // Call platform-specific exit
+        exitProcess(code, closeState)
+
+        // This line should never be reached, but needed for type checking
+        return emptyList()
     }
 
     // ============================================
@@ -428,3 +432,8 @@ expect fun getOs(): String
 expect fun getPlatformEnvironmentVariable(name: String): String?
 
 expect fun executePlatformCommand(command: String): Int
+
+expect fun exitProcess(
+    code: Int,
+    closeState: Boolean,
+): Nothing

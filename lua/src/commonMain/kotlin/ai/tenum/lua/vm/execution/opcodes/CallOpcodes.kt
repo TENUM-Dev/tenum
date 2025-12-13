@@ -278,10 +278,26 @@ object CallOpcodes {
         currentLine: Int,
         triggerHookFn: (HookEvent, Int) -> Unit,
     ): List<LuaValue<*>> {
+        // Step 1: Snapshot return values BEFORE calling __close
+        // This ensures return values are not corrupted by __close metamethods
         val collector = ArgumentCollector(registers, frame)
         val results = collector.collectResults(instr.a, instr.b)
 
-        env.debug("  Return ${results.size} values: $results")
+        env.debug("  Return ${results.size} values (before __close): $results")
+        env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
+
+        // Step 2: Execute __close metamethods for all to-be-closed variables
+        // This must happen AFTER return values are evaluated but BEFORE they are returned
+        frame.executeCloseMetamethods(0) { upvalue, capturedValue ->
+            env.debug("  Calling __close for value: $capturedValue")
+            val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
+            if (closeFn != null) {
+                // Call __close - errors should propagate normally
+                env.callFunction(closeFn, listOf(capturedValue, ai.tenum.lua.runtime.LuaNil))
+            }
+        }
+
+        env.debug("  Return ${results.size} values (after __close): $results")
 
         // Update current CallFrame with return transfer info before triggering RETURN hook
         // This allows debug.getinfo('r') in the hook to access ftransfer and ntransfer

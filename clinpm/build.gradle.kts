@@ -71,6 +71,5 @@ val npmBundleInstall = tasks.register<NpmTask>("npmBundleInstall") {
 tasks.register("installLocal") {
     group = "distribution"
     description = "Build JS in :cli, bundle the npm package, and install it locally."
-    dependsOn(cliJsBuild)
     dependsOn(npmBundleInstall)
 }

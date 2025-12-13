@@ -156,11 +156,6 @@ class TableLib : LuaLibrary {
                 val parts = mutableListOf<String>()
                 for (index in i..j) {
                     val value = table[LuaNumber.of(index)]
-                    // Check for nil - table.concat requires all values to be strings or numbers
-                    if (value is LuaNil) {
-                        // Lua 5.4 behavior: report the actual 1-based index where nil was found
-                        throw RuntimeException("invalid value (nil) at index $index in table for 'concat'")
-                    }
                     // Check that value is a string or number
                     if (value !is LuaString && value !is LuaNumber) {
                         throw RuntimeException("invalid value (${value.type().name.lowercase()}) at index $index in table for 'concat'")

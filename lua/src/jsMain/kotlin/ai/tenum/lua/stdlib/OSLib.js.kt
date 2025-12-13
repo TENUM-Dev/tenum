@@ -51,3 +51,13 @@ actual fun executePlatformCommand(command: String): Int {
         1 // Return failure code on error
     }
 }
+
+actual fun exitProcess(
+    code: Int,
+    closeState: Boolean,
+): Nothing {
+    try {
+        js("process.exit(code)")
+    }catch (_: dynamic) { }
+    throw RuntimeException("os.exit called with code $code (process termination not available)")
+}

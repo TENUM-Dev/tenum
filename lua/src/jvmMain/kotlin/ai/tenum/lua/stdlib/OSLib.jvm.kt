@@ -31,3 +31,11 @@ actual fun executePlatformCommand(command: String): Int =
     } catch (e: Exception) {
         1 // Return failure code on error
     }
+
+actual fun exitProcess(
+    code: Int,
+    closeState: Boolean,
+): Nothing {
+    // closeState parameter is ignored on JVM - process always terminates completely
+    kotlin.system.exitProcess(code)
+}

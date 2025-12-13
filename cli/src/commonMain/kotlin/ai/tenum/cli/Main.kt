@@ -12,9 +12,9 @@ import okio.FileSystem
  * Entry point for the Tenum CLI.
  * Exposes `tenum lua` and `tenum luac` subcommands.
  */
-fun main(args: Array<String>) {
-    createCli().main(args)
-}
+//fun main(args: Array<String>) {
+//    createCli().main(args)
+//}
 
 /**
  * Build the CLI instance. Exposed so tests can inject a fake FileSystem.

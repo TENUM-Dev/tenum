@@ -169,8 +169,10 @@ class StatementCompiler {
         statement: ReturnStatement,
         ctx: CompileContext,
     ) {
-        // Close all to-be-closed variables on return (entire function scope)
-        ctx.emitCloseVariables(0)
+        // NOTE: Do NOT emit CLOSE mode=2 here.
+        // The RETURN opcode itself will call __close metamethods AFTER return values are evaluated.
+        // This ensures return values are not corrupted by __close mutations (see locals.lua:255).
+        // ctx.emitCloseVariables(0)  ← REMOVED
 
         if (statement.expressions.isEmpty()) {
             ctx.emit(OpCode.RETURN, 0, 1, 0)
