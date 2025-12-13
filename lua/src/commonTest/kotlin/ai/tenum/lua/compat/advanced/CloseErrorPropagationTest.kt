@@ -143,4 +143,51 @@ class CloseErrorPropagationTest : LuaCompatTestBase() {
                 true,
             )
         }
+
+    @Test
+    fun testCloseErrorChainingWithComplexAssertions() =
+        runTest {
+            // Test exact case from locals.lua:422-463
+            // This includes the complex error chain with multiple assertions
+            // NOTE: Removed debug.getinfo checks - those require special VM support
+            vm.debugEnabled = true
+            assertLuaBoolean(
+                """
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            local function foo()
+              local x <close> = func2close(function (self, msg)
+                assert(string.find(msg, "@x1"), "Expected @x1, got: " .. tostring(msg))
+              end)
+            
+              local x1 <close> = func2close(function (self, msg)
+                assert(string.find(msg, "@y"), "Expected @y, got: " .. tostring(msg))
+                error("@x1")
+              end)
+            
+              local gc <close> = func2close(function () collectgarbage() end)
+            
+              local y <close> = func2close(function (self, msg)
+                assert(string.find(msg, "@z"), "Expected @z, got: " .. tostring(msg))
+                error("@y")
+              end)
+            
+              local first = true
+              local z <close> = func2close(function (self, msg)
+                assert(first and msg == 4, "Expected first=true and msg=4, got first=" .. tostring(first) .. " msg=" .. tostring(msg) .. " type=" .. type(msg))
+                first = false
+                error("@z")
+              end)
+            
+              error(4)  -- original error
+            end
+            
+            local stat, msg = pcall(foo)
+            return string.find(msg, "@x1") ~= nil
+        """,
+                true,
+            )
+        }
 }

@@ -21,6 +21,7 @@ import ai.tenum.lua.vm.execution.InferredFunctionName
  * @param inferredFunctionName Inferred function name and source from calling context (for debug.getinfo)
  * @param ftransfer First index of transferred values (1-based, for call/return hooks)
  * @param ntransfer Number of transferred values (for call/return hooks)
+ * @param isCloseMetamethod Whether this frame is for a __close metamethod call during error unwinding
  */
 data class CallFrame(
     val function: LuaFunction?,
@@ -35,6 +36,7 @@ data class CallFrame(
     val varargs: List<LuaValue<*>> = emptyList(),
     val ftransfer: Int = 0, // Lua 5.4: first index of transferred values (1-based)
     val ntransfer: Int = 0, // Lua 5.4: number of transferred values
+    val isCloseMetamethod: Boolean = false, // Lua 5.4: marks __close metamethod frames as transparent for debug.getinfo
 ) {
     /**
      * Get the current source line number (if available)

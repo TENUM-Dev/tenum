@@ -200,6 +200,13 @@ class LuaVmImpl(
     private var pendingInferredName: InferredFunctionName? = null
 
     /**
+     * Flag to mark the next function call as a __close metamethod call.
+     * When true, the call frame will be marked with isCloseMetamethod=true.
+     * This makes the frame transparent for debug.getinfo level counting.
+     */
+    private var nextCallIsCloseMetamethod: Boolean = false
+
+    /**
      * Original call stack snapshot for hooks.
      * When a hook is executing, this contains the call stack from where the hook was triggered,
      * allowing debug.traceback() to show the complete stack including the triggering location.
@@ -522,7 +529,9 @@ class LuaVmImpl(
                 if (closeMethod is LuaFunction) {
                     try {
                         // Pass the current error to the __close metamethod
-                        callFunction(closeMethod, listOf(capturedValue, currentError))
+                        // Mark this as a __close metamethod call so debug.getinfo can skip it
+                        nextCallIsCloseMetamethod = true
+                        callFunctionInternal(closeMethod, listOf(capturedValue, currentError), isCloseMetamethod = true)
                     } catch (closeEx: LuaException) {
                         // If __close throws, that becomes the new error
                         // The errorValue from LuaException already has location info for strings
@@ -659,11 +668,13 @@ class LuaVmImpl(
                 args = args,
                 inferredName = pendingInferredName,
                 pc = pc,
+                isCloseMetamethod = nextCallIsCloseMetamethod,
             )
         }
 
         // Clear call context after using it
         pendingInferredName = null
+        nextCallIsCloseMetamethod = false
 
         // Trigger CALL hook (Phase 6.4)
         triggerHook(HookEvent.CALL, currentProto.lineDefined)
@@ -1532,10 +1543,12 @@ class LuaVmImpl(
 
     /**
      * Call a function with arguments (internal implementation with hook support)
+     * @param isCloseMetamethod If true, marks the call frame as a __close metamethod call (transparent for debug.getinfo)
      */
     private fun callFunctionInternal(
         func: LuaFunction,
         args: List<LuaValue<*>>,
+        isCloseMetamethod: Boolean = false,
     ): List<LuaValue<*>> =
         when (func) {
             is LuaNativeFunction -> {
@@ -1554,6 +1567,7 @@ class LuaVmImpl(
                         varargs = emptyList(),
                         ftransfer = if (args.isEmpty()) 0 else 1, // Lua 5.4: 0 if no parameters, else 1
                         ntransfer = args.size, // Lua 5.4: number of parameters
+                        isCloseMetamethod = nextCallIsCloseMetamethod,
                     )
 
                 val initialCallStackSize = callStackManager.size
@@ -1561,6 +1575,7 @@ class LuaVmImpl(
 
                 // Clear call context after using it
                 pendingInferredName = null
+                nextCallIsCloseMetamethod = false
 
                 // Check call depth for native functions too
                 callDepth++
