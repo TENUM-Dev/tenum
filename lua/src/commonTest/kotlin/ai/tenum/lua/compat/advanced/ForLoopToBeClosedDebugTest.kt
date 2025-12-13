@@ -6,6 +6,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Focused test for the break + to-be-closed variable bug in for loops.
+ * Based on locals.lua:365-382
+ */
 class ForLoopToBeClosedDebugTest : LuaCompatTestBase() {
     @Test
     fun testForLoopToBeClosedDebug() {
@@ -47,5 +51,85 @@ class ForLoopToBeClosedDebugTest : LuaCompatTestBase() {
             result.value,
             "To-be-closed variable should be closed when function returns from inside loop",
         )
+    }
+
+    @Test
+    fun testBreakWithToBeClosedAndUpvalue() {
+        // Bug in 5.4.4: 'break' may generate wrong 'close' instruction when
+        // leaving a loop block, especially when there's an upvalue creation inside
+        vm.debugEnabled = true
+        val result =
+            execute(
+                """
+            local closed = false
+            
+            local o1 = setmetatable({}, {__close=function() closed = true end})
+            
+            local function test()
+                for k, v in next, {}, nil, o1 do
+                    local function f() return k end   -- create an upvalue
+                    break
+                end
+                assert(closed, "o1 should be closed after break")
+            end
+            
+            test()
+            return closed
+            """,
+            )
+        assertTrue(result is LuaBoolean)
+        assertEquals(true, result.value, "To-be-closed variable should be closed after break, even with upvalue")
+    }
+
+    @Test
+    fun testBreakWithToBeClosedSimple() {
+        // Simpler version without upvalue
+        vm.debugEnabled = true
+        val result =
+            execute(
+                """
+            local closed = false
+            
+            local o1 = setmetatable({}, {__close=function() closed = true end})
+            
+            local function test()
+                for k, v in next, {}, nil, o1 do
+                    break
+                end
+                assert(closed, "o1 should be closed after break")
+            end
+            
+            test()
+            return closed
+            """,
+            )
+        assertTrue(result is LuaBoolean)
+        assertEquals(true, result.value, "To-be-closed variable should be closed after simple break")
+    }
+
+    @Test
+    fun testNormalExitWithToBeClosedAndUpvalue() {
+        // Verify normal exit also works
+        vm.debugEnabled = true
+        val result =
+            execute(
+                """
+            local closed = false
+            
+            local o1 = setmetatable({}, {__close=function() closed = true end})
+            
+            local function test()
+                for k, v in next, {}, nil, o1 do
+                    local function f() return k end   -- create an upvalue
+                end
+                assert(closed, "o1 should be closed after normal exit")
+            end
+            
+            test()
+            return closed
+            """,
+            )
+        assertTrue(result is LuaBoolean)
+        assertEquals(true, result.value, "To-be-closed variable should be closed after normal exit with upvalue")
     }
 }

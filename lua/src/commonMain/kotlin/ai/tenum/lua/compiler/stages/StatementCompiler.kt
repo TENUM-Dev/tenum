@@ -1001,17 +1001,27 @@ class StatementCompiler {
         if (exprs.isNotEmpty() && exprs[0] is FunctionCall) {
             val call = exprs[0] as FunctionCall
             // Request enough results to fill iterator state (3) plus TBC (1)
-            val numResults = (iteratorStateCount + 1) - (exprCount - 1)
+            // But we need to account for how many expressions follow
+            val totalSlotsNeeded = iteratorStateCount + 1 // 3 for iterator state + 1 for TBC
+            val remainingExprs = exprCount - 1 // expressions after the function call
+            val numResults = totalSlotsNeeded - remainingExprs
             lastExprLine = call.line
             callCompiler.compileFunctionCall(call, loopStateRegs[0], ctx, expressionCompiler::compileExpression, numResults)
-            // Compile remaining expressions
-            for (i in 1 until exprCount) {
+            // Compile remaining expressions into iterator state slots (up to 3)
+            for (i in 1 until exprCount.coerceAtMost(iteratorStateCount)) {
                 lastExprLine = exprs[i].line
                 expressionCompiler.compileExpression(exprs[i], loopStateRegs[i], ctx)
             }
+            // If there's a 4th expression, it's the to-be-closed variable
+            if (exprCount > iteratorStateCount) {
+                lastExprLine = exprs[iteratorStateCount].line
+                expressionCompiler.compileExpression(exprs[iteratorStateCount], toBeClosedReg, ctx)
+            }
+            // If function call was supposed to provide the TBC value but there are no explicit expressions,
+            // it will be in loopVarRegs[0] and needs to be moved (handled below)
         } else {
             // No function call - evaluate each expression
-            // Only evaluate up to iteratorStateCount expressions (we have 3 registers for iterator state)
+            // Evaluate up to iteratorStateCount expressions for iterator state (f, s, var)
             val exprsToEvaluate = exprCount.coerceAtMost(iteratorStateCount)
             for (i in 0 until exprsToEvaluate) {
                 lastExprLine = exprs[i].line
@@ -1021,25 +1031,32 @@ class StatementCompiler {
             for (i in exprsToEvaluate until iteratorStateCount) {
                 ctx.emit(OpCode.LOADNIL, loopStateRegs[i], loopStateRegs[i], 0)
             }
+            // If there's a 4th expression, it's the to-be-closed variable
+            if (exprCount > iteratorStateCount) {
+                lastExprLine = exprs[iteratorStateCount].line
+                expressionCompiler.compileExpression(exprs[iteratorStateCount], toBeClosedReg, ctx)
+            } else {
+                // No TBC variable, initialize to nil
+                ctx.emit(OpCode.LOADNIL, toBeClosedReg, toBeClosedReg, 0)
+            }
         }
 
-        // The call will have filled registers starting at loopStateBase
-        // If the call returns 4 values, they go into:
-        //   loopStateBase+0 (f), loopStateBase+1 (s), loopStateBase+2 (var), loopStateBase+3 (TBC temp)
-        // But loopStateBase+3 is actually the first loop variable register!
-        // We need to MOVE the value from loopVarRegs[0] to toBeClosedReg
-
-        // Move TBC value from first loop var position to final TBC position
-        // (The 4th result from the call ends up at loopStateBase+3, which is loopVarRegs[0])
-        if (loopVarRegs.isNotEmpty()) {
+        // If the iterator expression was a function call that returned 4+ values,
+        // the 4th value ends up at loopStateBase+3, which is loopVarRegs[0].
+        // We need to move it to toBeClosedReg (which comes after all loop vars).
+        // But only do this if:
+        // 1. The first expression was a function call
+        // 2. We didn't explicitly compile a 4th expression above
+        // 3. The function call was requested to return 4 values (numResults = 4 - remaining)
+        val needsMoveTBC =
+            exprs.isNotEmpty() &&
+                exprs[0] is FunctionCall &&
+                exprCount <= iteratorStateCount &&
+                loopVarRegs.isNotEmpty()
+        if (needsMoveTBC) {
             ctx.emit(OpCode.MOVE, toBeClosedReg, loopVarRegs[0], 0)
-            // Initialize first loop var to nil since we're about to overwrite it with TFORCALL results anyway
+            // Initialize first loop var to nil since TFORCALL will overwrite it anyway
             ctx.emit(OpCode.LOADNIL, loopVarRegs[0], loopVarRegs[0], 0)
-        } else {
-            // No loop variables, so 4th result goes directly where we want it? No, that's wrong.
-            // Actually if there are no loop vars, toBeClosedReg = loopStateBase + 3
-            // And the 4th result from the call goes to loopStateBase + 3
-            // So it's already in the right place!
         }
 
         // All loop registers are now: [loopStateBase, loopStateBase+1, loopStateBase+2, loopVarRegs..., toBeClosedReg]
@@ -1111,11 +1128,13 @@ class StatementCompiler {
         ctx.instructions[tforloopIndex] = Instruction(OpCode.TFORLOOP, ctrl, jumpDistance, statement.variables.size)
 
         // Loop exit point (TFORLOOP jumps here when done)
-        // Close the to-be-closed variable (4th return value from iterator expression)
-        ctx.emit(OpCode.CLOSE, toBeClosedReg, 2, 0)
-
+        // NOTE: We must emit CLOSE mode=2 AFTER patching breaks so they jump to it
         // Use helper to clean up loop scope (includes CLOSE for upvalues and break patching)
         CompilerHelpers.cleanupLoopScope(bodySnapshot, ctx, emitClose = true)
+
+        // After breaks are patched, emit CLOSE mode=2 to close the to-be-closed variable
+        // This ensures both normal exit and break statements close the TBC variable
+        ctx.emit(OpCode.CLOSE, toBeClosedReg, 2, 0)
 
         // Emit line event for the 'end' line
         emitLoopEndLineEvent(statement.line, statement.block, ctx)
