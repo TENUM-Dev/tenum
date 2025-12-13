@@ -972,46 +972,72 @@ class StatementCompiler {
         val exprCount = exprs.size
 
         // The structure of a for-in loop requires careful register management.
-        // We allocate: 3 registers for iterator state (f, s, var) + N registers for loop variables
-        // Total: 3 + statement.variables.size registers
+        // Layout: [f, s, var] [loop vars...] [TBC]
+        // Lua 5.4: 4th+ return values from iterator expressions are to-be-closed variables
 
-        // Phase 1: Allocate temp registers for evaluating iterator expressions
-        val tempCount = exprCount.coerceAtLeast(3)
-        val tempStart = ctx.registerAllocator.stackTop
-        repeat(tempCount) { ctx.registerAllocator.allocateTemp() }
-        val tempRegs = (tempStart until tempStart + tempCount).toList()
+        // Phase 1: Allocate all registers upfront
+        val iteratorStateCount = 3
+        val loopStateRegs = ctx.registerAllocator.allocateLocals(iteratorStateCount)
+        val loopStateBase = loopStateRegs[0]
+        val loopVarRegs = ctx.registerAllocator.allocateLocals(statement.variables.size)
+        val toBeClosedReg = ctx.registerAllocator.allocateLocal()
+        
+        // Now we have: [loopStateBase, loopStateBase+1, loopStateBase+2] [loopVarRegs...] [toBeClosedReg]
+        // We need to evaluate the iterator expression, requesting 4 results
+        // The first 3 go into loopStateBase, loopStateBase+1, loopStateBase+2
+        // The 4th goes into toBeClosedReg
 
-        // Phase 2: Evaluate iterator expressions into temps
         // Track the line of the last expression for TFORCALL error reporting
         var lastExprLine = statement.line
+        
+        // Evaluate iterator expressions
+        // We request 3 + 1 results: f, s, var, TBC
         if (exprs.isNotEmpty() && exprs[0] is FunctionCall) {
             val call = exprs[0] as FunctionCall
-            val numResults = 3 - (exprCount - 1)
+            // Request enough results to fill iterator state (3) plus TBC (1)
+            val numResults = (iteratorStateCount + 1) - (exprCount - 1)
             lastExprLine = call.line
-            callCompiler.compileFunctionCall(call, tempRegs[0], ctx, expressionCompiler::compileExpression, numResults)
+            callCompiler.compileFunctionCall(call, loopStateRegs[0], ctx, expressionCompiler::compileExpression, numResults)
+            // Compile remaining expressions
             for (i in 1 until exprCount) {
                 lastExprLine = exprs[i].line
-                expressionCompiler.compileExpression(exprs[i], tempRegs[i], ctx)
+                expressionCompiler.compileExpression(exprs[i], loopStateRegs[i], ctx)
             }
-            // Don't emit LOADNIL when first expr is a call - it already filled all 3 registers
         } else {
-            for (i in 0 until exprCount) {
+            // No function call - evaluate each expression
+            // Only evaluate up to iteratorStateCount expressions (we have 3 registers for iterator state)
+            val exprsToEvaluate = exprCount.coerceAtMost(iteratorStateCount)
+            for (i in 0 until exprsToEvaluate) {
                 lastExprLine = exprs[i].line
-                expressionCompiler.compileExpression(exprs[i], tempRegs[i], ctx)
+                expressionCompiler.compileExpression(exprs[i], loopStateRegs[i], ctx)
             }
-            // Only emit LOADNIL for non-call case when we have fewer than 3 expressions
-            for (i in exprCount until 3) {
-                ctx.emit(OpCode.LOADNIL, tempRegs[i], tempRegs[i], 0)
+            // Fill remaining iterator state slots with nil
+            for (i in exprsToEvaluate until iteratorStateCount) {
+                ctx.emit(OpCode.LOADNIL, loopStateRegs[i], loopStateRegs[i], 0)
             }
         }
+        
+        // The call will have filled registers starting at loopStateBase
+        // If the call returns 4 values, they go into:
+        //   loopStateBase+0 (f), loopStateBase+1 (s), loopStateBase+2 (var), loopStateBase+3 (TBC temp)
+        // But loopStateBase+3 is actually the first loop variable register!
+        // We need to MOVE the value from loopVarRegs[0] to toBeClosedReg
+        
+        // Move TBC value from first loop var position to final TBC position
+        // (The 4th result from the call ends up at loopStateBase+3, which is loopVarRegs[0])
+        if (loopVarRegs.isNotEmpty()) {
+            ctx.emit(OpCode.MOVE, toBeClosedReg, loopVarRegs[0], 0)
+            // Initialize first loop var to nil since we're about to overwrite it with TFORCALL results anyway
+            ctx.emit(OpCode.LOADNIL, loopVarRegs[0], loopVarRegs[0], 0)
+        } else {
+            // No loop variables, so 4th result goes directly where we want it? No, that's wrong.
+            // Actually if there are no loop vars, toBeClosedReg = loopStateBase + 3
+            // And the 4th result from the call goes to loopStateBase + 3
+            // So it's already in the right place!
+        }
 
-        // Phase 3: Promote temps to locals for loop state (f, s, var)
-        val loopStateBase = ctx.registerAllocator.promoteTempsToLocals(3)
-
-        // Phase 4: Allocate additional registers for loop variables
-        val loopVarRegs = ctx.registerAllocator.allocateLocals(statement.variables.size)
-
-        // All loop registers are now: [loopStateBase+0, loopStateBase+1, loopStateBase+2, ...loopVarRegs]
+        // All loop registers are now: [loopStateBase, loopStateBase+1, loopStateBase+2, loopVarRegs..., toBeClosedReg]
+        // Note: loopStateBase+3 (tbcTempReg) is unused but will be freed with other iterator state
         val base = loopStateBase
         val state = loopStateBase + 1
         val ctrl = loopStateBase + 2
@@ -1027,6 +1053,17 @@ class StatementCompiler {
                 startPc = ctx.instructions.size,
             )
         }
+        
+        // Declare the to-be-closed variable (4th return value from iterator expression)
+        // This is an invisible variable that will be closed when the loop exits
+        ctx.scopeManager.declareLocal(
+            name = "(for to-be-closed)",
+            register = toBeClosedReg,
+            startPc = ctx.instructions.size,
+            isClose = true,
+        )
+        // Emit CLOSE instruction with mode 1 (declaration) to mark it as to-be-closed
+        ctx.emit(OpCode.CLOSE, toBeClosedReg, 1, 0)
 
         ctx.scopeManager.beginLoop()
 
@@ -1068,14 +1105,17 @@ class StatementCompiler {
         ctx.instructions[tforloopIndex] = Instruction(OpCode.TFORLOOP, ctrl, jumpDistance, statement.variables.size)
 
         // Loop exit point (TFORLOOP jumps here when done)
-        // Use helper to clean up loop scope (includes CLOSE and break patching)
+        // Close the to-be-closed variable (4th return value from iterator expression)
+        ctx.emit(OpCode.CLOSE, toBeClosedReg, 2, 0)
+        
+        // Use helper to clean up loop scope (includes CLOSE for upvalues and break patching)
         CompilerHelpers.cleanupLoopScope(bodySnapshot, ctx, emitClose = true)
 
         // Emit line event for the 'end' line
         emitLoopEndLineEvent(statement.line, statement.block, ctx)
 
         // Phase 6: Free loop state registers (base, state, ctrl)
-        // Loop variables were already freed when we freed bodyExit.removedLocals
+        // Loop variables and toBeClosedReg were already freed when we freed bodyExit.removedLocals
         for (i in 0 until 3) {
             ctx.registerAllocator.freeLocal()
         }
