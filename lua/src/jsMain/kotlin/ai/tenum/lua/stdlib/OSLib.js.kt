@@ -58,6 +58,7 @@ actual fun exitProcess(
 ): Nothing {
     try {
         js("process.exit(code)")
-    }catch (_: dynamic) { }
+    } catch (_: dynamic) {
+    }
     throw RuntimeException("os.exit called with code $code (process termination not available)")
 }

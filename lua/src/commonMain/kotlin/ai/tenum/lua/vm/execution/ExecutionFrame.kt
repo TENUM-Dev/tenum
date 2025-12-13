@@ -167,7 +167,10 @@ class ExecutionFrame(
         val snapshot = toBeClosedVars.toList()
         for ((reg, capturedValue) in snapshot.asReversed()) {
             if (reg < registerIndex) continue
-            toBeClosedVars.removeAll { it.first == reg && it.second === capturedValue }
+            // Use structural equality instead of reference equality
+            // This ensures the value is removed even if the object identity changed
+            // (which can happen due to platform-specific optimizations or copying)
+            toBeClosedVars.removeAll { it.first == reg && it.second == capturedValue }
 
             // Get __close metamethod if present
             val closeFun = getCloseMetamethod(capturedValue)

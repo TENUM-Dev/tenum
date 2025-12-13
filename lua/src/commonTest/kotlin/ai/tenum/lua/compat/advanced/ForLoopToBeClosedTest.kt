@@ -156,4 +156,52 @@ class ForLoopToBeClosedTest : LuaCompatTestBase() {
         assertTrue(result is LuaBoolean)
         assertEquals(true, result.value, "To-be-closed variable should be closed when loop exits via break")
     }
+
+    @Test
+    fun testForLoopClosesOnReturn() {
+        // This is the exact failing test from locals.lua:337-361
+        // Bug in 5.4.3: calls cannot be tail in the scope of to-be-closed variables
+        // This must be valid for tbc variables created by 'for' loops.
+        vm.debugEnabled = true
+        val result =
+            execute(
+                """
+            local function func2close(f)
+                return setmetatable({}, {__close = f})
+            end
+            
+            local closed = false
+            
+            local function foo()
+                return function() return true end, 0, 0,
+                       func2close(function() closed = true end)
+            end
+            
+            local function tail() return closed end
+            
+            local function foo1()
+                for k in foo() do return tail() end
+            end
+            
+            -- When foo1() is called:
+            -- 1. The for loop is entered with a to-be-closed variable
+            -- 2. The iterator returns true, so loop body executes
+            -- 3. return tail() executes - at this moment, closed is still false
+            -- 4. When returning from foo1, the to-be-closed variable must be closed
+            -- 5. After foo1 returns, closed should be true
+            
+            local result = foo1()
+            -- tail() was called before __close, so result should be false
+            assert(result == false, "tail() should return false (closed was false at call time)")
+            -- but after foo1 returns, the __close should have been called
+            return closed
+        """,
+            )
+        assertTrue(result is LuaBoolean)
+        assertEquals(
+            true,
+            result.value,
+            "To-be-closed variable should be closed when function returns from inside loop",
+        )
+    }
 }
