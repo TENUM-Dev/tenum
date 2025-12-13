@@ -497,15 +497,23 @@ class LuaVmImpl(
      * Close to-be-closed variables during unwinding with proper error handling.
      * Called from exception handlers to ensure __close metamethods are invoked.
      *
+     * According to Lua 5.4 semantics:
+     * - Each __close receives the current error as its second parameter
+     * - If a __close throws a new error, that error REPLACES the current error
+     * - The final error (after all __close calls) is the one that gets thrown
+     *
      * @param toBeClosedVars List of (register, value) pairs to close
      * @param alreadyClosedRegs Set of registers already closed
-     * @param errorValue The error value to pass to __close metamethods (nil or error message)
+     * @param initialErrorValue The initial error value to pass to __close metamethods (nil or error message)
+     * @return The final error value after all __close calls (may be different from initialErrorValue)
      */
     private fun closeToBeClosedVars(
         toBeClosedVars: List<Pair<Int, LuaValue<*>>>,
         alreadyClosedRegs: Set<Int>,
-        errorValue: LuaValue<*>,
-    ) {
+        initialErrorValue: LuaValue<*>,
+    ): LuaValue<*> {
+        var currentError = initialErrorValue
+
         for ((reg, capturedValue) in toBeClosedVars.reversed()) {
             if (reg in alreadyClosedRegs) continue
             if (capturedValue !is LuaNil && capturedValue != LuaBoolean.FALSE) {
@@ -513,13 +521,49 @@ class LuaVmImpl(
                 val closeMethod = metatable?.get(LuaString("__close"))
                 if (closeMethod is LuaFunction) {
                     try {
-                        callFunction(closeMethod, listOf(capturedValue, errorValue))
+                        // Pass the current error to the __close metamethod
+                        callFunction(closeMethod, listOf(capturedValue, currentError))
+                    } catch (closeEx: LuaException) {
+                        // If __close throws, that becomes the new error
+                        // The errorValue from LuaException already has location info for strings
+                        currentError = closeEx.errorValue ?: (closeEx.message?.let { LuaString(it) } ?: LuaNil)
+                    } catch (closeEx: LuaRuntimeError) {
+                        // For LuaRuntimeError, we need to add location info for string errors
+                        // This matches Lua 5.4 behavior where error("msg") adds location to the message
+                        val rawError = closeEx.errorValue
+                        currentError =
+                            if (rawError is LuaString) {
+                                // Add location info to string errors
+                                val currentProto = callStackManager.lastFrame()?.proto
+                                val currentPc = callStackManager.lastFrame()?.pc ?: 0
+                                val line = currentProto?.let { stackTraceBuilder.getCurrentLine(it, currentPc) }
+                                val source = currentProto?.source
+                                LuaString(
+                                    buildString {
+                                        if (source != null || line != null) {
+                                            val displaySource = source?.removePrefix("=") ?: "(load)"
+                                            append(displaySource)
+                                            if (line != null) {
+                                                append(":").append(line)
+                                            }
+                                            append(": ")
+                                        }
+                                        append(rawError.value)
+                                    },
+                                )
+                            } else {
+                                // Non-string errors are passed through unchanged
+                                rawError
+                            }
                     } catch (closeEx: Exception) {
-                        // Suppress errors in __close during unwinding
+                        // For other exceptions, convert to string
+                        currentError = closeEx.message?.let { LuaString(it) } ?: LuaString("error in __close")
                     }
                 }
             }
         }
+
+        return currentError
     }
 
     /**
@@ -650,6 +694,69 @@ class LuaVmImpl(
         // Execution stack for trampolined calls (non-tail calls)
         // Each entry represents a caller waiting for callee to return
         val execStack = ArrayDeque<ExecContext>()
+
+        /**
+         * Helper function to convert a LuaValue error to a displayable string message.
+         */
+        fun errorValueToMessage(errorValue: LuaValue<*>): String =
+            when (errorValue) {
+                is LuaString -> errorValue.value
+                is LuaNumber -> errorValue.toDouble().toString()
+                else -> errorValue.toString()
+            }
+
+        /**
+         * Helper function to handle error chaining through __close metamethods.
+         * Closes to-be-closed variables and throws a new exception if the error changed.
+         */
+        fun handleErrorAndCloseToBeClosedVars(originalException: Throwable): Nothing {
+            // Extract initial error value from the exception
+            val initialError =
+                when (originalException) {
+                    is LuaRuntimeError -> originalException.errorValue
+                    is LuaException -> originalException.errorValue ?: (originalException.message?.let { LuaString(it) } ?: LuaNil)
+                    else -> originalException.message?.let { LuaString(it) } ?: LuaNil
+                }
+
+            // Close to-be-closed variables and get the final error (possibly changed by __close handlers)
+            val finalError = closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, initialError)
+
+            // If the error changed during cleanup, throw a new exception with the new error
+            if (finalError !== initialError) {
+                val errorMsg = errorValueToMessage(finalError)
+                when (originalException) {
+                    is LuaRuntimeError -> {
+                        throw LuaRuntimeError(
+                            message = errorMsg,
+                            errorValue = finalError,
+                            callStack = callStackManager.captureSnapshot(),
+                        )
+                    }
+                    is LuaException -> {
+                        throw LuaException(
+                            errorMessageOnly = errorMsg,
+                            line = stackTraceBuilder.getCurrentLine(currentProto, pc),
+                            source = currentProto.source,
+                            luaStackTrace = originalException.luaStackTrace,
+                            errorValueOverride = finalError,
+                        )
+                    }
+                    else -> {
+                        // Should not happen, but handle gracefully
+                        throw LuaException(
+                            errorMessageOnly = errorMsg,
+                            line = stackTraceBuilder.getCurrentLine(currentProto, pc),
+                            source = currentProto.source,
+                            luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
+                            errorValueOverride = finalError,
+                        )
+                    }
+                }
+            }
+
+            // Error didn't change, re-throw the original exception
+            throw originalException
+        }
 
         try {
             debug { "--- Starting execution ---" }
@@ -1127,15 +1234,11 @@ class LuaVmImpl(
             } catch (_: Exception) {
             }
 
-            // Close to-be-closed variables
-            val errorValue = if (luaEx.message != null) LuaString(luaEx.message!!) else LuaNil
-            closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, errorValue)
-            throw luaEx
+            // Close to-be-closed variables and handle error chaining
+            handleErrorAndCloseToBeClosedVars(luaEx)
         } catch (e: LuaException) {
-            // Already a LuaException - close to-be-closed vars and re-throw
-            val errorValue = if (e.message != null) LuaString(e.message!!) else LuaNil
-            closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, errorValue)
-            throw e
+            // Already a LuaException - close to-be-closed vars and handle error chaining
+            handleErrorAndCloseToBeClosedVars(e)
         } catch (e: Exception) {
             // Convert RuntimeException to LuaException, optionally with enhanced diagnostic info
             val extraInfo =
@@ -1183,11 +1286,8 @@ class LuaVmImpl(
                     )
                 }
 
-            // On error, close all to-be-closed variables in reverse order
-            val errorValue = if (luaEx.message != null) LuaString(luaEx.message!!) else LuaNil
-            closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, errorValue)
-            // Re-throw the exception after cleanup
-            throw luaEx
+            // On error, close all to-be-closed variables in reverse order and handle error chaining
+            handleErrorAndCloseToBeClosedVars(luaEx)
         } catch (e: Error) {
             // Convert platform errors to Lua errors with proper stack trace
             val errorType = e::class.simpleName ?: "Error"
