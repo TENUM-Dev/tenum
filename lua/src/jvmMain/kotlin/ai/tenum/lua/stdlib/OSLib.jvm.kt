@@ -1,5 +1,6 @@
 package ai.tenum.lua.stdlib
 
+// CPD-OFF: platform-specific code
 actual fun getPlatform(): String = "jvm"
 
 actual fun getOs(): String = System.getProperty("os.name") ?: "unknown"

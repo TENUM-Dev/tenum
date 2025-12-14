@@ -1,7 +1,7 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
 package ai.tenum.lua.stdlib
-
+// CPD-OFF: platform-specific code
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import platform.posix.exit

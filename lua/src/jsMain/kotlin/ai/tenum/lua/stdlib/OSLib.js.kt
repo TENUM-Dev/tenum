@@ -1,5 +1,6 @@
 package ai.tenum.lua.stdlib
 
+// CPD-OFF: platform-specific code
 external val process: dynamic
 
 actual fun getPlatform(): String = "JS"
