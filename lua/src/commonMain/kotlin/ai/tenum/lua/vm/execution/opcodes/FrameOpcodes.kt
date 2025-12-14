@@ -2,8 +2,6 @@ package ai.tenum.lua.vm.execution.opcodes
 
 import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.runtime.LuaFunction
-import ai.tenum.lua.runtime.LuaString
-import ai.tenum.lua.runtime.LuaTable
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
@@ -26,7 +24,7 @@ object FrameOpcodes {
         instr: Instruction,
         frame: ExecutionFrame,
         env: ExecutionEnvironment,
-        callCloseFn: (LuaFunction, LuaValue<*>) -> Unit,
+        crossinline callCloseFn: (LuaFunction, LuaValue<*>, LuaValue<*>) -> Unit,
     ) {
         val a = instr.a
         val mode = instr.b
@@ -50,24 +48,14 @@ object FrameOpcodes {
             2 -> {
                 env.debug("[CLOSE] scope-exit close for regs >= $a")
 
-                // Work on a snapshot since we'll mutate the original
-                val snapshot = frame.toBeClosedVars.toList()
-
-                for ((reg, capturedValue) in snapshot.asReversed()) {
-                    if (reg < a) continue // only those in scope
-                    // Remove this lifetime from tracking
-                    frame.toBeClosedVars.removeAll { it.first == reg && it.second === capturedValue }
-
-                    val mt = capturedValue.metatable as? LuaTable
+                // Use the shared executeCloseMetamethods which handles validation and error chaining
+                frame.executeCloseMetamethods(a) { upvalue, value, errorArg ->
                     val closeFun =
-                        mt?.get(
-                            LuaString("__close"),
-                        ) as? LuaFunction
-                    if (closeFun != null) {
-                        env.debug("[CLOSE] calling __close for reg=$reg")
-                        // Normal flow: err == nil
-                        callCloseFn(closeFun, capturedValue)
-                    }
+                        upvalue.closedValue as? LuaFunction
+                            ?: error("Expected function in upvalue")
+                    env.debug("[CLOSE] calling __close for value=$value, error=$errorArg")
+                    // Call with the chained error argument
+                    callCloseFn(closeFun, value, errorArg)
                 }
             }
 

@@ -299,13 +299,13 @@ object CallOpcodes {
         // Note: Error call stack preservation is handled at the VM level (LuaVmImpl.executeProto)
         // where LuaRuntimeError is caught BEFORE conversion to LuaException, ensuring the full
         // call stack with isCloseMetamethod flags is preserved for debug.traceback()
-        frame.executeCloseMetamethods(0) { upvalue, capturedValue ->
-            env.debug("  Calling __close for value: $capturedValue")
+        frame.executeCloseMetamethods(0) { upvalue, capturedValue, errorArg ->
+            env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
             val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
             if (closeFn != null) {
                 // Call __close - errors should propagate normally
                 env.setNextCallIsCloseMetamethod()
-                env.callFunction(closeFn, listOf(capturedValue, ai.tenum.lua.runtime.LuaNil))
+                env.callFunction(closeFn, listOf(capturedValue, errorArg))
             }
         }
 
