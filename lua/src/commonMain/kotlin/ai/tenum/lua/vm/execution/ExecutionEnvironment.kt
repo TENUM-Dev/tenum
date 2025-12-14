@@ -79,6 +79,12 @@ class ExecutionEnvironment(
 
     fun setPendingInferredName(name: InferredFunctionName?) = vmCapabilities.setPendingInferredName(name)
 
+    fun setNextCallIsCloseMetamethod() = vmCapabilities.setNextCallIsCloseMetamethod()
+
+    fun preserveErrorCallStack(callStack: List<ai.tenum.lua.vm.CallFrame>) = vmCapabilities.preserveErrorCallStack(callStack)
+
+    fun markCurrentFrameAsReturning() = vmCapabilities.markCurrentFrameAsReturning()
+
     fun isTruthy(value: LuaValue<*>): Boolean = vmCapabilities.isTruthy(value)
 
     fun luaEquals(

@@ -24,6 +24,14 @@ interface DebugContext {
     fun getStackView(): StackView
 
     /**
+     * Get the last error call stack if available.
+     * This is used by debug.traceback when called as an xpcall message handler
+     * to show __close metamethod frames that have been popped from the current stack.
+     * Returns null and clears the stored stack after being called.
+     */
+    fun getAndClearLastErrorCallStack(): List<ai.tenum.lua.vm.CallFrame>?
+
+    /**
      * Execute a hook function with proper context preservation.
      *
      * This method:

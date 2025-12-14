@@ -816,12 +816,20 @@ class DebugLib : LuaLibrary {
                     }
                 }
             } else if (currentContext != null) {
-                // Get stack view - automatically handles hook context
+                // Check if there's a preserved error call stack (e.g., from __close metamethod)
+                // If so, use it instead of the current stack to show the __close frames
+                val lastErrorStack = currentContext.getAndClearLastErrorCallStack()
+                
+                // Get stack view for coroutine boundary check and level calculation
                 val stackView = currentContext.getStackView()
                 val snapshot = currentContext.getHookSnapshot()
-
-                // If in hook, combine hook frame with observed frames
-                val rawCallStack =
+                
+                val rawCallStack = if (lastErrorStack != null && lastErrorStack.isNotEmpty()) {
+                    // Use the preserved error stack which includes __close frames
+                    lastErrorStack.asReversed() // Most-recent-first for traceback
+                } else {
+                    // Normal path: get stack from view - automatically handles hook context
+                    // If in hook, combine hook frame with observed frames
                     if (snapshot != null && stackView.size > 0) {
                         // Hook context: find the hook frame (skip native frames like debug.traceback)
                         // and combine with observed frames from when the hook was triggered
@@ -835,6 +843,7 @@ class DebugLib : LuaLibrary {
                         // Normal context: use stack as-is (most-recent-first for traceback)
                         stackView.forTraceback()
                     }
+                }
 
                 // When in a coroutine, filter frames to only show those within the coroutine
                 // This prevents leaking frames from outside the coroutine boundary
@@ -846,7 +855,7 @@ class DebugLib : LuaLibrary {
                         // rawCallStack is most-recent-first, so we need to filter from the end
                         // Frames at the end (oldest) before callStackBase should be excluded
                         // stackView.size gives us total frames including the ones before callStackBase
-                        val totalFrames = stackView.size
+                        val totalFrames = if (lastErrorStack != null) rawCallStack.size else stackView.size
                         if (callStackBase > 0 && callStackBase < totalFrames) {
                             val framesToDrop = callStackBase
                             rawCallStack.dropLast(framesToDrop)

@@ -80,4 +80,23 @@ interface VmCapabilities {
      * @param name The inferred function name with its source
      */
     fun setPendingInferredName(name: InferredFunctionName?)
+
+    /**
+     * Mark the next function call as a __close metamethod invocation.
+     * This is used to annotate stack traces with "in metamethod 'close'".
+     */
+    fun setNextCallIsCloseMetamethod()
+
+    /**
+     * Preserve the error call stack for later retrieval by debug.traceback.
+     * Used when errors occur in __close metamethods during function return.
+     */
+    fun preserveErrorCallStack(callStack: List<ai.tenum.lua.vm.CallFrame>)
+
+    /**
+     * Mark the current frame as returning (invisible to debug.getinfo).
+     * Used before executing __close metamethods during return, so the returning
+     * function is no longer visible in debug.getinfo (matches Lua 5.4 behavior).
+     */
+    fun markCurrentFrameAsReturning()
 }

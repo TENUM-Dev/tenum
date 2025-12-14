@@ -389,7 +389,9 @@ internal class OpcodeDispatcher(
 
             OpCode.CLOSE -> {
                 FrameOpcodes.executeClose(instr, execFrame, env) { closeFun, value ->
-                    callFunction(closeFun, listOf(value, LuaNil))
+                    env.setNextCallIsCloseMetamethod()
+                    callFunction(closeFun, listOf(value, LuaNil)) // Return value is ignored by executeClose
+                    Unit // Explicitly return Unit
                 }
                 DispatchResult.Continue
             }

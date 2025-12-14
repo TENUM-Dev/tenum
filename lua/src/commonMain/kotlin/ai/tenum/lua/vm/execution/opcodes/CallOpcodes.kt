@@ -10,6 +10,8 @@ import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 import ai.tenum.lua.vm.debug.HookEvent
+import ai.tenum.lua.vm.errorhandling.LuaException
+import ai.tenum.lua.vm.errorhandling.LuaRuntimeError
 import ai.tenum.lua.vm.execution.ArgumentCollector
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
@@ -287,12 +289,24 @@ object CallOpcodes {
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
 
         // Step 2: Execute __close metamethods for all to-be-closed variables
-        // This must happen AFTER return values are evaluated but BEFORE they are returned
+        // NOTE: During NORMAL returns (RETURN opcode), the function is STILL ACTIVE
+        // when __close executes. debug.getinfo(2) from within __close should see
+        // the returning function's name, not the caller's name.
+        // This differs from ERROR unwinding, where the function is conceptually
+        // "already gone" and debug.getinfo(2) should see the caller.
+        // See locals.lua:262 (normal return) vs locals.lua:445 (error path)
+
+        // Step 3: Execute __close metamethods for all to-be-closed variables
+        // This must happen AFTER return values are evaluated and frame is popped, but BEFORE returning
+        // Note: Error call stack preservation is handled at the VM level (LuaVmImpl.executeProto)
+        // where LuaRuntimeError is caught BEFORE conversion to LuaException, ensuring the full
+        // call stack with isCloseMetamethod flags is preserved for debug.traceback()
         frame.executeCloseMetamethods(0) { upvalue, capturedValue ->
             env.debug("  Calling __close for value: $capturedValue")
             val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
             if (closeFn != null) {
                 // Call __close - errors should propagate normally
+                env.setNextCallIsCloseMetamethod()
                 env.callFunction(closeFn, listOf(capturedValue, ai.tenum.lua.runtime.LuaNil))
             }
         }

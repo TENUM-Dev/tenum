@@ -93,6 +93,23 @@ class LuaVmImpl(
         pendingInferredName = InferredFunctionName(cleanName, FunctionNameSource.Metamethod)
     }
 
+    override fun setNextCallIsCloseMetamethod() {
+        nextCallIsCloseMetamethod = true
+    }
+
+    override fun preserveErrorCallStack(callStack: List<CallFrame>) {
+        lastErrorCallStack = callStack
+    }
+
+    override fun markCurrentFrameAsReturning() {
+        // Mark the last frame as returning so it's invisible to debug.getinfo
+        val lastFrame = callStackManager.lastFrame()
+        if (lastFrame != null) {
+            val updated = lastFrame.copy(isReturning = true)
+            callStackManager.replaceLastFrame(updated)
+        }
+    }
+
     override fun getMetamethod(
         value: LuaValue<*>,
         methodName: String,
@@ -205,6 +222,14 @@ class LuaVmImpl(
      * This makes the frame transparent for debug.getinfo level counting.
      */
     private var nextCallIsCloseMetamethod: Boolean = false
+
+    /**
+     * Last error call stack for debug.traceback.
+     * When an error is thrown from a __close metamethod, we capture its call stack here.
+     * debug.traceback can use this if called shortly after (e.g., as xpcall message handler).
+     * This is cleared after being read once to avoid stale data.
+     */
+    private var lastErrorCallStack: List<CallFrame>? = null
 
     /**
      * Original call stack snapshot for hooks.
@@ -342,6 +367,16 @@ class LuaVmImpl(
         // Call stack is stored oldest-first internally
         // Include all frames: atLevel() handles native frame skipping
         return StackView(callStackManager.captureSnapshot())
+    }
+
+    /**
+     * Get and clear the last error call stack.
+     * Used by debug.traceback to show __close frames in error messages.
+     */
+    override fun getAndClearLastErrorCallStack(): List<CallFrame>? {
+        val stack = lastErrorCallStack
+        lastErrorCallStack = null // Clear after reading
+        return stack
     }
 
     /**
@@ -536,8 +571,14 @@ class LuaVmImpl(
                         // If __close throws, that becomes the new error
                         // The errorValue from LuaException already has location info for strings
                         currentError = closeEx.errorValue ?: (closeEx.message?.let { LuaString(it) } ?: LuaNil)
+                        // Capture the call stack for debug.traceback (converted from LuaStackFrame)
+                        // Note: We'll rely on LuaRuntimeError path for proper CallFrame capture
                     } catch (closeEx: LuaRuntimeError) {
-                        // For LuaRuntimeError, we need to add location info for string errors
+                        // For LuaRuntimeError, preserve its call stack which includes the __close frame
+                        // This allows debug.traceback to show "in metamethod 'close'" when used as xpcall message handler
+                        lastErrorCallStack = closeEx.callStack
+                        
+                        // For string errors, add location info
                         // This matches Lua 5.4 behavior where error("msg") adds location to the message
                         val rawError = closeEx.errorValue
                         currentError =
@@ -567,6 +608,7 @@ class LuaVmImpl(
                     } catch (closeEx: Exception) {
                         // For other exceptions, convert to string
                         currentError = closeEx.message?.let { LuaString(it) } ?: LuaString("error in __close")
+                        lastErrorCallStack = null
                     }
                 }
             }
@@ -728,6 +770,13 @@ class LuaVmImpl(
                     is LuaException -> originalException.errorValue ?: (originalException.message?.let { LuaString(it) } ?: LuaNil)
                     else -> originalException.message?.let { LuaString(it) } ?: LuaNil
                 }
+
+            // Mark the current frame as returning BEFORE closing to-be-closed variables
+            // This makes the frame invisible to debug.getinfo during __close execution
+            // (matching Lua 5.4.8 semantics where the function is conceptually already returned)
+            if (toBeClosedVars.isNotEmpty()) {
+                markCurrentFrameAsReturning()
+            }
 
             // Close to-be-closed variables and get the final error (possibly changed by __close handlers)
             val finalError = closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, initialError)
@@ -1140,6 +1189,11 @@ class LuaVmImpl(
             }
             throw e // Re-throw to be caught by coroutineResume
         } catch (e: LuaRuntimeError) {
+            // Preserve the full call stack from LuaRuntimeError BEFORE converting to LuaException
+            // This ensures __close metamethod frames with isCloseMetamethod=true are preserved
+            // for debug.traceback() even when the simplified LuaException loses them
+            preserveErrorCallStack(e.callStack)
+            
             // If executing in a coroutine, save the call stack for debug.traceback()
             val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
             if (currentCoroutine is LuaCoroutine.LuaFunctionCoroutine) {

@@ -190,4 +190,123 @@ class CloseErrorPropagationTest : LuaCompatTestBase() {
                 true,
             )
         }
+
+    @Test
+    fun testCloseMetamethodInTraceback() =
+        runTest {
+            // Test that __close metamethods appear as "in metamethod 'close'" in tracebacks
+            // Based on locals.lua line 486-493
+            vm.debugEnabled = true
+            assertLuaBoolean(
+                """
+            local debug = require"debug"
+            
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            -- error in __close in vararg function
+            local function foo(...)
+              local x123 <close> = func2close(function () error("@x123") end)
+            end
+            
+            local st, msg = xpcall(foo, debug.traceback)
+            -- Check that error message contains "@x123"
+            assert(string.match(msg, "@x123"), "Should contain error message '@x123'")
+            -- Check that traceback contains "in metamethod 'close'"
+            assert(string.find(msg, "in metamethod 'close'"), "Should contain 'in metamethod \\'close\\''")
+            return true
+        """,
+                true,
+            )
+        }
+
+    @Test
+    fun testSimpleCloseErrorChain() =
+        runTest {
+            // Simplest possible test: two __close handlers, second throws, first doesn't re-throw
+            assertLuaBoolean(
+                """
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            local function foo()
+              local x <close> = func2close(function (self, msg)
+                -- Receive "@z" but don't re-throw
+                return -- final error should still be "@z"
+              end)
+            
+              local z <close> = func2close(function (self, msg)
+                error("@z")
+              end)
+            
+              error(4)
+            end
+            
+            local stat, msg = pcall(foo)
+            return string.find(msg, "@z") ~= nil
+        """,
+                true,
+            )
+        }
+
+    @Test
+    fun testCloseErrorReplacement() =
+        runTest {
+            // Test that a __close handler can replace the error
+            assertLuaBoolean(
+                """
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            local function foo()
+              local x <close> = func2close(function (self, msg)
+                -- Replace "@z" with "@x1"
+                error("@x1")
+              end)
+            
+              local z <close> = func2close(function (self, msg)
+                error("@z")
+              end)
+            
+              error(4)
+            end
+            
+            local stat, msg = pcall(foo)
+            return string.find(msg, "@x1") ~= nil
+        """,
+                true,
+            )
+        }
+
+    @Test
+    fun testCloseReceivesCorrectErrorValue() =
+        runTest {
+            // Test that __close receives the actual error value, not the formatted message
+            assertLuaBoolean(
+                """
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            local results = {}
+            local function foo()
+              local z <close> = func2close(function (self, msg)
+                -- Should receive the error VALUE thrown by error("@z"), not a formatted string
+                table.insert(results, string.find(tostring(msg), "@z") ~= nil)
+                error("@z2")
+              end)
+            
+              error("@z")
+            end
+            
+            local stat, msg = pcall(foo)
+            -- Final error should be "@z2" and z should have received "@z"
+            return results[1] and string.find(msg, "@z2") ~= nil
+        """,
+                true,
+            )
+        }
 }
