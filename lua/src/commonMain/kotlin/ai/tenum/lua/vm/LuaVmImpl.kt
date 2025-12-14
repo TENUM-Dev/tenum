@@ -577,7 +577,7 @@ class LuaVmImpl(
                         // For LuaRuntimeError, preserve its call stack which includes the __close frame
                         // This allows debug.traceback to show "in metamethod 'close'" when used as xpcall message handler
                         lastErrorCallStack = closeEx.callStack
-                        
+
                         // For string errors, add location info
                         // This matches Lua 5.4 behavior where error("msg") adds location to the message
                         val rawError = closeEx.errorValue
@@ -1193,7 +1193,7 @@ class LuaVmImpl(
             // This ensures __close metamethod frames with isCloseMetamethod=true are preserved
             // for debug.traceback() even when the simplified LuaException loses them
             preserveErrorCallStack(e.callStack)
-            
+
             // If executing in a coroutine, save the call stack for debug.traceback()
             val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
             if (currentCoroutine is LuaCoroutine.LuaFunctionCoroutine) {

@@ -819,31 +819,32 @@ class DebugLib : LuaLibrary {
                 // Check if there's a preserved error call stack (e.g., from __close metamethod)
                 // If so, use it instead of the current stack to show the __close frames
                 val lastErrorStack = currentContext.getAndClearLastErrorCallStack()
-                
+
                 // Get stack view for coroutine boundary check and level calculation
                 val stackView = currentContext.getStackView()
                 val snapshot = currentContext.getHookSnapshot()
-                
-                val rawCallStack = if (lastErrorStack != null && lastErrorStack.isNotEmpty()) {
-                    // Use the preserved error stack which includes __close frames
-                    lastErrorStack.asReversed() // Most-recent-first for traceback
-                } else {
-                    // Normal path: get stack from view - automatically handles hook context
-                    // If in hook, combine hook frame with observed frames
-                    if (snapshot != null && stackView.size > 0) {
-                        // Hook context: find the hook frame (skip native frames like debug.traceback)
-                        // and combine with observed frames from when the hook was triggered
-                        val hookFrame = stackView.forTraceback().firstOrNull { !it.isNative }
-                        if (hookFrame != null) {
-                            listOf(hookFrame) + snapshot.frames.asReversed()
-                        } else {
-                            snapshot.frames.asReversed()
-                        }
+
+                val rawCallStack =
+                    if (lastErrorStack != null && lastErrorStack.isNotEmpty()) {
+                        // Use the preserved error stack which includes __close frames
+                        lastErrorStack.asReversed() // Most-recent-first for traceback
                     } else {
-                        // Normal context: use stack as-is (most-recent-first for traceback)
-                        stackView.forTraceback()
+                        // Normal path: get stack from view - automatically handles hook context
+                        // If in hook, combine hook frame with observed frames
+                        if (snapshot != null && stackView.size > 0) {
+                            // Hook context: find the hook frame (skip native frames like debug.traceback)
+                            // and combine with observed frames from when the hook was triggered
+                            val hookFrame = stackView.forTraceback().firstOrNull { !it.isNative }
+                            if (hookFrame != null) {
+                                listOf(hookFrame) + snapshot.frames.asReversed()
+                            } else {
+                                snapshot.frames.asReversed()
+                            }
+                        } else {
+                            // Normal context: use stack as-is (most-recent-first for traceback)
+                            stackView.forTraceback()
+                        }
                     }
-                }
 
                 // When in a coroutine, filter frames to only show those within the coroutine
                 // This prevents leaking frames from outside the coroutine boundary

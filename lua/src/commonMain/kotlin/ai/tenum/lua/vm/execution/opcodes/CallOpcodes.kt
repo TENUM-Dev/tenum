@@ -10,8 +10,6 @@ import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 import ai.tenum.lua.vm.debug.HookEvent
-import ai.tenum.lua.vm.errorhandling.LuaException
-import ai.tenum.lua.vm.errorhandling.LuaRuntimeError
 import ai.tenum.lua.vm.execution.ArgumentCollector
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
