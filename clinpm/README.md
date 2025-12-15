@@ -11,7 +11,7 @@ This package provides npm/Node.js integration for TENUM, making it easy to use t
 ### Published Package (when available)
 
 ```bash
-npm install -g @tenum-dev/tenum
+npm install -g @tenum_dev/tenum
 ```
 
 ### Local Development Build
