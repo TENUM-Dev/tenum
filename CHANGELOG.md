@@ -1,3 +1,18 @@
+## 1.3.0 (2025-12-15)
+
+* bump: (deps-dev): Bump @types/node from 24.10.2 to 25.0.0 in /clinpm (#48) ([d8b72db](https://github.com/TENUM-Dev/tenum/commit/d8b72db)), closes [#48](https://github.com/TENUM-Dev/tenum/issues/48)
+* bump: (deps-dev): bump @types/node from 25.0.0 to 25.0.1 in /clinpm (#52) ([2be040a](https://github.com/TENUM-Dev/tenum/commit/2be040a)), closes [#52](https://github.com/TENUM-Dev/tenum/issues/52)
+* bump: (deps): Bump ch.qos.logback:logback-classic from 1.5.21 to 1.5.22 (#47) ([7e0d9e2](https://github.com/TENUM-Dev/tenum/commit/7e0d9e2)), closes [#47](https://github.com/TENUM-Dev/tenum/issues/47)
+* Add aggregated classes and testClasses tasks (#50) ([407c0a4](https://github.com/TENUM-Dev/tenum/commit/407c0a4)), closes [#50](https://github.com/TENUM-Dev/tenum/issues/50)
+* Add CodeQL analysis workflow configuration (#49) ([84cf3d0](https://github.com/TENUM-Dev/tenum/commit/84cf3d0)), closes [#49](https://github.com/TENUM-Dev/tenum/issues/49)
+* fix: Enforce Lua goto/label scope rules in compiler (#46) ([3db245a](https://github.com/TENUM-Dev/tenum/commit/3db245a)), closes [#46](https://github.com/TENUM-Dev/tenum/issues/46)
+* Feat: enable math tests (#44) ([7bd8769](https://github.com/TENUM-Dev/tenum/commit/7bd8769)), closes [#44](https://github.com/TENUM-Dev/tenum/issues/44)
+* Feat: fully support db lua (#43) ([39e3e70](https://github.com/TENUM-Dev/tenum/commit/39e3e70)), closes [#43](https://github.com/TENUM-Dev/tenum/issues/43)
+* Merge pull request #40 from TENUM-Dev/release ([e4c49ed](https://github.com/TENUM-Dev/tenum/commit/e4c49ed)), closes [#40](https://github.com/TENUM-Dev/tenum/issues/40)
+* Merge pull request #42 from TENUM-Dev/main ([a4f633d](https://github.com/TENUM-Dev/tenum/commit/a4f633d)), closes [#42](https://github.com/TENUM-Dev/tenum/issues/42)
+* Change PR auto-merge method to MERGE in workflow ([11550ae](https://github.com/TENUM-Dev/tenum/commit/11550ae))
+* Sync: main -> dev (#41) ([93eac4e](https://github.com/TENUM-Dev/tenum/commit/93eac4e)), closes [#41](https://github.com/TENUM-Dev/tenum/issues/41)
+
 ## 1.2.0 (2025-12-11)
 
 * Merge branch 'main' into release ([372b708](https://github.com/TENUM-Dev/tenum/commit/372b708))
