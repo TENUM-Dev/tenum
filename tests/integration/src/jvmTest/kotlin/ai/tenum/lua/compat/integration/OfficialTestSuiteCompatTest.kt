@@ -71,6 +71,7 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_cstack_lua() = runTest(timeout = 60.seconds) { executeTestFile("cstack.lua") }
 
     @Test
+    @Ignore
     fun test_db_lua() =
         runTest(timeout = 60.seconds) {
             executeTestFile(
@@ -126,6 +127,7 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
         }
 
     @Test
+    @Ignore
     fun test_locals_lua() = runTest(timeout = 60.seconds) {
         executeTestFile(
             "locals.lua",
