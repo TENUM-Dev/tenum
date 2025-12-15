@@ -383,7 +383,7 @@ class CoroutineLib : LuaLibrary {
                 }
             }
 
-        vm.setHook(debugHook, maskStr, count)
+        vm.setHook(coroutine = null, hook = debugHook, mask = maskStr, count = count)
 
         // Return previous state for restoration
         return HookState(previousHook)
@@ -402,9 +402,9 @@ class CoroutineLib : LuaLibrary {
         // Restore previous hook
         val prevConfig = hookState.previousConfig
         if (prevConfig.hook != null) {
-            vm.setHook(prevConfig.hook, prevConfig.mask.joinToString(""), prevConfig.count)
+            vm.setHook(coroutine = null, hook = prevConfig.hook, mask = prevConfig.mask.joinToString(""), count = prevConfig.count)
         } else {
-            vm.setHook(null, "")
+            vm.setHook(coroutine = null, hook = null, mask = "")
         }
     }
 

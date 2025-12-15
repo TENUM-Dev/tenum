@@ -930,7 +930,7 @@ class DebugLib : LuaLibrary {
 
         if (args.isEmpty()) {
             // Disable hook for current thread
-            currentContext.setHook(null, "")
+            currentContext.setHook(coroutine = null, hook = null, mask = "")
         } else {
             // Check if first argument is a coroutine (thread-specific hook)
             val firstArg = args.getOrNull(0)
@@ -941,30 +941,26 @@ class DebugLib : LuaLibrary {
                     val mask = (args.getOrNull(2) as? LuaString)?.value ?: ""
                     val count = (args.getOrNull(3) as? LuaNumber)?.toDouble()?.toInt() ?: 0
 
-                    // Store hook in registry's _HOOKKEY table with coroutine as key
-                    val registry = currentContext.getRegistry()
-                    val hookKey = LuaString("_HOOKKEY")
-                    val hookTable =
-                        registry[hookKey] as? LuaTable ?: run {
-                            // Initialize _HOOKKEY table if not present
-                            val newTable = LuaTable()
-                            val mt = LuaTable()
-                            mt[LuaString("__mode")] = LuaString("k")
-                            newTable.metatable = mt
-                            registry[hookKey] = newTable
-                            newTable
-                        }
-
                     if (hookFunc is LuaFunction) {
-                        // Store hook info as a table: {func, mask, count}
-                        val hookInfo = LuaTable()
-                        hookInfo[LuaNumber.of(1)] = hookFunc
-                        hookInfo[LuaNumber.of(2)] = LuaString(mask)
-                        hookInfo[LuaNumber.of(3)] = LuaNumber.of(count)
-                        hookTable[firstArg] = hookInfo
+                        // Create Kotlin hook that uses DebugContext.executeHook()
+                        val debugHook =
+                            object : DebugHook {
+                                override val luaFunction: LuaFunction = hookFunc
+
+                                override fun onHook(
+                                    event: HookEvent,
+                                    line: Int,
+                                    callStack: List<CallFrame>,
+                                ) {
+                                    // Delegate to DebugContext which handles all state management
+                                    currentContext.executeHook(hookFunc, event, line, callStack)
+                                }
+                            }
+
+                        currentContext.setHook(coroutine = firstArg, hook = debugHook, mask = mask, count = count)
                     } else if (hookFunc is LuaNil) {
                         // Clear hook for this coroutine
-                        hookTable[firstArg] = LuaNil
+                        currentContext.setHook(coroutine = firstArg, hook = null, mask = "")
                     }
                 }
                 is LuaFunction -> {
@@ -987,11 +983,11 @@ class DebugLib : LuaLibrary {
                             }
                         }
 
-                    currentContext.setHook(debugHook, mask, count)
+                    currentContext.setHook(coroutine = null, hook = debugHook, mask = mask, count = count)
                 }
                 is LuaNil -> {
                     // debug.sethook(nil) should also clear the hook (Lua 5.4 behavior)
-                    currentContext.setHook(null, "")
+                    currentContext.setHook(coroutine = null, hook = null, mask = "")
                 }
                 else -> {
                     // Invalid first argument
@@ -1014,24 +1010,14 @@ class DebugLib : LuaLibrary {
 
         // Check if first argument is a coroutine
         val firstArg = args.getOrNull(0)
-        if (firstArg is LuaCoroutine) {
-            // debug.gethook(thread) - get hook for specific coroutine
-            val registry = currentVm.getRegistry()
-            val hookKey = LuaString("_HOOKKEY")
-            val hookTable = registry[hookKey] as? LuaTable ?: return listOf()
-
-            val hookInfo = hookTable[firstArg] as? LuaTable ?: return listOf()
-
-            // Extract hook info: {func, mask, count}
-            val hookFunc = hookInfo[LuaNumber.of(1)] ?: LuaNil
-            val mask = hookInfo[LuaNumber.of(2)] ?: LuaString("")
-            val count = hookInfo[LuaNumber.of(3)] ?: LuaNumber.of(0)
-
-            return listOf(hookFunc, mask, count)
-        }
-
-        // debug.gethook() - get hook for current thread
-        val config = currentVm.getHook()
+        val config =
+            if (firstArg is LuaCoroutine) {
+                // debug.gethook(thread) - get hook for specific coroutine
+                currentVm.getHook(coroutine = firstArg)
+            } else {
+                // debug.gethook() - get hook for current thread
+                currentVm.getHook(coroutine = null)
+            }
 
         if (config.hook == null) {
             return listOf()

@@ -74,6 +74,7 @@ class StatementCompiler {
             val lastLine = block.last().line
             val endLine = lastLine + 1
             // Only emit if the end line is different from the statement line and current line
+            // This approximates the 'end' keyword line which PUC Lua visits
             if (endLine != statementLine && endLine != ctx.currentLine) {
                 ctx.currentLine = endLine
                 ctx.lineInfo.add(LineEvent(ctx.instructions.size, ctx.currentLine, LineEventKind.EXECUTION))

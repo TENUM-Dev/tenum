@@ -276,7 +276,20 @@ class LuaVmImpl(
 
     // Debug components
     private val debugTracer = DebugTracer()
-    private val hookManager = HookManager(getCallStack = { callStackManager.captureSnapshot() }, getRegistry = { registryTable })
+    /**
+     * Get the current thread's hook state holder (LuaThread for main, CoroutineThread for coroutines)
+     */
+    private fun getCurrentThreadHookHolder(): ai.tenum.lua.vm.debug.ThreadHookState {
+        val coroutine = coroutineStateManager.getCurrentCoroutine()
+        return coroutine?.thread ?: coroutineStateManager.mainThread
+    }
+
+    private val hookManager =
+        HookManager(
+            getCallStack = { callStackManager.captureSnapshot() },
+            getRegistry = { registryTable },
+            getCurrentThread = { getCurrentThreadHookHolder() },
+        )
 
     // Error handling components
     private val nameHintResolver = NameHintResolver()
@@ -423,17 +436,28 @@ class LuaVmImpl(
 
     /**
      * Set debug hook (Phase 6.4)
+     * Per-thread in Lua 5.4: if coroutine is null, uses current thread.
      */
     override fun setHook(
+        coroutine: ai.tenum.lua.runtime.LuaCoroutine?,
         hook: DebugHook?,
         mask: String,
         count: Int,
-    ) = hookManager.setHook(hook, mask, count)
+    ) {
+        val targetThread: ai.tenum.lua.vm.debug.ThreadHookState =
+            coroutine?.thread ?: getCurrentThreadHookHolder()
+        hookManager.setHook(targetThread, hook, mask, count)
+    }
 
     /**
      * Get current hook configuration (Phase 6.4)
+     * Per-thread in Lua 5.4: if coroutine is null, uses current thread.
      */
-    override fun getHook(): HookConfig = hookManager.getHook()
+    override fun getHook(coroutine: ai.tenum.lua.runtime.LuaCoroutine?): HookConfig {
+        val targetThread: ai.tenum.lua.vm.debug.ThreadHookState =
+            coroutine?.thread ?: getCurrentThreadHookHolder()
+        return hookManager.getHook(targetThread)
+    }
 
     /**
      * Get registry table (Phase 6.4)
@@ -489,12 +513,15 @@ class LuaVmImpl(
 
     /**
      * Set debug hook (legacy overload)
-     * @deprecated Use setHook(hook, mask, count) with all parameters
+     * @deprecated Use setHook(coroutine, hook, mask, count) with all parameters
      */
     fun setHook(
         hook: DebugHook?,
         mask: String,
-    ) = hookManager.setHook(hook, mask, 0)
+    ) {
+        val targetThread = getCurrentThreadHookHolder()
+        hookManager.setHook(targetThread, hook, mask, 0)
+    }
 
     // ===== End Backward Compatibility =====
 
@@ -829,15 +856,21 @@ class LuaVmImpl(
                 // Update current frame PC
                 callStackManager.updateLastFramePc(pc)
 
-                // Trigger LINE hooks for ALL LineEvents at current PC (BEFORE executing instruction)
-                // Domain concept: Multiple LineEvents can exist at same PC (e.g., CONTROL_FLOW + EXECUTION)
-                // This allows hooks to fire for control flow keywords like 'then' that don't have dedicated instructions
-                // ITERATION events bypass lastLine deduplication to fire on every loop iteration
+                // Trigger LINE hooks for LineEvents at current PC (BEFORE executing instruction)
+                // Domain: PUC Lua fires hooks for:
+                // - EXECUTION: real bytecode execution
+                // - CONTROL_FLOW: keywords like 'then', 'else' that mark decision points
+                // - MARKER: block boundaries like 'end'
+                // - ITERATION: loop headers that fire on every iteration
+                // SYNTHETIC events are compiler-generated and don't fire hooks.
                 val currentEvents = currentProto.lineEvents.filter { it.pc == pc }
                 for (event in currentEvents) {
-                    if (event.kind == LineEventKind.ITERATION || event.line != lastLine) {
-                        lastLine = event.line
-                        triggerHook(HookEvent.LINE, event.line)
+                    // Skip SYNTHETIC events - they're for internal tracking only
+                    if (event.kind != LineEventKind.SYNTHETIC) {
+                        if (event.kind == LineEventKind.ITERATION || event.line != lastLine) {
+                            lastLine = event.line
+                            triggerHook(HookEvent.LINE, event.line)
+                        }
                     }
                 }
 

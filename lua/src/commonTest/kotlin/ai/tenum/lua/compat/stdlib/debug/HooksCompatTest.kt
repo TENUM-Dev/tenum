@@ -131,17 +131,10 @@ class HooksCompatTest : LuaCompatTestBase() {
                   local function f (event, line)
                     assert(event == 'line')
                     local expected = table.remove(l, 1)
-                    print("Hook fired: expected=" .. tostring(expected) .. ", actual=" .. tostring(line))
                     if p then print(expected, line) end
                     assert(expected == line, "wrong trace!! expected " .. tostring(expected) .. ", got " .. tostring(line))
                   end
                   debug.sethook(f,"l"); load(s)(); debug.sethook()
-                  if #l > 0 then
-                    print("Remaining lines not visited:")
-                    for i=1,#l do
-                      print("  " .. tostring(l[i]))
-                    end
-                  end
                   assert(#l == 0, "not all expected lines were visited, remaining: " .. #l)
                 end
                 

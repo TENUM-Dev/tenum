@@ -39,9 +39,7 @@ class LineHookCountTest : LuaCompatTestBase() {
         runTest {
             vm.debugEnabled = true
             // Test that close variables don't affect line hook counting
-            // TODO: Line hook deduplication issue - fires 7 vs lua548's 5
-            // Root cause: LineEvent deduplication in VM resets per-function, causing extra hooks
-            // when entering nested functions (like __close metamethods)
+            // Verified to match Lua 5.4.8 behavior (5 hooks)
             val code = """
             local count = 0
             local function hook()
@@ -56,9 +54,13 @@ class LineHookCountTest : LuaCompatTestBase() {
             end
             debug.sethook()
             
-            -- Current: 6 hooks (1 extra due to empty __close function)
             -- Expected: 5 hooks like Lua 5.4.8
-            assert(count == 6, "Expected count=6, got " .. count)
+            -- 1. local x <close> = ... (line 8)
+            -- 2. local y = 1 (line 9)
+            -- 3. y = 2 (line 10)
+            -- 4. Inside __close function (line 8 again, attributed to metamethod)
+            -- 5. After end of do block (line 12)
+            assert(count == 5, "Expected count=5, got " .. count)
         """
             execute(code)
         }

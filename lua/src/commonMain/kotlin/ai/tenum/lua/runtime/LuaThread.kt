@@ -4,7 +4,7 @@ package ai.tenum.lua.runtime
  * Represents a Lua thread (coroutine) value
  * Threads are used for cooperative multitasking in Lua
  */
-class LuaThread : LuaValue<Unit> {
+class LuaThread : LuaValue<Unit>, ai.tenum.lua.vm.debug.ThreadHookState {
     override val value: Unit = Unit
 
     /**
@@ -16,5 +16,9 @@ class LuaThread : LuaValue<Unit> {
 
     override fun toString(): String = "thread: ${hashCode().toString(16)}"
 
-    // TODO: Add coroutine state and execution context when implementing coroutines
+    // Per-thread hook state (Lua 5.4 keeps hooks per coroutine)
+    // Main thread also needs its own hook state
+    override var hookConfig: ai.tenum.lua.vm.debug.HookConfig = ai.tenum.lua.vm.debug.HookConfig.NONE
+    override var hookInstructionCount: Int = 0
+    override var hookInProgress: Boolean = false
 }

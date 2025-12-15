@@ -57,7 +57,7 @@ enum class CoroutineStatus {
 /**
  * Coroutine execution thread state
  */
-class CoroutineThread {
+class CoroutineThread : ai.tenum.lua.vm.debug.ThreadHookState {
     // Execution state
     var proto: Proto? = null
     var pc: Int = 0
@@ -86,6 +86,11 @@ class CoroutineThread {
     // Saved native call depth from the calling context (for proper yield boundary checks)
     var savedNativeCallDepth: Int = 0
 
+    // Per-thread hook state (Lua 5.4 keeps hooks per coroutine)
+    override var hookConfig: ai.tenum.lua.vm.debug.HookConfig = ai.tenum.lua.vm.debug.HookConfig.NONE
+    override var hookInstructionCount: Int = 0
+    override var hookInProgress: Boolean = false
+
     fun reset() {
         proto = null
         pc = 0
@@ -98,6 +103,7 @@ class CoroutineThread {
         savedCallStack = emptyList()
         yieldedValues = emptyList()
         returnValues = emptyList()
+        // Don't reset hook state - it persists across yields
         continuation = null
         savedNativeCallDepth = 0
     }
