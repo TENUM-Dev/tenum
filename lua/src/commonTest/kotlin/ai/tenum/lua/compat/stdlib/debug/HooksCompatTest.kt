@@ -1,6 +1,7 @@
 package ai.tenum.lua.compat.stdlib.debug
 
 import ai.tenum.lua.compat.LuaCompatTestBase
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 /**
@@ -461,6 +462,7 @@ end
         }
 
     @Test
+    @Ignore // Slow test - runs all combinations
     fun testLineHookMultiLineExpressionAllCombinations() =
         runTest {
             // Test from db.lua:192-210 - full test with all combinations

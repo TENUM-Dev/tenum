@@ -5,9 +5,6 @@ import ai.tenum.lua.compiler.helper.CompilerHelpers
 import ai.tenum.lua.compiler.model.LocalLifetime
 import ai.tenum.lua.compiler.model.LocalVarInfo
 import ai.tenum.lua.compiler.model.Proto
-import ai.tenum.lua.lexer.Token
-import ai.tenum.lua.lexer.TokenType
-import ai.tenum.lua.parser.ParserException
 import ai.tenum.lua.parser.ast.Chunk
 import ai.tenum.lua.vm.OpCode
 
@@ -27,14 +24,9 @@ class FunctionCompiler {
             stmtCompiler.compileStatement(stmt, ctx)
         }
 
-        // Check for unresolved gotos (labels that were never defined or not visible)
-        if (ctx.pendingGotos.isNotEmpty()) {
-            val firstUnresolved = ctx.pendingGotos.first()
-            throw ParserException(
-                message = "no visible label '${firstUnresolved.labelName}' for <goto> at line ${firstUnresolved.line}",
-                token = Token(TokenType.IDENTIFIER, firstUnresolved.labelName, firstUnresolved.labelName, ctx.currentLine, 1),
-            )
-        }
+        // Resolve all pending forward gotos now that all labels are known
+        // This validates scope rules and patches jump instructions
+        ctx.resolveForwardGotos()
 
         // Implicit `return nil`
         ctx.emit(OpCode.RETURN, 0, 1, 0)

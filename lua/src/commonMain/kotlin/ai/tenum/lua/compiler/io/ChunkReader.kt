@@ -2,7 +2,6 @@ package ai.tenum.lua.compiler.io
 
 import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.LineEvent
-import ai.tenum.lua.compiler.model.LineEventKind
 import ai.tenum.lua.compiler.model.LocalVarInfo
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.compiler.model.UpvalueInfo
@@ -95,12 +94,17 @@ object ChunkReader {
         }
 
         // Read the function
-        return readFunction(source)
+        return readFunction(source, parentSource = null)
     }
 
-    private fun readFunction(source: BufferedSource): Proto {
-        // Source name
-        val name = readString(source)
+    private fun readFunction(
+        source: BufferedSource,
+        parentSource: String?,
+    ): Proto {
+        // Source name (this is the source file/chunk name, not the function name)
+        val rawSourceName = readString(source)
+        // If empty and we have a parent source, inherit it (Lua 5.4 deduplication)
+        val sourceName = if (rawSourceName.isEmpty() && parentSource != null) parentSource else rawSourceName
         // debug prints removed
 
         // Line info
@@ -126,7 +130,7 @@ object ChunkReader {
         // debug prints removed
         val constants = mutableListOf<LuaValue<*>>()
         for (i in 0 until constantsSize) {
-            constants.add(readConstant(source))
+            constants.add(readConstant(source, sourceName))
         }
 
         // Upvalues
@@ -175,15 +179,13 @@ object ChunkReader {
         val parameters = (0 until numParams).map { "param$it" }
 
         // Build line info
-        val lineInfo =
-            if (lineDefined > 0) {
-                listOf(LineEvent(0, lineDefined, LineEventKind.EXECUTION))
-            } else {
-                emptyList()
-            }
+        // Note: We don't reconstruct lineInfo from lineDefined because stripped functions
+        // should have no line events (currentline will be -1 during execution) even though
+        // lineDefined/lastLineDefined are preserved for debug.getinfo.
+        val lineInfo = emptyList<LineEvent>()
 
         return Proto(
-            name = name,
+            name = "", // Function name is inferred from context, not stored in chunk
             instructions = instructions,
             constants = constants,
             upvalueInfo = upvalueInfo,
@@ -192,7 +194,7 @@ object ChunkReader {
             maxStackSize = maxStackSize,
             localVars = localVars,
             lineEvents = lineInfo,
-            source = name,
+            source = sourceName,
             lineDefined = lineDefined,
             lastLineDefined = lastLineDefined,
         )
@@ -218,7 +220,10 @@ object ChunkReader {
         }
     }
 
-    private fun readConstant(source: BufferedSource): LuaValue<*> {
+    private fun readConstant(
+        source: BufferedSource,
+        parentSource: String,
+    ): LuaValue<*> {
         val type = source.readByte().toInt() and 0xFF
         return when (type) {
             LUA_TNIL -> LuaNil
@@ -236,7 +241,8 @@ object ChunkReader {
             }
             LUA_TFUNCTION -> {
                 // Read an inline serialized function Proto and wrap as LuaCompiledFunction
-                val proto = readFunction(source)
+                // Nested functions inherit parent source if they have empty source
+                val proto = readFunction(source, parentSource = parentSource)
                 val luaCompiledFunction = LuaCompiledFunction(proto)
                 luaCompiledFunction
             }

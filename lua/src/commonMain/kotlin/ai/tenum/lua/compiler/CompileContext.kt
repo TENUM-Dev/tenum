@@ -7,6 +7,8 @@ import ai.tenum.lua.compiler.helper.RegisterAllocator
 import ai.tenum.lua.compiler.helper.ScopeManager
 import ai.tenum.lua.compiler.helper.UpvalueResolver
 import ai.tenum.lua.compiler.model.Instruction
+import ai.tenum.lua.compiler.model.LineEvent
+import ai.tenum.lua.compiler.model.LineEventKind
 import ai.tenum.lua.compiler.model.LineInfo
 import ai.tenum.lua.compiler.model.LocalLifetime
 import ai.tenum.lua.compiler.model.LocalVarInfo
@@ -43,12 +45,19 @@ data class CompileContext(
 
     /**
      * Info about a label site for goto resolution.
+     *
+     * Scope Identity:
+     * - scopeStack: Precise identity using stable scope IDs - use for identity matching
+     * - scopeLevel: Depth counter (how nested) - use only for depth comparisons
      */
     data class LabelInfo(
         val instructionIndex: Int,
-        val scopeLevel: Int,
+        val scopeLevel: Int, // Depth counter - for comparisons only, NOT identity
+        val scopeStack: List<Int>, // Stable scope ID chain - for identity matching
         val localCount: Int,
         val line: Int,
+        var isInRepeatUntilBlock: Boolean = false, // True if label is inside repeat-until block (set at scope exit)
+        var scopeEndPc: Int = -1, // PC where the label's scope ends (set after scope ends)
     )
 
     /**
@@ -58,14 +67,26 @@ data class CompileContext(
         val instructionIndex: Int,
         val labelName: String,
         val scopeLevel: Int,
+        val scopeStack: List<Int>, // Lexical scope ancestry at goto site
         val localCount: Int,
         val line: Int,
     )
 
     /**
-     * All labels defined in this function (name -> info).
+     * Info about a resolved goto-label pair for later validation.
      */
-    val labels: MutableMap<String, LabelInfo> = mutableMapOf()
+    data class ResolvedGotoLabel(
+        val gotoInfo: GotoInfo,
+        val labelInfo: LabelInfo,
+    )
+
+    /**
+     * Registry of all labels defined in this function (name -> list of label info).
+     * Labels persist until function end (function-scoped, not block-scoped).
+     * Multiple labels with same name allowed if in different scopes (shadowing).
+     * Visibility controlled by scopeStack ancestry in findLabelVisibleFrom().
+     */
+    private val labelRegistry: MutableMap<String, MutableList<LabelInfo>> = mutableMapOf()
 
     /**
      * All gotos not yet resolved (pending label definition).
@@ -73,15 +94,126 @@ data class CompileContext(
     val pendingGotos: MutableList<GotoInfo> = mutableListOf()
 
     /**
-     * Remove labels that were defined at the given scope level.
-     * Called when exiting a block to implement block-scoped label semantics.
+     * All resolved goto-label pairs for scope validation at endScope().
      */
-    fun removeLabelsAtScope(scopeLevel: Int) {
-        val iterator = labels.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            if (entry.value.scopeLevel >= scopeLevel) {
-                iterator.remove()
+    val resolvedGotos: MutableList<ResolvedGotoLabel> = mutableListOf()
+
+    /**
+     * Register a label at the current scope.
+     * Lua 5.4 allows duplicate label names only if they are in sibling scopes (e.g., different if branches).
+     * Duplicate labels in nested scopes (parent-child relationship) are NOT allowed.
+     */
+    fun registerLabel(
+        name: String,
+        instructionIndex: Int,
+        line: Int,
+    ) {
+        val labelInfo =
+            LabelInfo(
+                instructionIndex = instructionIndex,
+                scopeLevel = scopeManager.currentScopeLevel,
+                scopeStack = scopeManager.getCurrentScopeStack(),
+                localCount = scopeManager.activeLocalCount(),
+                line = line,
+                isInRepeatUntilBlock = scopeManager.isInRepeatUntilBlock(),
+            )
+
+        val labelList = labelRegistry.getOrPut(name) { mutableListOf() }
+
+        // Check if any existing label would conflict with the new label
+        // Uses stable scope IDs (from scopeStack) not depth-based scopeLevel
+        // Conflict occurs when:
+        // - Existing label is an ancestor of new label (new is nested inside existing)
+        // - Existing label is in the same scope as new label (exact duplicate)
+        //
+        // Example: do ::l:: do ::l:: end end
+        //   First  ::l:: has scopeStack=[0,1], scopeId=1
+        //   Second ::l:: has scopeStack=[0,1,2], scopeId=2
+        //   Is scopeId 1 in [0,1,2]? YES → ERROR (nested duplicate)
+        //
+        // Example: if a then ::l:: end ::l::
+        //   First  ::l:: has scopeStack=[0,1], scopeId=1
+        //   Second ::l:: has scopeStack=[0], scopeId=0
+        //   Is scopeId 1 in [0]? NO → OK (sibling scopes after first exited)
+        for (existingLabel in labelList) {
+            val existingScopeId = existingLabel.scopeStack.lastOrNull() ?: 0
+
+            // Check if existing label's scope is in our ancestry (uses stable scope IDs)
+            // This includes same-scope case and correctly handles nested duplicates
+            if (existingScopeId in labelInfo.scopeStack) {
+                throw ParserException(
+                    message = "label '$name' already defined on line ${existingLabel.line}",
+                    token = Token(TokenType.IDENTIFIER, name, name, labelInfo.line, 1),
+                )
+            }
+
+            // NOTE: We do NOT check if new label is in existing label's ancestry
+            // because that's allowed - a parent scope can have a label with the same name
+            // as a label in a child scope that was already exited. Example:
+            //   elseif a == 2 then ::l1:: return "inner" end
+            //   ::l1:: return "outer"
+            // The outer ::l1:: is allowed even though ::l1:: exists in child scope [0,2]
+        }
+
+        // Add the new label to the registry
+        labelList.add(labelInfo)
+    }
+
+    /**
+     * Find the most recent (innermost) visible label with the given name.
+     * Returns null if no such label exists.
+     */
+    fun findLabel(name: String): LabelInfo? {
+        val labelList = labelRegistry[name] ?: return null
+        // Return the last (most recent/innermost) label
+        return labelList.lastOrNull()
+    }
+
+    /**
+     * Find a label visible from a given scope stack (lexical ancestry).
+     * A label is visible from a goto if the label's last scope ID is in the goto's scope stack
+     * (i.e., the label is in an ancestor scope or the same scope).
+     *
+     * This prevents sibling-branch bindings: labels in if-blocks are not visible to gotos in elseif-blocks.
+     * Returns the most nested visible label (the one with the longest matching scope stack).
+     */
+    fun findLabelVisibleFrom(
+        name: String,
+        fromScopeStack: List<Int>,
+    ): LabelInfo? {
+        val labelList = labelRegistry[name] ?: return null
+        // Find all visible labels (whose scope ID is in the goto's scope stack)
+        val visibleLabels =
+            labelList.filter { label ->
+                val labelScopeId = label.scopeStack.lastOrNull() ?: 0
+                labelScopeId in fromScopeStack
+            }
+        // Return the most nested one (longest scope stack = deepest nesting)
+        return visibleLabels.maxByOrNull { it.scopeStack.size }
+    }
+
+    /**
+     * Set the scopeEndPc for all labels at the given scope.
+     * Called when exiting a scope to record where the scope ended.
+     * Uses scopeStack for precise scope identity (not scopeLevel which is ambiguous for siblings).
+     */
+    fun setLabelsScopeEndPc(
+        scopeStack: List<Int>,
+        endPc: Int,
+        isRepeatUntilBlock: Boolean = false,
+    ) {
+        val scopeId = scopeStack.lastOrNull() ?: 0
+        for (labelList in labelRegistry.values) {
+            for (label in labelList) {
+                // Match by exact scope ID (last element of scopeStack)
+                // This correctly handles sibling scopes at same depth
+                val labelScopeId = label.scopeStack.lastOrNull() ?: 0
+                if (labelScopeId == scopeId && label.scopeEndPc < 0) {
+                    label.scopeEndPc = endPc
+                    if (isRepeatUntilBlock) {
+                        label.isInRepeatUntilBlock = true
+                    }
+                }
             }
         }
     }
@@ -216,8 +348,7 @@ data class CompileContext(
 
     /**
      * Scope validation for goto.
-     * Right now this is a no-op (accept all gotos).
-     * You can add strict checks here if you need exact Lua semantics.
+     * Checks Lua's goto/label scoping rules.
      */
     fun validateGotoScope(
         gotoScopeLevel: Int,
@@ -227,6 +358,8 @@ data class CompileContext(
         labelName: String,
         isForward: Boolean,
         gotoLine: Int = -1,
+        gotoInstructionIndex: Int = -1,
+        labelInstructionIndex: Int = -1,
     ) {
         // Lua rule: you cannot jump INTO a deeper scope with local variables
         // Key: it's about scope depth, not just local count
@@ -242,11 +375,147 @@ data class CompileContext(
                     token = Token(TokenType.IDENTIFIER, labelName, labelName, if (gotoLine > 0) gotoLine else 1, 1),
                 )
             }
-            // If at same scope level, jumping forward over local declarations is OK
+
+            // At same scope level: Lua allows jumping forward over local declarations
+            // within the same block. The "no jumping into scope" rule only applies
+            // when jumping INTO a nested block (which is already checked above).
+            //
+            // However, there's a subtle case we need to handle: jumping from inside
+            // a nested scope OUT to a label in an outer scope, when there are locals
+            // declared in the outer scope between the inner block and the label.
+            // But this is naturally prevented by the scope level check and is handled
+            // at function compilation time.
         } else {
             // Backward jump: from label to goto (label was already seen)
             // Jumping backwards/out of scopes is always allowed
             // We just need to close any <close> variables (already handled by emitCloseVariables)
+        }
+    }
+
+    /**
+     * Resolve all pending forward gotos and validate them.
+     * This should be called after all statements in a function have been compiled.
+     */
+    fun resolveForwardGotos() {
+        val iterator = pendingGotos.iterator()
+        while (iterator.hasNext()) {
+            val gotoInfo = iterator.next()
+            // Find a label visible from the goto's lexical scope ancestry
+            val labelInfo = findLabelVisibleFrom(gotoInfo.labelName, gotoInfo.scopeStack)
+
+            if (labelInfo != null) {
+                // Found a visible label - validate and patch
+                validateGotoScope(
+                    gotoScopeLevel = gotoInfo.scopeLevel,
+                    gotoLocalCount = gotoInfo.localCount,
+                    labelScopeLevel = labelInfo.scopeLevel,
+                    labelLocalCount = labelInfo.localCount,
+                    labelName = gotoInfo.labelName,
+                    isForward = true,
+                    gotoLine = gotoInfo.line,
+                    gotoInstructionIndex = gotoInfo.instructionIndex,
+                    labelInstructionIndex = labelInfo.instructionIndex,
+                )
+                patchJump(gotoInfo.instructionIndex, labelInfo.instructionIndex)
+                // Record for validation
+                resolvedGotos.add(ResolvedGotoLabel(gotoInfo, labelInfo))
+                iterator.remove()
+            }
+        }
+
+        // Validate all resolved goto-label pairs across all scope levels
+        val allScopeLevels = resolvedGotos.map { it.labelInfo.scopeLevel }.toSet()
+        for (scopeLevel in allScopeLevels.sorted()) {
+            validateGotosAtScopeExit(scopeLevel, instructions.size)
+        }
+
+        // Check for unresolved gotos (labels that were never defined or not visible)
+        if (pendingGotos.isNotEmpty()) {
+            val firstUnresolved = pendingGotos.first()
+            throw ParserException(
+                message = "no visible label '${firstUnresolved.labelName}' for <goto> at line ${firstUnresolved.line}",
+                token = Token(TokenType.IDENTIFIER, firstUnresolved.labelName, firstUnresolved.labelName, currentLine, 1),
+            )
+        }
+    }
+
+    /**
+     * Validate resolved goto-label pairs at scope exit.
+     * This checks Lua's rule: you can't jump over local variable declarations
+     * if there are statements after the label that execute in the scope of those locals.
+     */
+    fun validateGotosAtScopeExit(
+        scopeLevel: Int,
+        endPc: Int,
+        isRepeatUntilBlock: Boolean = false,
+    ) {
+        val iterator = resolvedGotos.iterator()
+        while (iterator.hasNext()) {
+            val pair = iterator.next()
+            val gotoInfo = pair.gotoInfo
+            val labelInfo = pair.labelInfo
+
+            // Only validate gotos/labels at this scope level
+            if (labelInfo.scopeLevel != scopeLevel) {
+                continue
+            }
+
+            // Remove this pair from the list since we're processing it
+            iterator.remove()
+
+            // Check if goto jumped over any local variables
+            // that were declared between goto and label
+            // Use allLocals to include locals that have gone out of scope
+            val jumpedOverLocal =
+                if (gotoInfo.instructionIndex < labelInfo.instructionIndex) {
+                    // Forward jump
+                    scopeManager.allLocals.any { local ->
+                        local.scopeLevel == scopeLevel &&
+                            local.startPc > gotoInfo.instructionIndex &&
+                            local.startPc <= labelInfo.instructionIndex
+                    }
+                } else {
+                    // Backward jump - not a problem
+                    false
+                }
+
+            if (jumpedOverLocal) {
+                // Check if there are statements after the label within its scope
+                // If label is at end of block (labelIndex == endPc - 1), it's OK
+                // EXCEPT for repeat-until blocks where the condition is semantically part of the block
+                // Use labelInfo.scopeEndPc if set (when scope ended), otherwise use endPc parameter
+                val actualEndPc = if (labelInfo.scopeEndPc > 0) labelInfo.scopeEndPc else endPc
+                val hasStatementsAfterLabel = labelInfo.instructionIndex < actualEndPc - 1
+
+                if (hasStatementsAfterLabel || isRepeatUntilBlock || labelInfo.isInRepeatUntilBlock) {
+                    // Find the first local that was jumped over (use allLocals to include inactive locals)
+                    val firstJumpedLocal =
+                        scopeManager.allLocals.find { local ->
+                            local.scopeLevel == scopeLevel &&
+                                local.startPc > gotoInfo.instructionIndex &&
+                                local.startPc <= labelInfo.instructionIndex
+                        }
+
+                    val lineInfo = if (gotoInfo.line > 0) " at line ${gotoInfo.line}" else ""
+                    throw ParserException(
+                        message = "<goto ${gotoInfo.labelName}>$lineInfo jumps into the scope of local '${firstJumpedLocal?.name ?: "?"}'",
+                        token =
+                            Token(
+                                TokenType.IDENTIFIER,
+                                gotoInfo.labelName,
+                                gotoInfo.labelName,
+                                if (gotoInfo.line >
+                                    0
+                                ) {
+                                    gotoInfo.line
+                                } else {
+                                    1
+                                },
+                                1,
+                            ),
+                    )
+                }
+            }
         }
     }
 
@@ -301,7 +570,17 @@ data class CompileContext(
             stmtCompiler.compileStatement(stmt, childCtx)
         }
 
-        childCtx.emitCloseVariables(0)
+        // Resolve all pending forward gotos now that all labels are known
+        childCtx.resolveForwardGotos()
+
+        childCtx.emitCloseVariables(0) // Emit lineEvent for lastLineDefined (the 'end' line) before RETURN
+        // This matches Lua 5.4.8 behavior where lastLineDefined is always in activelines
+        val actualEndLine = if (endLine > 0) endLine else childCtx.currentLine
+        if (actualEndLine > 0 && actualEndLine != childCtx.currentLine) {
+            childCtx.currentLine = actualEndLine
+            childCtx.lineInfo.add(LineEvent(childCtx.instructions.size, actualEndLine, LineEventKind.EXECUTION))
+        }
+
         childCtx.emit(OpCode.RETURN, 0, 1, 0)
 
         val localVarInfo =

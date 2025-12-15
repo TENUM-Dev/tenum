@@ -3,6 +3,7 @@ package ai.tenum.cli.commands
 import ai.tenum.lua.compiler.Compiler
 import ai.tenum.lua.compiler.io.ChunkWriter
 import ai.tenum.lua.compiler.model.Proto
+import ai.tenum.lua.compiler.util.DebugInfoStripping
 import ai.tenum.lua.lexer.Lexer
 import ai.tenum.lua.parser.Parser
 import ai.tenum.lua.runtime.LuaCompiledFunction
@@ -103,26 +104,7 @@ class Luac(
         return compiler.compile(ast, name = sourceName)
     }
 
-    private fun stripDebugInfo(proto: Proto): Proto {
-        val strippedConstants =
-            proto.constants.map { const ->
-                if (const is LuaCompiledFunction) {
-                    LuaCompiledFunction(
-                        stripDebugInfo(const.proto),
-                        const.upvalues,
-                    )
-                } else {
-                    const
-                }
-            }
-
-        return proto.copy(
-            constants = strippedConstants,
-            localVars = emptyList(),
-            lineEvents = emptyList(),
-            source = "=?",
-        )
-    }
+    private fun stripDebugInfo(proto: Proto): Proto = DebugInfoStripping.stripDebugInfo(proto)
 
     private fun listProto(
         proto: Proto,

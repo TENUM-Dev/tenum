@@ -27,3 +27,6 @@ gradle-app.setting
 **/node_modules
 
 **/*.js
+
+aidoc
+.github/copilot-instructions.md

@@ -57,7 +57,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
         }
 
     @Test
-    @Ignore
     fun test_code_lua() = runTest(timeout = 60.seconds) { executeTestFile("code.lua") }
 
     @Test
@@ -80,8 +79,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
                 594..609,
                 // We use the kotlin gc
                 903..916,
-                // Current state
-                1002..1055,
             )
         }
 
@@ -112,7 +109,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_gengc_lua() = runTest(timeout = 60.seconds) { executeTestFile("gengc.lua") }
 
     @Test
-    @Ignore
     fun test_goto_lua() = runTest(timeout = 60.seconds) { executeTestFile("goto.lua") }
 
     @Test
@@ -137,8 +133,15 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_main_lua() = runTest(timeout = 60.seconds) { executeTestFile("main.lua") }
 
     @Test
-    @Ignore
-    fun test_math_lua() = runTest(timeout = 60.seconds) { executeTestFile("math.lua") }
+    fun test_math_lua() = runTest(timeout = 60.seconds) {
+        executeTestFile(
+            "math.lua",
+            //ignore random seed tests
+            817..853,
+            // Disable slow random bit distribution/statistical randomness tests
+            855..1012,
+        )
+    }
 
     @Test
     @Ignore

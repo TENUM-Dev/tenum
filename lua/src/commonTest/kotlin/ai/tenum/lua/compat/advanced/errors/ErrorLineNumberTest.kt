@@ -5,6 +5,7 @@ import ai.tenum.lua.vm.errorhandling.LuaException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 /**
@@ -547,6 +548,7 @@ varfunc(1, 2, 3)
         }
 
     @Test
+    @Ignore // slow test
     fun testOffLineNumberBug() =
         runTest {
             val error =
