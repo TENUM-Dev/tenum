@@ -1432,7 +1432,8 @@ class LuaVmImpl(
         when {
             left is LuaLong && right is LuaLong -> {
                 val result = op(left.value.toDouble(), right.value.toDouble())
-                if (result == result.toLong().toDouble()) LuaLong(result.toLong()) else LuaDouble(result)
+                // Use LuaNumber.of which handles platform-specific safe integer checks
+                LuaNumber.of(result)
             }
             left is LuaNumber && right is LuaNumber -> {
                 val leftVal = left.toDoubleValue()

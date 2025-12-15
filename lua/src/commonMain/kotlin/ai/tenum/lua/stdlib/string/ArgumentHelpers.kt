@@ -150,22 +150,30 @@ object ArgumentHelpers {
      * decimal or scientific notation based on the value.
      */
     fun numberToString(num: Number): String {
-        // Handle Long/Integer types directly to avoid precision loss via Double conversion
+        // Handle types in specific order to avoid JS platform confusion
+        // In JS, numbers can satisfy both `is Int` and `is Double`, so check Double first
         return when (num) {
-            is Long -> num.toString()
-            is Int -> num.toString()
-            else -> {
-                val d = num.toDouble()
-
+            is Double -> {
                 // Handle special cases
-                if (!d.isFinite()) {
-                    return d.toString()
+                if (!num.isFinite()) {
+                    return num.toString()
                 }
 
                 // Use Lua's "%.14g" format which automatically chooses between
                 // integer, decimal, or scientific notation based on the value
                 // This matches Lua 5.4's lua_number2strx behavior
-                StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
+                StringFormatting.formatGStyle(num, 14, lowercase = true, alternateForm = false)
+            }
+            is Long -> num.toString()
+            is Int -> num.toString()
+            else -> {
+                // Fallback for other Number types
+                val d = num.toDouble()
+                if (!d.isFinite()) {
+                    d.toString()
+                } else {
+                    StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
+                }
             }
         }
     }

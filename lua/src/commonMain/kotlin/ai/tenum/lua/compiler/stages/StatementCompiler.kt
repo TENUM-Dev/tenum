@@ -137,6 +137,7 @@ class StatementCompiler {
             statement !is RepeatStatement &&
             statement !is ForStatement &&
             statement !is ForInStatement &&
+            statement !is DoStatement &&
             !skipInitialLineEvent
         ) {
             // Only add LineEvent if the line has changed

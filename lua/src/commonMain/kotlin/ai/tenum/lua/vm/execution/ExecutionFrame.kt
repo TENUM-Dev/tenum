@@ -1,5 +1,5 @@
 package ai.tenum.lua.vm.execution
-// CPD-OFF TODO: Enable CPD when duplication is resolved
+
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaTable
@@ -148,17 +148,21 @@ class ExecutionFrame(
         }
     }
 
+    /**
+     * Get metatable for a value, handling both instance metatables (tables) and shared metatables (primitives).
+     */
+    private fun getMetatable(value: LuaValue<*>): LuaTable? =
+        when (value) {
+            is ai.tenum.lua.runtime.LuaTable -> value.metatable as? LuaTable
+            is ai.tenum.lua.runtime.LuaNumber -> ai.tenum.lua.runtime.LuaNumber.metatableStore as? LuaTable
+            is ai.tenum.lua.runtime.LuaString -> ai.tenum.lua.runtime.LuaString.metatableStore as? LuaTable
+            is ai.tenum.lua.runtime.LuaBoolean -> ai.tenum.lua.runtime.LuaBoolean.metatableStore as? LuaTable
+            is ai.tenum.lua.runtime.LuaNil -> ai.tenum.lua.runtime.LuaNil.metatableStore as? LuaTable
+            else -> value.metatable as? LuaTable
+        }
+
     private fun getCloseMetamethod(value: LuaValue<*>): ai.tenum.lua.runtime.LuaFunction? {
-        // Get metatable - handles both instance metatables (tables) and shared metatables (primitives)
-        val mt =
-            when (value) {
-                is ai.tenum.lua.runtime.LuaTable -> value.metatable as? LuaTable
-                is ai.tenum.lua.runtime.LuaNumber -> ai.tenum.lua.runtime.LuaNumber.metatableStore as? LuaTable
-                is ai.tenum.lua.runtime.LuaString -> ai.tenum.lua.runtime.LuaString.metatableStore as? LuaTable
-                is ai.tenum.lua.runtime.LuaBoolean -> ai.tenum.lua.runtime.LuaBoolean.metatableStore as? LuaTable
-                is ai.tenum.lua.runtime.LuaNil -> ai.tenum.lua.runtime.LuaNil.metatableStore as? LuaTable
-                else -> value.metatable as? LuaTable
-            }
+        val mt = getMetatable(value)
         return mt?.get(
             ai.tenum.lua.runtime
                 .LuaString("__close"),
@@ -170,16 +174,7 @@ class ExecutionFrame(
      * Returns the raw value so we can distinguish between nil and non-callable values.
      */
     private fun getCloseMetamethodRaw(value: LuaValue<*>): LuaValue<*>? {
-        val mt =
-            when (value) {
-                is ai.tenum.lua.runtime.LuaTable -> value.metatable as? LuaTable
-                is ai.tenum.lua.runtime.LuaNumber -> ai.tenum.lua.runtime.LuaNumber.metatableStore as? LuaTable
-                is ai.tenum.lua.runtime.LuaString -> ai.tenum.lua.runtime.LuaString.metatableStore as? LuaTable
-                is ai.tenum.lua.runtime.LuaBoolean -> ai.tenum.lua.runtime.LuaBoolean.metatableStore as? LuaTable
-                is ai.tenum.lua.runtime.LuaNil -> ai.tenum.lua.runtime.LuaNil.metatableStore as? LuaTable
-                else -> value.metatable as? LuaTable
-            } ?: return null
-
+        val mt = getMetatable(value) ?: return null
         return mt[
             ai.tenum.lua.runtime
                 .LuaString("__close"),

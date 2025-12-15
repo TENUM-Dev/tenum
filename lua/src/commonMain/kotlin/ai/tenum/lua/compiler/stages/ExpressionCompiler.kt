@@ -586,11 +586,8 @@ class ExpressionCompiler(
             val fieldConst = ctx.addConstant(LuaString(expr.field))
 
             // Always add LineEvent before GETTABLE for debug.getinfo accuracy
-            // Multiple expressions on same line each need their own LineEvent for inspection
-            // But only update ctx.currentLine if line actually changed (for hook tracking)
-            if (expr.line != ctx.currentLine) {
-                ctx.currentLine = expr.line
-            }
+            // This ensures error messages report the correct line for field access operations
+            ctx.currentLine = expr.line
             ctx.lineInfo.add(LineEvent(ctx.instructions.size, expr.line, LineEventKind.EXECUTION))
 
             if (ctx.canUseRKOperand(fieldConst)) {
