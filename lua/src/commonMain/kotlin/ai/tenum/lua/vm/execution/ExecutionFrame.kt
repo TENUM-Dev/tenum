@@ -1,5 +1,5 @@
 package ai.tenum.lua.vm.execution
-//CPD-OFF TODO: Enable CPD when duplication is resolved
+// CPD-OFF TODO: Enable CPD when duplication is resolved
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaTable
