@@ -186,6 +186,14 @@ object TracebackFormatter {
                         append("$source: in upvalue '$name'")
                     }
                 }
+            } else if (frame.isCloseMetamethod) {
+                // __close metamethod frames should be displayed as "in metamethod 'close'"
+                // This matches Lua 5.4.8 behavior (locals.lua line 493)
+                if (line >= 0) {
+                    append("$source:$line: in metamethod 'close'")
+                } else {
+                    append("$source: in metamethod 'close'")
+                }
             } else {
                 val name = frame.proto.name
                 // Filter out special function names that shouldn't appear in stack traces

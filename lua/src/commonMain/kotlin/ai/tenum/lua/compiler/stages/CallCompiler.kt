@@ -27,10 +27,13 @@ class CallCompiler {
         line: Int,
         ctx: CompileContext,
     ) {
-        // Always update to the function expression's line and add LineEvent
-        // This ensures "attempt to call" errors report where the function expression is
-        ctx.currentLine = line
-        ctx.lineInfo.add(LineEvent(ctx.instructions.size, ctx.currentLine, LineEventKind.EXECUTION))
+        // Only emit a line event if we're moving to a different line
+        // This prevents duplicate line events when a function call is part of a statement
+        // that already emitted a line event (e.g., "local x = f()")
+        if (line != ctx.currentLine) {
+            ctx.currentLine = line
+            ctx.lineInfo.add(LineEvent(ctx.instructions.size, ctx.currentLine, LineEventKind.EXECUTION))
+        }
     }
 
     /**

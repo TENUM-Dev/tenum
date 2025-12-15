@@ -144,15 +144,37 @@ object ArgumentHelpers {
     }
 
     /**
-     * Convert a number to string with proper Lua formatting
-     * (integers without decimal point, floats with decimal)
+     * Convert a number to string with proper Lua formatting.
+     * Lua formats integers as plain text (no decimal point) regardless of size.
+     * For floats, Lua uses "%.14g" format which automatically chooses between
+     * decimal or scientific notation based on the value.
      */
     fun numberToString(num: Number): String {
-        val d = num.toDouble()
-        return if (d == d.toLong().toDouble()) {
-            d.toLong().toString()
-        } else {
-            d.toString()
+        // Handle types in specific order to avoid JS platform confusion
+        // In JS, numbers can satisfy both `is Int` and `is Double`, so check Double first
+        return when (num) {
+            is Double -> {
+                // Handle special cases
+                if (!num.isFinite()) {
+                    return num.toString()
+                }
+
+                // Use Lua's "%.14g" format which automatically chooses between
+                // integer, decimal, or scientific notation based on the value
+                // This matches Lua 5.4's lua_number2strx behavior
+                StringFormatting.formatGStyle(num, 14, lowercase = true, alternateForm = false)
+            }
+            is Long -> num.toString()
+            is Int -> num.toString()
+            else -> {
+                // Fallback for other Number types
+                val d = num.toDouble()
+                if (!d.isFinite()) {
+                    d.toString()
+                } else {
+                    StringFormatting.formatGStyle(d, 14, lowercase = true, alternateForm = false)
+                }
+            }
         }
     }
 
@@ -163,7 +185,8 @@ object ArgumentHelpers {
     fun coerceToString(value: LuaValue<*>?): String =
         when (value) {
             is LuaString -> value.value
-            is LuaNumber -> numberToString(value.value)
+            is LuaLong -> value.value.toString() // Handle LuaLong directly to preserve integer format
+            is LuaDouble -> numberToString(value.value)
             is LuaNil, null -> ""
             else -> value.toString()
         }

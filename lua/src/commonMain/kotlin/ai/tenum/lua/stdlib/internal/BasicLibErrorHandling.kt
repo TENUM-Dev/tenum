@@ -78,10 +78,12 @@ internal object BasicLibErrorHandling {
                     }
                 val level = (args.getOrNull(1) as? LuaNumber)?.toDouble()?.toInt() ?: 1
 
+                val callStack = getCallStack?.invoke() ?: emptyList()
+
                 throw LuaRuntimeError(
                     message = message,
                     errorValue = errorValue,
-                    callStack = getCallStack?.invoke() ?: emptyList(),
+                    callStack = callStack,
                     level = level,
                 )
             },

@@ -9,23 +9,13 @@ import com.github.ajalt.clikt.core.subcommands
 import okio.FileSystem
 
 /**
- * Entry point for the Tenum CLI.
- * Exposes `tenum lua` and `tenum luac` subcommands.
- */
-fun main(args: Array<String>) {
-    createCli().main(args)
-}
-
-/**
  * Build the CLI instance. Exposed so tests can inject a fake FileSystem.
  */
 fun createCli(
-    fileSystem: FileSystem = createFileSystem(),
+    fileSystem: FileSystem
 ): CliktCommand =
     Tenum()
         .subcommands(
             Lua(fileSystem),
             Luac(fileSystem),
         )
-
-expect fun createFileSystem(): FileSystem

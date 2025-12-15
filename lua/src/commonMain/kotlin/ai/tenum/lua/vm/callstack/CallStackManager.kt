@@ -45,6 +45,7 @@ class CallStackManager {
         args: List<LuaValue<*>>,
         inferredName: InferredFunctionName?,
         pc: Int = 0,
+        isCloseMetamethod: Boolean = false,
     ): Int {
         val initialSize = frames.size
 
@@ -60,6 +61,7 @@ class CallStackManager {
                 varargs = varargs,
                 ftransfer = if (args.isEmpty()) 0 else 1,
                 ntransfer = args.size,
+                isCloseMetamethod = isCloseMetamethod,
             )
 
         frames.add(frame)

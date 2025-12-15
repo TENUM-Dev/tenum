@@ -183,7 +183,8 @@ class StringLib : LuaLibrary {
                         is LuaNil -> "nil"
                         is LuaBoolean -> value.value.toString()
                         is LuaString -> value.value
-                        is LuaNumber -> ArgumentHelpers.numberToString(value.value)
+                        is LuaDouble -> ArgumentHelpers.numberToString(value.value)
+                        is LuaLong -> value.value.toString()
                         else -> {
                             // Check for __tostring metamethod
                             val toStringMeta = context.getMetamethod(value, "__tostring")

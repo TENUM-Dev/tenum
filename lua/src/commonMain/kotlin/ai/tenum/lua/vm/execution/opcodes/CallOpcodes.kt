@@ -1,3 +1,5 @@
+@file:Suppress("NOTHING_TO_INLINE")
+
 package ai.tenum.lua.vm.execution.opcodes
 
 import ai.tenum.lua.compiler.model.Instruction
@@ -276,10 +278,38 @@ object CallOpcodes {
         currentLine: Int,
         triggerHookFn: (HookEvent, Int) -> Unit,
     ): List<LuaValue<*>> {
+        // Step 1: Snapshot return values BEFORE calling __close
+        // This ensures return values are not corrupted by __close metamethods
         val collector = ArgumentCollector(registers, frame)
         val results = collector.collectResults(instr.a, instr.b)
 
-        env.debug("  Return ${results.size} values: $results")
+        env.debug("  Return ${results.size} values (before __close): $results")
+        env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
+
+        // Step 2: Execute __close metamethods for all to-be-closed variables
+        // NOTE: During NORMAL returns (RETURN opcode), the function is STILL ACTIVE
+        // when __close executes. debug.getinfo(2) from within __close should see
+        // the returning function's name, not the caller's name.
+        // This differs from ERROR unwinding, where the function is conceptually
+        // "already gone" and debug.getinfo(2) should see the caller.
+        // See locals.lua:262 (normal return) vs locals.lua:445 (error path)
+
+        // Step 3: Execute __close metamethods for all to-be-closed variables
+        // This must happen AFTER return values are evaluated and frame is popped, but BEFORE returning
+        // Note: Error call stack preservation is handled at the VM level (LuaVmImpl.executeProto)
+        // where LuaRuntimeError is caught BEFORE conversion to LuaException, ensuring the full
+        // call stack with isCloseMetamethod flags is preserved for debug.traceback()
+        frame.executeCloseMetamethods(0) { upvalue, capturedValue, errorArg ->
+            env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
+            val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
+            if (closeFn != null) {
+                // Call __close - errors should propagate normally
+                env.setNextCallIsCloseMetamethod()
+                env.callFunction(closeFn, listOf(capturedValue, errorArg))
+            }
+        }
+
+        env.debug("  Return ${results.size} values (after __close): $results")
 
         // Update current CallFrame with return transfer info before triggering RETURN hook
         // This allows debug.getinfo('r') in the hook to access ftransfer and ntransfer

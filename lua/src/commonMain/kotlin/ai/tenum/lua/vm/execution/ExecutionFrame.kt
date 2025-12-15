@@ -148,8 +148,21 @@ class ExecutionFrame(
         }
     }
 
+    /**
+     * Get metatable for a value, handling both instance metatables (tables) and shared metatables (primitives).
+     */
+    private fun getMetatable(value: LuaValue<*>): LuaTable? =
+        when (value) {
+            is ai.tenum.lua.runtime.LuaTable -> value.metatable as? LuaTable
+            is ai.tenum.lua.runtime.LuaNumber -> ai.tenum.lua.runtime.LuaNumber.metatableStore as? LuaTable
+            is ai.tenum.lua.runtime.LuaString -> ai.tenum.lua.runtime.LuaString.metatableStore as? LuaTable
+            is ai.tenum.lua.runtime.LuaBoolean -> ai.tenum.lua.runtime.LuaBoolean.metatableStore as? LuaTable
+            is ai.tenum.lua.runtime.LuaNil -> ai.tenum.lua.runtime.LuaNil.metatableStore as? LuaTable
+            else -> value.metatable as? LuaTable
+        }
+
     private fun getCloseMetamethod(value: LuaValue<*>): ai.tenum.lua.runtime.LuaFunction? {
-        val mt = value.metatable as? LuaTable
+        val mt = getMetatable(value)
         return mt?.get(
             ai.tenum.lua.runtime
                 .LuaString("__close"),
@@ -157,36 +170,119 @@ class ExecutionFrame(
     }
 
     /**
+     * Get the __close metamethod value (not just functions).
+     * Returns the raw value so we can distinguish between nil and non-callable values.
+     */
+    private fun getCloseMetamethodRaw(value: LuaValue<*>): LuaValue<*>? {
+        val mt = getMetatable(value) ?: return null
+        return mt[
+            ai.tenum.lua.runtime
+                .LuaString("__close"),
+        ]
+    }
+
+    /**
      * Execute __close metamethods for to-be-closed variables at or above the given register.
      * Called in reverse declaration order (LIFO).
+     *
+     * Error chaining: If one close handler throws an error, that error is passed as the second
+     * argument to the next close handler. The final error is re-thrown after all handlers run.
      */
     fun executeCloseMetamethods(
         registerIndex: Int,
-        callCloseFn: (Upvalue, LuaValue<*>) -> Unit,
+        callCloseFn: (Upvalue, LuaValue<*>, LuaValue<*>) -> Unit,
     ) {
         val snapshot = toBeClosedVars.toList()
+        var chainedError: LuaValue<*> = ai.tenum.lua.runtime.LuaNil
+        var lastException: Throwable? = null
+
         for ((reg, capturedValue) in snapshot.asReversed()) {
             if (reg < registerIndex) continue
-            toBeClosedVars.removeAll { it.first == reg && it.second === capturedValue }
+            // Use structural equality instead of reference equality
+            // This ensures the value is removed even if the object identity changed
+            // (which can happen due to platform-specific optimizations or copying)
+            toBeClosedVars.removeAll { it.first == reg && it.second == capturedValue }
 
-            // Get __close metamethod if present
-            val closeFun = getCloseMetamethod(capturedValue)
-            if (closeFun != null) {
-                // Delegate actual call to VM (needs callFunction)
-                callCloseFn(Upvalue(closedValue = closeFun), capturedValue)
+            // Get current value from register (may have changed since declaration)
+            val currentValue = registers.getOrNull(reg) ?: capturedValue
+
+            // nil and false don't need closing
+            if (currentValue is ai.tenum.lua.runtime.LuaNil ||
+                (currentValue is ai.tenum.lua.runtime.LuaBoolean && !currentValue.value)
+            ) {
+                continue
+            }
+
+            // Get __close metamethod - must exist and be callable at close time
+            val closeMethod = getCloseMetamethodRaw(currentValue)
+            try {
+                when {
+                    closeMethod == null || closeMethod is ai.tenum.lua.runtime.LuaNil -> {
+                        // __close doesn't exist - create error
+                        throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                            "attempt to call a nil value (metamethod 'close')",
+                        )
+                    }
+                    closeMethod is ai.tenum.lua.runtime.LuaFunction -> {
+                        // Valid function - call it with current error (if any)
+                        callCloseFn(Upvalue(closedValue = closeMethod), currentValue, chainedError)
+                        // If no error was thrown, the chained error continues to next handler
+                        // (Don't clear it - only a new error replaces the old one)
+                    }
+                    else -> {
+                        // __close exists but is not a function
+                        val typeName = closeMethod.type().name.lowercase()
+                        throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                            "attempt to call a $typeName value (metamethod 'close')",
+                        )
+                    }
+                }
+            } catch (e: ai.tenum.lua.vm.errorhandling.LuaException) {
+                // Capture the original error value and exception
+                chainedError = e.errorValue
+                lastException = e
+            } catch (e: ai.tenum.lua.vm.errorhandling.LuaRuntimeError) {
+                // For runtime errors (from validation), create a formatted error message
+                chainedError =
+                    ai.tenum.lua.runtime
+                        .LuaString(e.message ?: "error in close")
+                lastException = e
             }
         }
+
+        // If there's a final error, re-throw the last exception
+        lastException?.let { throw it }
     }
 
     /**
      * Mark a register as having a to-be-closed variable.
-     * Only tracks if the value has a __close metamethod.
+     *
+     * According to Lua 5.4 semantics:
+     * - nil and false are allowed (won't be closed)
+     * - Values with __close metamethod are allowed
+     * - Anything else throws an error "variable got a non-closable value"
      */
     fun markToBeClosedVar(registerIndex: Int) {
         val value = registers[registerIndex]
+
+        // nil and false are allowed but won't be closed
+        if (value is ai.tenum.lua.runtime.LuaNil ||
+            (value is ai.tenum.lua.runtime.LuaBoolean && !value.value)
+        ) {
+            return
+        }
+
+        // Check for __close metamethod
         val closeFun = getCloseMetamethod(value)
         if (closeFun != null) {
             toBeClosedVars.add(registerIndex to value)
+        } else {
+            // Error: value is not closable
+            // Try to get the variable name from proto for better error messages
+            val varName = proto.localVars.find { it.register == registerIndex }?.name ?: "?"
+            throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                "variable '$varName' got a non-closable value",
+            )
         }
     }
 

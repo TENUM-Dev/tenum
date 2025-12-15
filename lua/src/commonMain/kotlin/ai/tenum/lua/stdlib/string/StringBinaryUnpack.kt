@@ -1,3 +1,5 @@
+@file:Suppress("REDUNDANT_ELSE_IN_WHEN")
+
 package ai.tenum.lua.stdlib.string
 
 import ai.tenum.lua.runtime.LuaDouble
