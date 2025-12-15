@@ -137,6 +137,7 @@ class StatementCompiler {
             statement !is RepeatStatement &&
             statement !is ForStatement &&
             statement !is ForInStatement &&
+            statement !is DoStatement &&
             !skipInitialLineEvent
         ) {
             // Only add LineEvent if the line has changed
@@ -169,8 +170,14 @@ class StatementCompiler {
         statement: ReturnStatement,
         ctx: CompileContext,
     ) {
-        // Close all to-be-closed variables on return (entire function scope)
-        ctx.emitCloseVariables(0)
+        // NOTE: Do NOT emit CLOSE mode=2 here.
+        // The RETURN opcode itself will call __close metamethods AFTER return values are evaluated.
+        // This ensures return values are not corrupted by __close mutations (see locals.lua:255).
+        // ctx.emitCloseVariables(0)  ← REMOVED
+
+        // Check if there are any to-be-closed variables in the current scope
+        // If so, we CANNOT use tail call optimization because RETURN must execute to close them
+        val hasToBeClosedVars = ctx.scopeManager.locals.any { it.isClose && it.isActive }
 
         if (statement.expressions.isEmpty()) {
             ctx.emit(OpCode.RETURN, 0, 1, 0)
@@ -215,8 +222,9 @@ class StatementCompiler {
                     }
                 }
             }
-        } else if (statement.expressions.size == 1 && statement.expressions[0] is MethodCall) {
+        } else if (statement.expressions.size == 1 && statement.expressions[0] is MethodCall && !hasToBeClosedVars) {
             // Tail call optimization for method calls: return self:method(...) becomes TAILCALL
+            // BUT: cannot use TCO if there are to-be-closed variables (they must be closed by RETURN)
             val methodCall = statement.expressions[0] as MethodCall
             val argCount = methodCall.arguments.size
 
@@ -246,10 +254,11 @@ class StatementCompiler {
                 // 5) TAILCALL base, B (B = func+self+args)
                 ctx.emit(OpCode.TAILCALL, base, argCount + 2, 0)
             }
-        } else if (statement.expressions.size == 1 && statement.expressions[0] is FunctionCall) {
+        } else if (statement.expressions.size == 1 && statement.expressions[0] is FunctionCall && !hasToBeClosedVars) {
             // Tail call optimization: return f(...) becomes TAILCALL
             // BUT: Lua 5.4 does NOT use TAILCALL if the expression is wrapped in parentheses
             // because parentheses force exactly 1 return value
+            // ALSO: cannot use TCO if there are to-be-closed variables (they must be closed by RETURN)
             val funcCall = statement.expressions[0] as FunctionCall
 
             val lastArg = funcCall.arguments.lastOrNull()
@@ -970,46 +979,89 @@ class StatementCompiler {
         val exprCount = exprs.size
 
         // The structure of a for-in loop requires careful register management.
-        // We allocate: 3 registers for iterator state (f, s, var) + N registers for loop variables
-        // Total: 3 + statement.variables.size registers
+        // Layout: [f, s, var] [loop vars...] [TBC]
+        // Lua 5.4: 4th+ return values from iterator expressions are to-be-closed variables
 
-        // Phase 1: Allocate temp registers for evaluating iterator expressions
-        val tempCount = exprCount.coerceAtLeast(3)
-        val tempStart = ctx.registerAllocator.stackTop
-        repeat(tempCount) { ctx.registerAllocator.allocateTemp() }
-        val tempRegs = (tempStart until tempStart + tempCount).toList()
+        // Phase 1: Allocate all registers upfront
+        val iteratorStateCount = 3
+        val loopStateRegs = ctx.registerAllocator.allocateLocals(iteratorStateCount)
+        val loopStateBase = loopStateRegs[0]
+        val loopVarRegs = ctx.registerAllocator.allocateLocals(statement.variables.size)
+        val toBeClosedReg = ctx.registerAllocator.allocateLocal()
 
-        // Phase 2: Evaluate iterator expressions into temps
+        // Now we have: [loopStateBase, loopStateBase+1, loopStateBase+2] [loopVarRegs...] [toBeClosedReg]
+        // We need to evaluate the iterator expression, requesting 4 results
+        // The first 3 go into loopStateBase, loopStateBase+1, loopStateBase+2
+        // The 4th goes into toBeClosedReg
+
         // Track the line of the last expression for TFORCALL error reporting
         var lastExprLine = statement.line
+
+        // Evaluate iterator expressions
+        // We request 3 + 1 results: f, s, var, TBC
         if (exprs.isNotEmpty() && exprs[0] is FunctionCall) {
             val call = exprs[0] as FunctionCall
-            val numResults = 3 - (exprCount - 1)
+            // Request enough results to fill iterator state (3) plus TBC (1)
+            // But we need to account for how many expressions follow
+            val totalSlotsNeeded = iteratorStateCount + 1 // 3 for iterator state + 1 for TBC
+            val remainingExprs = exprCount - 1 // expressions after the function call
+            val numResults = totalSlotsNeeded - remainingExprs
             lastExprLine = call.line
-            callCompiler.compileFunctionCall(call, tempRegs[0], ctx, expressionCompiler::compileExpression, numResults)
-            for (i in 1 until exprCount) {
+            callCompiler.compileFunctionCall(call, loopStateRegs[0], ctx, expressionCompiler::compileExpression, numResults)
+            // Compile remaining expressions into iterator state slots (up to 3)
+            for (i in 1 until exprCount.coerceAtMost(iteratorStateCount)) {
                 lastExprLine = exprs[i].line
-                expressionCompiler.compileExpression(exprs[i], tempRegs[i], ctx)
+                expressionCompiler.compileExpression(exprs[i], loopStateRegs[i], ctx)
             }
-            // Don't emit LOADNIL when first expr is a call - it already filled all 3 registers
+            // If there's a 4th expression, it's the to-be-closed variable
+            if (exprCount > iteratorStateCount) {
+                lastExprLine = exprs[iteratorStateCount].line
+                expressionCompiler.compileExpression(exprs[iteratorStateCount], toBeClosedReg, ctx)
+            }
+            // If function call was supposed to provide the TBC value but there are no explicit expressions,
+            // it will be in loopVarRegs[0] and needs to be moved (handled below)
         } else {
-            for (i in 0 until exprCount) {
+            // No function call - evaluate each expression
+            // Evaluate up to iteratorStateCount expressions for iterator state (f, s, var)
+            val exprsToEvaluate = exprCount.coerceAtMost(iteratorStateCount)
+            for (i in 0 until exprsToEvaluate) {
                 lastExprLine = exprs[i].line
-                expressionCompiler.compileExpression(exprs[i], tempRegs[i], ctx)
+                expressionCompiler.compileExpression(exprs[i], loopStateRegs[i], ctx)
             }
-            // Only emit LOADNIL for non-call case when we have fewer than 3 expressions
-            for (i in exprCount until 3) {
-                ctx.emit(OpCode.LOADNIL, tempRegs[i], tempRegs[i], 0)
+            // Fill remaining iterator state slots with nil
+            for (i in exprsToEvaluate until iteratorStateCount) {
+                ctx.emit(OpCode.LOADNIL, loopStateRegs[i], loopStateRegs[i], 0)
+            }
+            // If there's a 4th expression, it's the to-be-closed variable
+            if (exprCount > iteratorStateCount) {
+                lastExprLine = exprs[iteratorStateCount].line
+                expressionCompiler.compileExpression(exprs[iteratorStateCount], toBeClosedReg, ctx)
+            } else {
+                // No TBC variable, initialize to nil
+                ctx.emit(OpCode.LOADNIL, toBeClosedReg, toBeClosedReg, 0)
             }
         }
 
-        // Phase 3: Promote temps to locals for loop state (f, s, var)
-        val loopStateBase = ctx.registerAllocator.promoteTempsToLocals(3)
+        // If the iterator expression was a function call that returned 4+ values,
+        // the 4th value ends up at loopStateBase+3, which is loopVarRegs[0].
+        // We need to move it to toBeClosedReg (which comes after all loop vars).
+        // But only do this if:
+        // 1. The first expression was a function call
+        // 2. We didn't explicitly compile a 4th expression above
+        // 3. The function call was requested to return 4 values (numResults = 4 - remaining)
+        val needsMoveTBC =
+            exprs.isNotEmpty() &&
+                exprs[0] is FunctionCall &&
+                exprCount <= iteratorStateCount &&
+                loopVarRegs.isNotEmpty()
+        if (needsMoveTBC) {
+            ctx.emit(OpCode.MOVE, toBeClosedReg, loopVarRegs[0], 0)
+            // Initialize first loop var to nil since TFORCALL will overwrite it anyway
+            ctx.emit(OpCode.LOADNIL, loopVarRegs[0], loopVarRegs[0], 0)
+        }
 
-        // Phase 4: Allocate additional registers for loop variables
-        val loopVarRegs = ctx.registerAllocator.allocateLocals(statement.variables.size)
-
-        // All loop registers are now: [loopStateBase+0, loopStateBase+1, loopStateBase+2, ...loopVarRegs]
+        // All loop registers are now: [loopStateBase, loopStateBase+1, loopStateBase+2, loopVarRegs..., toBeClosedReg]
+        // Note: loopStateBase+3 (tbcTempReg) is unused but will be freed with other iterator state
         val base = loopStateBase
         val state = loopStateBase + 1
         val ctrl = loopStateBase + 2
@@ -1025,6 +1077,17 @@ class StatementCompiler {
                 startPc = ctx.instructions.size,
             )
         }
+
+        // Declare the to-be-closed variable (4th return value from iterator expression)
+        // This is an invisible variable that will be closed when the loop exits
+        ctx.scopeManager.declareLocal(
+            name = "(for to-be-closed)",
+            register = toBeClosedReg,
+            startPc = ctx.instructions.size,
+            isClose = true,
+        )
+        // Emit CLOSE instruction with mode 1 (declaration) to mark it as to-be-closed
+        ctx.emit(OpCode.CLOSE, toBeClosedReg, 1, 0)
 
         ctx.scopeManager.beginLoop()
 
@@ -1066,14 +1129,19 @@ class StatementCompiler {
         ctx.instructions[tforloopIndex] = Instruction(OpCode.TFORLOOP, ctrl, jumpDistance, statement.variables.size)
 
         // Loop exit point (TFORLOOP jumps here when done)
-        // Use helper to clean up loop scope (includes CLOSE and break patching)
+        // NOTE: We must emit CLOSE mode=2 AFTER patching breaks so they jump to it
+        // Use helper to clean up loop scope (includes CLOSE for upvalues and break patching)
         CompilerHelpers.cleanupLoopScope(bodySnapshot, ctx, emitClose = true)
+
+        // After breaks are patched, emit CLOSE mode=2 to close the to-be-closed variable
+        // This ensures both normal exit and break statements close the TBC variable
+        ctx.emit(OpCode.CLOSE, toBeClosedReg, 2, 0)
 
         // Emit line event for the 'end' line
         emitLoopEndLineEvent(statement.line, statement.block, ctx)
 
         // Phase 6: Free loop state registers (base, state, ctrl)
-        // Loop variables were already freed when we freed bodyExit.removedLocals
+        // Loop variables and toBeClosedReg were already freed when we freed bodyExit.removedLocals
         for (i in 0 until 3) {
             ctx.registerAllocator.freeLocal()
         }
@@ -1099,6 +1167,11 @@ class StatementCompiler {
                 // Check if there's a local variable with the function's name first
                 val localVar = ctx.findLocal(statement.name)
                 if (localVar != null) {
+                    // Check if the local variable is const/close before assigning
+                    if (ctx.isConstOrCloseVariable(statement.name)) {
+                        val errorToken = Token(TokenType.IDENTIFIER, statement.name, null, statement.line, 0)
+                        throw ParserException("attempt to assign to const variable '${statement.name}'", errorToken)
+                    }
                     // Assign to existing local variable
                     ctx.emit(OpCode.MOVE, localVar.register, reg, 0)
                 } else if (ctx.scopeManager.currentScopeLevel > 0) {

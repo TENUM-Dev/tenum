@@ -9,7 +9,6 @@ import ai.tenum.lua.compiler.helper.UpvalueResolver
 import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.LineEvent
 import ai.tenum.lua.compiler.model.LineEventKind
-import ai.tenum.lua.compiler.model.LineInfo
 import ai.tenum.lua.compiler.model.LocalLifetime
 import ai.tenum.lua.compiler.model.LocalVarInfo
 import ai.tenum.lua.compiler.model.Proto
@@ -240,7 +239,7 @@ data class CompileContext(
     // ───────────────────────────────────────────────
 
     var currentLine: Int = 0
-    val lineInfo: MutableList<LineInfo> = mutableListOf()
+    val lineInfo: MutableList<LineEvent> = mutableListOf()
 
     // ───────────────────────────────────────────────
     //  LOCALS / SCOPES (unified via ScopeManager)
@@ -573,7 +572,13 @@ data class CompileContext(
         // Resolve all pending forward gotos now that all labels are known
         childCtx.resolveForwardGotos()
 
-        childCtx.emitCloseVariables(0) // Emit lineEvent for lastLineDefined (the 'end' line) before RETURN
+        // NOTE: Do NOT emit CLOSE mode=2 here before the final RETURN.
+        // The RETURN instruction itself will call __close metamethods.
+        // This ensures return values are evaluated BEFORE __close runs,
+        // matching Lua 5.4.8 behavior (see locals.lua:255).
+        // childCtx.emitCloseVariables(0)  ← REMOVED
+
+        // Emit lineEvent for lastLineDefined (the 'end' line) before RETURN
         // This matches Lua 5.4.8 behavior where lastLineDefined is always in activelines
         val actualEndLine = if (endLine > 0) endLine else childCtx.currentLine
         if (actualEndLine > 0 && actualEndLine != childCtx.currentLine) {

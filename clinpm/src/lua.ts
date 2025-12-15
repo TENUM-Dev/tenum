@@ -3,6 +3,5 @@
 import { } from '@js-joda/core';
 import {execLua} from "./tenum-cli";
 const args = process.argv.slice(2);
-
 const exitCode = execLua(args)
 process.exit(exitCode);

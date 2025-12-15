@@ -20,14 +20,31 @@ class StackView(
     /**
      * Get the frame at a specific level (0-based from top).
      * Level 0 = current function, level 1 = caller, level 2 = caller's caller, etc.
-     * Native (C) functions are included in level counting (Lua 5.4 semantics).
+     * Native (C) functions and __close metamethod frames are included in level counting (Lua 5.4 semantics).
+     * Frames marked with isReturning=true are skipped (function is returning, invisible to debug.getinfo).
      *
      * @param level Stack level (0-based from top, where 0 is the current/most recent frame)
      * @return CallFrame at the specified level, or null if out of bounds
      */
     fun atLevel(level: Int): CallFrame? {
-        if (level < 0 || level >= frames.size) return null
-        return frames[frames.size - 1 - level]
+        if (level < 0) return null
+
+        // Walk from newest to oldest, skipping frames marked as returning
+        var currentLevel = 0
+        for (i in frames.size - 1 downTo 0) {
+            val frame = frames[i]
+            // Skip frames that are in the process of returning (invisible during __close execution)
+            if (frame.isReturning) {
+                continue
+            }
+
+            if (currentLevel == level) {
+                return frame
+            }
+            currentLevel++
+        }
+
+        return null // Level out of bounds
     }
 
     /**

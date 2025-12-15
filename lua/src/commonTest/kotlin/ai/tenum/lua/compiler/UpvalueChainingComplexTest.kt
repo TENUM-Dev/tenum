@@ -54,12 +54,13 @@ class UpvalueChainingComplexTest {
     @Test
     fun testToBeClosedUpvalue() {
         // Upvalue is a to-be-closed variable, ensure correct value in closure
+        // Note: Plain numbers aren't closable, so we need to use a table with __close metamethod
         val code = """
             local function make()
                 local f
                 do
-                    local x <close> = 99
-                    function f() return x end
+                    local x <close> = setmetatable({value = 99}, {__close = function() end})
+                    function f() return x.value end
                 end
                 return f
             end

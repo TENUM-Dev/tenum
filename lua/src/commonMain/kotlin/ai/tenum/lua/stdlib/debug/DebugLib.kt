@@ -460,11 +460,10 @@ class DebugLib : LuaLibrary {
             // Active lines - build a table mapping line numbers to true
             val activelinesTable = LuaTable()
             if (func is LuaCompiledFunction) {
-                // Extract all unique line numbers from lineInfo (PC -> line mappings)
-                // activelines contains the actual executable lines recorded in lineEvents
-                // Note: For stripped functions, lineInfo is empty, so activelines will be empty
+                // Extract all unique line numbers from lineEvents (PC -> line mappings)
+                // Note: For stripped functions, lineEvents can be empty, so activelines will be empty
                 val uniqueLines =
-                    func.proto.lineInfo
+                    func.proto.lineEvents
                         .map { it.line }
                         .toSet()
                 for (line in uniqueLines) {
@@ -817,37 +816,47 @@ class DebugLib : LuaLibrary {
                     }
                 }
             } else if (currentContext != null) {
-                // Get stack view - automatically handles hook context
+                // Check if there's a preserved error call stack (e.g., from __close metamethod)
+                // If so, use it instead of the current stack to show the __close frames
+                val lastErrorStack = currentContext.getAndClearLastErrorCallStack()
+
+                // Get stack view for coroutine boundary check and level calculation
                 val stackView = currentContext.getStackView()
                 val snapshot = currentContext.getHookSnapshot()
 
-                // If in hook, combine hook frame with observed frames
                 val rawCallStack =
-                    if (snapshot != null && stackView.size > 0) {
-                        // Hook context: find the hook frame (skip native frames like debug.traceback)
-                        // and combine with observed frames from when the hook was triggered
-                        val hookFrame = stackView.forTraceback().firstOrNull { !it.isNative }
-                        if (hookFrame != null) {
-                            listOf(hookFrame) + snapshot.frames.asReversed()
-                        } else {
-                            snapshot.frames.asReversed()
-                        }
+                    if (lastErrorStack != null && lastErrorStack.isNotEmpty()) {
+                        // Use the preserved error stack which includes __close frames
+                        lastErrorStack.asReversed() // Most-recent-first for traceback
                     } else {
-                        // Normal context: use stack as-is (most-recent-first for traceback)
-                        stackView.forTraceback()
+                        // Normal path: get stack from view - automatically handles hook context
+                        // If in hook, combine hook frame with observed frames
+                        if (snapshot != null && stackView.size > 0) {
+                            // Hook context: find the hook frame (skip native frames like debug.traceback)
+                            // and combine with observed frames from when the hook was triggered
+                            val hookFrame = stackView.forTraceback().firstOrNull { !it.isNative }
+                            if (hookFrame != null) {
+                                listOf(hookFrame) + snapshot.frames.asReversed()
+                            } else {
+                                snapshot.frames.asReversed()
+                            }
+                        } else {
+                            // Normal context: use stack as-is (most-recent-first for traceback)
+                            stackView.forTraceback()
+                        }
                     }
 
                 // When in a coroutine, filter frames to only show those within the coroutine
                 // This prevents leaking frames from outside the coroutine boundary
                 val currentCo = libContext?.getCurrentCoroutine?.invoke()
                 val filteredByBoundary =
-                    if (currentCo != null && targetThread == null) {
+                    if (currentCo != null) {
                         // Only apply filtering when getting traceback of current thread (not another coroutine)
                         val callStackBase = currentCo.thread.callStackBase
                         // rawCallStack is most-recent-first, so we need to filter from the end
                         // Frames at the end (oldest) before callStackBase should be excluded
                         // stackView.size gives us total frames including the ones before callStackBase
-                        val totalFrames = stackView.size
+                        val totalFrames = if (lastErrorStack != null) rawCallStack.size else stackView.size
                         if (callStackBase > 0 && callStackBase < totalFrames) {
                             val framesToDrop = callStackBase
                             rawCallStack.dropLast(framesToDrop)
@@ -871,12 +880,8 @@ class DebugLib : LuaLibrary {
                             else -> {
                                 // For native functions, only keep those with meaningful names
                                 val nativeFunc = frame.function as? ai.tenum.lua.runtime.LuaNativeFunction
-                                val hasName =
-                                    nativeFunc?.name != null && nativeFunc.name.isNotEmpty() && nativeFunc.name != "native"
-                                val hasInferredName =
-                                    frame.inferredFunctionName?.name != null &&
-                                        frame.inferredFunctionName.name.isNotEmpty() &&
-                                        frame.inferredFunctionName.name != "?"
+                                val hasName = nativeFunc?.name?.let { it.isNotEmpty() && it != "native" } == true
+                                val hasInferredName = frame.inferredFunctionName?.name?.let { it.isNotEmpty() && it != "?" } == true
                                 hasName || hasInferredName
                             }
                         }

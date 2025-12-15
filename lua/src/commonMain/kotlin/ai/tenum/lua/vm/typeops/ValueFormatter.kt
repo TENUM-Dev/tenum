@@ -31,22 +31,22 @@ object ValueFormatter {
         }
 
     /**
-     * Formats a double value, using integer format when exactly representable.
+     * Formats a double value following Lua 5.4 semantics.
+     * Uses integer format for exact integers < 2^53, scientific notation for larger values.
      */
     private fun formatDouble(num: Double): String {
-        // Only format as integer if it's exactly representable
-        // Doubles have full integer precision only up to 2^53
-        val maxPreciseInteger = 9007199254740992.0 // 2^53
-        return if (num >= -maxPreciseInteger && num <= maxPreciseInteger) {
-            val asLong = num.toLong()
-            if (asLong.toDouble() == num) {
-                asLong.toString()
-            } else {
-                num.toString()
-            }
-        } else {
-            // Beyond double precision bounds, use float format
-            num.toString()
+        // Handle special cases
+        if (!num.isFinite()) {
+            return num.toString()
         }
+
+        // Use Lua's %.14g format which automatically chooses between
+        // integer, decimal, or scientific notation based on the value
+        return ai.tenum.lua.stdlib.string.StringFormatting.formatGStyle(
+            num,
+            precision = 14,
+            lowercase = true,
+            alternateForm = false,
+        )
     }
 }
