@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Validate wrapper
         uses: gradle/actions/wrapper-validation@v5.0.0
 
@@ -27,7 +27,7 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -46,7 +46,7 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -65,7 +65,7 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -84,7 +84,7 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -104,7 +104,7 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -124,7 +124,7 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -144,7 +144,7 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -163,7 +163,7 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -183,7 +183,7 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
@@ -214,7 +214,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
         uses: actions/setup-java@v5.1.0
         with:
