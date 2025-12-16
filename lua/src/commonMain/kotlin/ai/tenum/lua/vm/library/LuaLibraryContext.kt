@@ -34,6 +34,7 @@ data class LuaLibraryContext(
             List<Upvalue>,
             LuaFunction?,
             CoroutineThread?,
+            Boolean,
         ) -> List<LuaValue<*>>
     )? = null, // For coroutine resumption with saved state
     val getCurrentEnv: (() -> Upvalue?)? = null, // Get current _ENV upvalue for load() inheritance

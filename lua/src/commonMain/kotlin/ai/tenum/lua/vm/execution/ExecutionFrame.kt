@@ -39,7 +39,16 @@ class ExecutionFrame(
     existingToBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>? = null,
     /** Existing open upvalues map (for resumption) */
     existingOpenUpvalues: MutableMap<Int, Upvalue>? = null,
+    /** Existing already-closed registers (for resumption of RETURN) */
+    val existingAlreadyClosed: MutableSet<Int>? = null,
 ) {
+    /**
+     * Captured return values for this frame (set by RETURN opcode).
+     * These persist across nested executeProto calls, preventing loss during __close yields.
+     * Non-null only when this frame has executed RETURN and captured its return values.
+     */
+    var capturedReturns: List<LuaValue<*>>? = null
+    
     /** Register array (local variables and temporaries) - uses MutableList for dynamic growth */
     val registers: MutableList<LuaValue<*>> =
         if (existingRegisters != null) {
@@ -104,6 +113,9 @@ class ExecutionFrame(
      * __close called in reverse order on scope exit.
      */
     val toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>> = existingToBeClosedVars ?: mutableListOf()
+
+    /** Registers that were already closed (used when resuming RETURN with yields) */
+    val alreadyClosedRegs: MutableSet<Int> = existingAlreadyClosed ?: mutableSetOf()
 
     init {
         // Load initial arguments into parameter registers (if not resuming)
@@ -194,21 +206,22 @@ class ExecutionFrame(
      */
     fun executeCloseMetamethods(
         registerIndex: Int,
-        callCloseFn: (Upvalue, LuaValue<*>, LuaValue<*>) -> Unit,
+        initialError: LuaValue<*> = ai.tenum.lua.runtime.LuaNil,
+        callCloseFn: (Int, Upvalue, LuaValue<*>, LuaValue<*>) -> Unit,
     ) {
-        val snapshot = toBeClosedVars.toList()
-        var chainedError: LuaValue<*> = ai.tenum.lua.runtime.LuaNil
+        val snapshot = toBeClosedVars.toList() // iterate over a stable view
+        var chainedError: LuaValue<*> = initialError
         var lastException: Throwable? = null
+
+        // Clear only the vars that will be closed (reg >= registerIndex)
+        // This prevents double-closing while preserving outer-scope TBC vars
+        toBeClosedVars.removeAll { it.first >= registerIndex }
 
         for ((reg, capturedValue) in snapshot.asReversed()) {
             if (reg < registerIndex) continue
-            // Use structural equality instead of reference equality
-            // This ensures the value is removed even if the object identity changed
-            // (which can happen due to platform-specific optimizations or copying)
-            toBeClosedVars.removeAll { it.first == reg && it.second == capturedValue }
 
-            // Get current value from register (may have changed since declaration)
-            val currentValue = registers.getOrNull(reg) ?: capturedValue
+            // Use the captured value for closing. Register may be stale if a close yielded.
+            val currentValue = capturedValue
 
             // nil and false don't need closing
             if (currentValue is ai.tenum.lua.runtime.LuaNil ||
@@ -229,7 +242,8 @@ class ExecutionFrame(
                     }
                     closeMethod is ai.tenum.lua.runtime.LuaFunction -> {
                         // Valid function - call it with current error (if any)
-                        callCloseFn(Upvalue(closedValue = closeMethod), currentValue, chainedError)
+                        callCloseFn(reg, Upvalue(closedValue = closeMethod), currentValue, chainedError)
+                        // Vars already removed from toBeClosedVars at the start of executeCloseMetamethods
                         // If no error was thrown, the chained error continues to next handler
                         // (Don't clear it - only a new error replaces the old one)
                     }
@@ -268,6 +282,8 @@ class ExecutionFrame(
      */
     fun markToBeClosedVar(registerIndex: Int) {
         val value = registers[registerIndex]
+
+        println("[TBC mark] reg=$registerIndex value=$value")
 
         // nil and false are allowed but won't be closed
         if (value is ai.tenum.lua.runtime.LuaNil ||

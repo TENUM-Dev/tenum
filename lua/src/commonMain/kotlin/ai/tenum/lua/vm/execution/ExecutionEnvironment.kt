@@ -87,6 +87,26 @@ class ExecutionEnvironment(
 
     fun getCloseException(): Exception? = vmCapabilities.getCloseException()
 
+    fun setPendingCloseVar(register: Int, value: LuaValue<*>) = vmCapabilities.setPendingCloseVar(register, value)
+
+    fun clearPendingCloseVar() = vmCapabilities.clearPendingCloseVar()
+
+    fun setPendingCloseStartReg(registerIndex: Int) = vmCapabilities.setPendingCloseStartReg(registerIndex)
+
+    fun clearPendingCloseStartReg() = vmCapabilities.clearPendingCloseStartReg()
+
+    fun setPendingCloseOwnerTbc(vars: MutableList<Pair<Int, LuaValue<*>>>) = vmCapabilities.setPendingCloseOwnerTbc(vars)
+
+    fun clearPendingCloseOwnerTbc() = vmCapabilities.clearPendingCloseOwnerTbc()
+    
+    fun setPendingCloseOwnerFrame(frame: ExecutionFrame) = vmCapabilities.setPendingCloseOwnerFrame(frame)
+    
+    fun getPendingCloseOwnerFrame(): ExecutionFrame? = vmCapabilities.getPendingCloseOwnerFrame()
+
+    fun setPendingCloseErrorArg(error: LuaValue<*>) = vmCapabilities.setPendingCloseErrorArg(error)
+
+    fun clearPendingCloseErrorArg() = vmCapabilities.clearPendingCloseErrorArg()
+
     fun setYieldResumeContext(
         targetReg: Int,
         encodedCount: Int,

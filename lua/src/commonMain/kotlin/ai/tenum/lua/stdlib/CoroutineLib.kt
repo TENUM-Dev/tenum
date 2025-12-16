@@ -335,6 +335,7 @@ class CoroutineLib : LuaLibrary {
             compiledFunc.upvalues,
             coroutine.func,
             coroutine.thread,
+            coroutine.thread.pendingCloseYield,
         )
     }
 

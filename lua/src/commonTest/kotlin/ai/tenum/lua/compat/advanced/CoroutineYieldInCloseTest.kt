@@ -1,6 +1,7 @@
 package ai.tenum.lua.compat.advanced
 
 import ai.tenum.lua.compat.LuaCompatTestBase
+import ai.tenum.lua.runtime.LuaString
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -39,7 +40,7 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
             return "OK"
         """.trimIndent())
         
-        result shouldBe "OK"
+        (result as? LuaString)?.value shouldBe "OK"
     }
 
     @Test
@@ -66,7 +67,7 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
             return "OK"
         """.trimIndent())
         
-        result shouldBe "OK"
+        (result as? LuaString)?.value shouldBe "OK"
     }
 
     @Test
@@ -106,12 +107,13 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
             
             return "OK"
         """.trimIndent())
-        
-        result shouldBe "OK"
+
+        result shouldBe LuaString.of("OK")
     }
 
     @Test
     fun testYieldInCloseWithPcall() {
+        vm.debugEnabled =true
         val result = execute("""
             local function func2close(f)
               return setmetatable({}, {__close = f})
@@ -171,6 +173,6 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
             return "OK"
         """.trimIndent())
         
-        result shouldBe "OK"
+        result shouldBe LuaString.of("OK")
     }
 }

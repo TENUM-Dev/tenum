@@ -388,16 +388,18 @@ internal class OpcodeDispatcher(
             }
 
             OpCode.CLOSE -> {
-                FrameOpcodes.executeClose(instr, execFrame, env) { closeFun, value, errorArg ->
+                // Set owner frame for CLOSE-mode yields (nested scopes)
+                env.setPendingCloseOwnerFrame(execFrame)
+                println("[CLOSE] Before executeClose: TBC list size=${execFrame.toBeClosedVars.size} vars=${execFrame.toBeClosedVars}")
+                FrameOpcodes.executeClose(instr, execFrame, env) { closeFun, value, errorArg, regIndex ->
                     env.setMetamethodCallContext("__close")
+                    env.setPendingCloseVar(regIndex, value)
                     env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true) // __close results ignored
                     env.setNextCallIsCloseMetamethod()
-                    try {
-                        callFunction(closeFun, listOf(value, errorArg)) // Return value is ignored by executeClose
-                        Unit // Explicitly return Unit
-                    } finally {
-                        env.clearYieldResumeContext()
-                    }
+                    callFunction(closeFun, listOf(value, errorArg)) // Return value is ignored by executeClose
+                    env.clearPendingCloseVar()
+                    env.clearYieldResumeContext()
+                    Unit // Explicitly return Unit
                 }
                 DispatchResult.Continue
             }

@@ -2,6 +2,7 @@ package ai.tenum.lua.runtime
 
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.vm.CallFrame
+import ai.tenum.lua.runtime.LuaNil
 
 /**
  * Represents a Lua coroutine.
@@ -67,6 +68,15 @@ class CoroutineThread : ai.tenum.lua.vm.debug.ThreadHookState {
     var yieldTargetRegister: Int = 0 // Register where yield call results should go
     var yieldExpectedResults: Int = 0 // Number of results expected by CALL (c field)
     var toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>> = mutableListOf()
+    var pendingCloseStartReg: Int = 0
+    var pendingCloseVarState: Pair<Int, LuaValue<*>>? = null
+    var savedExecStack: List<ai.tenum.lua.vm.execution.ExecContext> = emptyList()
+    var pendingCloseYield: Boolean = false
+    var capturedReturnValues: List<LuaValue<*>>? = null
+    var pendingCloseContinuation: ai.tenum.lua.vm.execution.ResumptionState? = null
+    var pendingCloseErrorArg: LuaValue<*> = LuaNil
+    var closeResumeState: ai.tenum.lua.vm.execution.CloseResumeState? = null
+    var closeOwnerFrameStack: List<ai.tenum.lua.vm.execution.ExecutionFrame> = emptyList()
 
     // Call stack boundary: index in global call stack where this coroutine's frames start
     // Used to filter out main thread frames when saving coroutine's call stack
@@ -105,6 +115,14 @@ class CoroutineThread : ai.tenum.lua.vm.debug.ThreadHookState {
         yieldedValues = emptyList()
         returnValues = emptyList()
         toBeClosedVars = mutableListOf()
+        pendingCloseStartReg = 0
+        pendingCloseVarState = null
+        savedExecStack = emptyList()
+        pendingCloseYield = false
+        capturedReturnValues = null
+        pendingCloseContinuation = null
+        pendingCloseErrorArg = LuaNil
+        closeOwnerFrameStack = emptyList()
         // Don't reset hook state - it persists across yields
         continuation = null
         savedNativeCallDepth = 0

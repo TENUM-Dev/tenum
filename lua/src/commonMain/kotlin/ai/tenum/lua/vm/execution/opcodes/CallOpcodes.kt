@@ -284,6 +284,7 @@ object CallOpcodes {
         val results = collector.collectResults(instr.a, instr.b)
 
         env.debug("  Return ${results.size} values (before __close): $results")
+        println("[TBC before return] ${frame.toBeClosedVars}")
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
 
         // Step 2: Execute __close metamethods for all to-be-closed variables
@@ -304,21 +305,26 @@ object CallOpcodes {
         // This allows xpcall to access return values even when __close fails
         // This matches Lua 5.4 semantics where return values are placed on stack before __close runs
         env.clearCloseException()
-        env.storeCapturedReturnValues(results)
+        frame.capturedReturns = results
+        env.setPendingCloseStartReg(0)
+        env.setPendingCloseOwnerFrame(frame) // Save owner frame for yield-in-close
         try {
-            frame.executeCloseMetamethods(0) { upvalue, capturedValue, errorArg ->
+            frame.executeCloseMetamethods(0) { regIndex, upvalue, capturedValue, errorArg ->
                 env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
                 val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
                 if (closeFn != null) {
                     // Call __close - errors should propagate normally
                     env.setMetamethodCallContext("__close")
-                    env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true) // store zero results on resume
-                    env.setNextCallIsCloseMetamethod()
-                    try {
-                        env.callFunction(closeFn, listOf(capturedValue, errorArg))
-                    } finally {
-                        env.clearYieldResumeContext()
-                    }
+                    println("[CLOSE callback RETURN] reg=$regIndex val=$capturedValue")
+                    env.setPendingCloseVar(regIndex, capturedValue)
+                env.setPendingCloseOwnerTbc(frame.toBeClosedVars)
+                env.setPendingCloseErrorArg(errorArg)
+                env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+                env.setNextCallIsCloseMetamethod()
+                env.callFunction(closeFn, listOf(capturedValue, errorArg))
+                env.clearPendingCloseVar()
+                // Clear yield context only after successful return (not after yield)
+                env.clearYieldResumeContext()
                 }
             }
         } catch (e: Exception) {
@@ -326,6 +332,8 @@ object CallOpcodes {
             env.setCloseException(e)
             // Re-throw so normal error handling works
             throw e
+        } finally {
+            env.clearPendingCloseStartReg()
         }
 
         env.debug("  Return ${results.size} values (after __close): $results")

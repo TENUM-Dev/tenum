@@ -131,6 +131,9 @@ internal object BasicLibErrorHandling {
                     add(LuaBoolean.TRUE)
                     addAll(results)
                 }
+            } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
+                // Yields must propagate through pcall transparently
+                throw e
             } catch (e: Exception) {
                 // For LuaException or LuaRuntimeError, return the original errorValue (preserves tables, nil, etc.)
                 // This matches Lua 5.4 behavior where error() can pass any value through pcall
@@ -175,6 +178,9 @@ internal object BasicLibErrorHandling {
                     add(LuaBoolean.TRUE)
                     addAll(results)
                 }
+            } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
+                // Yields must propagate through xpcall transparently
+                throw e
             } catch (e: Exception) {
                 // For LuaException or LuaRuntimeError, use errorValue to preserve non-string error objects
                 // The message handler should receive the original error value (table, string, etc.)

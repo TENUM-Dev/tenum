@@ -38,6 +38,26 @@ interface VmCapabilities {
 
     fun getCloseException(): Exception?
 
+    fun setPendingCloseVar(register: Int, value: LuaValue<*>)
+
+    fun clearPendingCloseVar()
+
+    fun setPendingCloseStartReg(registerIndex: Int)
+
+    fun clearPendingCloseStartReg()
+
+    fun setPendingCloseOwnerTbc(vars: MutableList<Pair<Int, LuaValue<*>>>)
+
+    fun clearPendingCloseOwnerTbc()
+    
+    fun setPendingCloseOwnerFrame(frame: ExecutionFrame)
+    
+    fun getPendingCloseOwnerFrame(): ExecutionFrame?
+
+    fun setPendingCloseErrorArg(error: LuaValue<*>)
+
+    fun clearPendingCloseErrorArg()
+
     /**
      * When a function call can yield but its results are ignored (e.g., __close metamethods),
      * we need to control how coroutine resume stores the yielded values.
