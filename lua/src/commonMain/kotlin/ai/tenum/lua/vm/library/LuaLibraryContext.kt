@@ -44,4 +44,5 @@ data class LuaLibraryContext(
     val getNativeCallDepth: (() -> Int)? = null, // Get current depth of native (C boundary) function calls
     val saveNativeCallDepth: ((Int) -> Unit)? = null, // Set native call depth (for coroutine context isolation)
     val getCoroutineStateManager: (() -> ai.tenum.lua.vm.coroutine.CoroutineStateManager)? = null, // Get coroutine state manager
+    val cleanupCallStackFrames: ((Int) -> Unit)? = null, // Clean up call stack frames to a specific size (for coroutine cleanup)
 )

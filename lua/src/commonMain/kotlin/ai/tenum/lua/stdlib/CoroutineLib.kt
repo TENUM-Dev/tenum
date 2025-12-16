@@ -176,6 +176,10 @@ class CoroutineLib : LuaLibrary {
             // Complete coroutine successfully
             stateManager.completeCoroutine(coroutine, results, previousCoroutine)
 
+            // Clean up call stack frames added by coroutine
+            println("DEBUG CoroutineLib: Cleaning up frames to size $currentCallStackSize")
+            context.cleanupCallStackFrames?.invoke(currentCallStackSize)
+
             // Restore native call depth
             val savedDepth = stateManager.getSavedNativeDepth(coroutine)
             context.saveNativeCallDepth?.invoke(savedDepth)
@@ -185,6 +189,9 @@ class CoroutineLib : LuaLibrary {
             // Coroutine yielded - execution state already saved in VM
             stateManager.handleYield(coroutine, coroutine.thread.yieldedValues, previousCoroutine)
 
+            // Clean up call stack frames added by coroutine
+            context.cleanupCallStackFrames?.invoke(currentCallStackSize)
+
             // Restore native call depth
             val savedDepth = stateManager.getSavedNativeDepth(coroutine)
             context.saveNativeCallDepth?.invoke(savedDepth)
@@ -193,6 +200,10 @@ class CoroutineLib : LuaLibrary {
         } catch (e: Exception) {
             // Coroutine errored - call stack already saved by VM
             stateManager.handleError(coroutine, previousCoroutine)
+
+            // Clean up call stack frames added by coroutine
+            println("DEBUG CoroutineLib: Cleaning up frames after ERROR to size $currentCallStackSize")
+            context.cleanupCallStackFrames?.invoke(currentCallStackSize)
 
             // Restore native call depth
             val savedDepth = stateManager.getSavedNativeDepth(coroutine)

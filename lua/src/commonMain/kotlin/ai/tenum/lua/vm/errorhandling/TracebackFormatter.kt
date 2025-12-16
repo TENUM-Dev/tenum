@@ -37,6 +37,7 @@ object TracebackFormatter {
         messagePrefix: String = "",
         startIndex: Int = 0,
         useUpvalueDescriptor: Boolean = false,
+        isInCoroutine: Boolean = false,
     ): String =
         buildString {
             if (messagePrefix.isNotEmpty()) {
@@ -86,6 +87,13 @@ object TracebackFormatter {
                         useUpvalueDescriptor = useUpvalueDescriptor,
                         addNewlineAfter = i < callStack.size - 1,
                     )
+            }
+
+            // Append final [C]: in ? frame only if NOT in a coroutine
+            // Lua 5.4.8: main chunk tracebacks include this, coroutine tracebacks don't
+            if (!isInCoroutine) {
+                appendLine()
+                append("\t[C]: in ?")
             }
         }
 

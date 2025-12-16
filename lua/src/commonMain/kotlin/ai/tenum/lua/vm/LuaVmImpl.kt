@@ -1625,6 +1625,7 @@ class LuaVmImpl(
                 getNativeCallDepth = { nativeCallDepth }, // Provide current native call depth
                 saveNativeCallDepth = { depth -> nativeCallDepth = depth }, // Save native call depth (for coroutine context isolation)
                 getCoroutineStateManager = { coroutineStateManager }, // Provide coroutine state manager
+                cleanupCallStackFrames = { initialSize -> callStackManager.cleanupFrames(initialSize) }, // Clean up call stack frames
             )
         libraryRegistry.initializeAll(context)
     }
