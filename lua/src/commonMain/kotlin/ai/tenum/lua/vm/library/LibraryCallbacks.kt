@@ -34,6 +34,30 @@ typealias GetMetamethodCallback = (value: LuaValue<*>, methodName: String) -> Lu
 typealias CallFunctionCallback = (function: LuaFunction, args: List<LuaValue<*>>) -> List<LuaValue<*>>
 
 /**
+ * Result of a function call with separate return values and __close exception.
+ * This matches Lua 5.4 semantics where return values are captured before __close runs.
+ * If __close throws, the return values are still available.
+ *
+ * @param returnValues The values returned by the function (captured before __close)
+ * @param closeException Exception thrown by __close metamethods, if any
+ */
+data class CallResult(
+    val returnValues: List<LuaValue<*>>,
+    val closeException: Exception? = null,
+)
+
+/**
+ * Callback to call a Lua function with explicit __close error handling.
+ * Returns both the captured return values and any exception from __close metamethods.
+ * This allows callers (like xpcall) to access return values even when __close fails.
+ *
+ * @param function The function to call
+ * @param args The arguments to pass
+ * @return CallResult with return values and optional __close exception
+ */
+typealias CallFunctionWithCloseCallback = (function: LuaFunction, args: List<LuaValue<*>>) -> CallResult
+
+/**
  * Callback to execute a Lua chunk.
  * @param chunk The source code to execute
  * @param chunkName The name for error messages

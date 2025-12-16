@@ -61,7 +61,7 @@ class BasicLib(
         registerRawOperations(registerGlobal)
 
         // Delegate to specialized modules
-        BasicLibErrorHandling.registerFunctions(registerGlobal, callFunction, context.getCallStack)
+        BasicLibErrorHandling.registerFunctions(registerGlobal, callFunction, context.getCallStack, context.vm)
         BasicLibIteration.registerFunctions(registerGlobal, getMetamethod, callFunction)
         BasicLibLoading(debugTracer).registerFunctions(registerGlobal, context)
     }

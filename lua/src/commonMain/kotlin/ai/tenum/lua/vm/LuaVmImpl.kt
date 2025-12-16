@@ -97,6 +97,23 @@ class LuaVmImpl(
         nextCallIsCloseMetamethod = true
     }
 
+    override fun clearCloseException() {
+        pendingCloseException = null
+        capturedReturnValues = null
+    }
+
+    override fun setCloseException(exception: Exception) {
+        pendingCloseException = exception
+    }
+
+    override fun getCloseException(): Exception? = pendingCloseException
+
+    fun setCapturedReturnValues(values: List<LuaValue<*>>) {
+        capturedReturnValues = values
+    }
+
+    fun getCapturedReturnValues(): List<LuaValue<*>>? = capturedReturnValues
+
     override fun preserveErrorCallStack(callStack: List<CallFrame>) {
         lastErrorCallStack = callStack
     }
@@ -230,6 +247,21 @@ class LuaVmImpl(
      * This is cleared after being read once to avoid stale data.
      */
     private var lastErrorCallStack: List<CallFrame>? = null
+
+    /**
+     * Exception from __close metamethods during RETURN.
+     * When __close throws during function return, we store it here so that
+     * callFunctionWithCloseHandling can access both return values and the exception.
+     * This matches Lua 5.4 semantics where return values are on stack before __close runs.
+     */
+    private var pendingCloseException: Exception? = null
+
+    /**
+     * Return values captured before __close ran.
+     * Stored here so they survive __close exceptions and can be accessed by
+     * callFunctionWithCloseHandling.
+     */
+    private var capturedReturnValues: List<LuaValue<*>>? = null
 
     /**
      * Original call stack snapshot for hooks.
@@ -1458,6 +1490,61 @@ class LuaVmImpl(
                     setMetamethodCallContext("__call")
                     // Recursively call through callFunction to support chained __call metamethods
                     callFunction(callMeta, listOf(func) + args)
+                } else {
+                    throw RuntimeException("attempt to call a ${func.type().name.lowercase()} value")
+                }
+            }
+        }
+
+    /**
+     * Call a function with explicit __close error handling.
+     * Returns both the captured return values and any exception from __close metamethods.
+     * This matches Lua 5.4 semantics where return values are placed on the stack before __close runs.
+     *
+     * @param func The function to call
+     * @param args The arguments to pass
+     * @return CallResult with return values and optional __close exception
+     */
+    fun callFunctionWithCloseHandling(
+        func: LuaValue<*>,
+        args: List<LuaValue<*>>,
+    ): ai.tenum.lua.vm.library.CallResult =
+        when (func) {
+            is LuaFunction -> {
+                // Clear any previous state
+                clearCloseException()
+
+                var returnValues: List<LuaValue<*>>? = null
+                var closeException: Exception? = null
+
+                try {
+                    returnValues = callFunctionInternal(func, args)
+                    // If successful, check if __close set an exception anyway (shouldn't happen)
+                    closeException = getCloseException()
+                } catch (e: Exception) {
+                    // Exception from __close or function body
+                    // Check if we captured return values before __close threw
+                    returnValues = getCapturedReturnValues()
+                    closeException = e
+                }
+
+                // If we have no return values but have captured ones, use them
+                if (returnValues == null && getCapturedReturnValues() != null) {
+                    returnValues = getCapturedReturnValues()
+                }
+
+                ai.tenum.lua.vm.library.CallResult(
+                    returnValues = returnValues ?: emptyList(),
+                    closeException = closeException,
+                )
+            }
+            else -> {
+                // Check for __call metamethod in the value's metatable
+                val callMeta = metamethodResolver.getMetamethod(func, "__call")
+                if (callMeta != null) {
+                    setMetamethodCallContext("__call")
+                    // Recursively call through callFunctionWithCloseHandling
+                    callFunctionWithCloseHandling(callMeta, listOf(func) + args)
                 } else {
                     throw RuntimeException("attempt to call a ${func.type().name.lowercase()} value")
                 }

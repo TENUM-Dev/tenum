@@ -299,14 +299,27 @@ object CallOpcodes {
         // Note: Error call stack preservation is handled at the VM level (LuaVmImpl.executeProto)
         // where LuaRuntimeError is caught BEFORE conversion to LuaException, ensuring the full
         // call stack with isCloseMetamethod flags is preserved for debug.traceback()
-        frame.executeCloseMetamethods(0) { upvalue, capturedValue, errorArg ->
-            env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
-            val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
-            if (closeFn != null) {
-                // Call __close - errors should propagate normally
-                env.setNextCallIsCloseMetamethod()
-                env.callFunction(closeFn, listOf(capturedValue, errorArg))
+        //
+        // IMPORTANT: Store return values and any exception from __close for two-phase return handling
+        // This allows xpcall to access return values even when __close fails
+        // This matches Lua 5.4 semantics where return values are placed on stack before __close runs
+        env.clearCloseException()
+        env.storeCapturedReturnValues(results)
+        try {
+            frame.executeCloseMetamethods(0) { upvalue, capturedValue, errorArg ->
+                env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
+                val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
+                if (closeFn != null) {
+                    // Call __close - errors should propagate normally
+                    env.setNextCallIsCloseMetamethod()
+                    env.callFunction(closeFn, listOf(capturedValue, errorArg))
+                }
             }
+        } catch (e: Exception) {
+            // Store the __close exception for two-phase handling
+            env.setCloseException(e)
+            // Re-throw so normal error handling works
+            throw e
         }
 
         env.debug("  Return ${results.size} values (after __close): $results")

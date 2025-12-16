@@ -81,6 +81,18 @@ class ExecutionEnvironment(
 
     fun setNextCallIsCloseMetamethod() = vmCapabilities.setNextCallIsCloseMetamethod()
 
+    fun clearCloseException() = vmCapabilities.clearCloseException()
+
+    fun setCloseException(exception: Exception) = vmCapabilities.setCloseException(exception)
+
+    fun getCloseException(): Exception? = vmCapabilities.getCloseException()
+
+    fun storeCapturedReturnValues(values: List<LuaValue<*>>) {
+        // Store captured return values so they survive __close exceptions
+        // This is implemented directly since it's specific to LuaVmImpl
+        (vmCapabilities as? ai.tenum.lua.vm.LuaVmImpl)?.setCapturedReturnValues(values)
+    }
+
     fun preserveErrorCallStack(callStack: List<ai.tenum.lua.vm.CallFrame>) = vmCapabilities.preserveErrorCallStack(callStack)
 
     fun markCurrentFrameAsReturning() = vmCapabilities.markCurrentFrameAsReturning()

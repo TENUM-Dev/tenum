@@ -32,6 +32,12 @@ interface VmCapabilities {
         args: List<LuaValue<*>>,
     ): List<LuaValue<*>>
 
+    fun clearCloseException()
+
+    fun setCloseException(exception: Exception)
+
+    fun getCloseException(): Exception?
+
     fun isTruthy(value: LuaValue<*>): Boolean
 
     fun luaEquals(
