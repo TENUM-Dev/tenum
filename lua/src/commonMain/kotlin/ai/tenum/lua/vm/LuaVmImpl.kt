@@ -687,12 +687,17 @@ class LuaVmImpl(
         function: LuaFunction? = null,
         mode: ExecutionMode = ExecutionMode.FreshCall,
     ): List<LuaValue<*>> {
+        // Remember entry call depth so we can fully restore it on exit (even on errors).
+        // This prevents leaked callDepth increments when trampolined calls abort, which
+        // would otherwise starve error handlers/__close of stack headroom (locals.lua:611).
+        val callDepthBase = callDepth
+
         // Check call depth to prevent stack overflow (Lua 5.4 behavior)
         // Only check for fresh calls, not coroutine resumptions
         if (mode is ExecutionMode.FreshCall) {
             callDepth++
             if (callDepth > maxCallDepth) {
-                callDepth-- // Reset before throwing
+                callDepth = callDepthBase // Reset before throwing
                 throw LuaException(
                     errorMessageOnly = "C stack overflow",
                     line = null,
@@ -1460,10 +1465,8 @@ class LuaVmImpl(
                 else -> throw e
             }
         } finally {
-            // Decrement call depth (only for fresh calls, not resumptions)
-            if (mode is ExecutionMode.FreshCall) {
-                callDepth--
-            }
+            // Restore call depth to entry value (cleans up leaked increments on error paths)
+            callDepth = callDepthBase
 
             // Remove all frames added during this execution (including tail-called frames)
             // This cleans up the call stack after trampolined tail calls
