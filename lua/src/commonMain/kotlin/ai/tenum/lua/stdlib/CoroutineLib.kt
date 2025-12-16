@@ -177,7 +177,6 @@ class CoroutineLib : LuaLibrary {
             stateManager.completeCoroutine(coroutine, results, previousCoroutine)
 
             // Clean up call stack frames added by coroutine
-            println("DEBUG CoroutineLib: Cleaning up frames to size $currentCallStackSize")
             context.cleanupCallStackFrames?.invoke(currentCallStackSize)
 
             // Restore native call depth
@@ -202,7 +201,6 @@ class CoroutineLib : LuaLibrary {
             stateManager.handleError(coroutine, previousCoroutine)
 
             // Clean up call stack frames added by coroutine
-            println("DEBUG CoroutineLib: Cleaning up frames after ERROR to size $currentCallStackSize")
             context.cleanupCallStackFrames?.invoke(currentCallStackSize)
 
             // Restore native call depth

@@ -793,6 +793,7 @@ class DebugLib : LuaLibrary {
                                 message,
                                 startIndex,
                                 useUpvalueDescriptor = true, // Use upvalue descriptor for both suspended and dead coroutines
+                                isInCoroutine = true, // Coroutine tracebacks don't include final [C]: in ? frame
                             )
                         } else {
                             // Coroutine finished or hasn't yielded yet - return just header
@@ -817,17 +818,22 @@ class DebugLib : LuaLibrary {
                 }
             } else if (currentContext != null) {
                 // Check if there's a preserved error call stack (e.g., from __close metamethod)
-                // If so, use it instead of the current stack to show the __close frames
+                // Only use it in main thread context, not in coroutines (which have their own error handling)
+                // This prevents stale error stacks from dead coroutines contaminating new coroutine tracebacks
                 val lastErrorStack = currentContext.getAndClearLastErrorCallStack()
 
                 // Get stack view for coroutine boundary check and level calculation
                 val stackView = currentContext.getStackView()
                 val snapshot = currentContext.getHookSnapshot()
-                println("DEBUG: snapshot = $snapshot, lastErrorStack = ${lastErrorStack?.size}")
+
+                // Check if we're currently in a coroutine
+                val currentCo = libContext?.getCurrentCoroutine?.invoke()
+                val isInCoroutine = currentCo != null
 
                 val rawCallStack =
-                    if (lastErrorStack != null && lastErrorStack.isNotEmpty()) {
-                        // Use the preserved error stack which includes __close frames
+                    if (lastErrorStack != null && lastErrorStack.isNotEmpty() && !isInCoroutine) {
+                        // Use the preserved error stack only in main thread context (not in coroutines)
+                        // This handles __close metamethod errors where the stack has already unwound
                         lastErrorStack.asReversed() // Most-recent-first for traceback
                     } else {
                         // Normal path: get stack from view - automatically handles hook context
@@ -840,9 +846,7 @@ class DebugLib : LuaLibrary {
                             stackView.forTraceback() + snapshot.frames.asReversed()
                         } else {
                             // Normal context: use stack as-is (most-recent-first for traceback)
-                            val result = stackView.forTraceback()
-                            println("DEBUG: stackView.forTraceback().size = ${result.size}, lines = ${result.map { it.getCurrentLine() }}")
-                            result
+                            stackView.forTraceback()
                         }
                     }
 
@@ -850,7 +854,6 @@ class DebugLib : LuaLibrary {
                 // PUC Lua's debug.traceback() filters intermediate C frames (like assert, string.match)
                 // when called from within a hook function, but NOT in normal contexts
                 // Error tracebacks always show C frames regardless of context
-                println("DEBUG: rawCallStack.size = ${rawCallStack.size}, lines = ${rawCallStack.map { it.getCurrentLine() }}")
                 val filteredCFrames =
                     if (snapshot != null && rawCallStack.isNotEmpty()) {
                         // In hook context: filter out C frames except the final runner
@@ -869,18 +872,9 @@ class DebugLib : LuaLibrary {
 
                 // When in a coroutine, filter frames to only show those within the coroutine
                 // This prevents leaking frames from outside the coroutine boundary
-                val currentCo = libContext?.getCurrentCoroutine?.invoke()
                 // Only treat as "in coroutine" if the coroutine is actually running (not dead/suspended with saved stack)
-                val isActiveCoroutine = currentCo != null && currentCo.status == ai.tenum.lua.runtime.CoroutineStatus.RUNNING
-                
-                // DEBUG: Log current coroutine state
-                if (currentCo != null) {
-                    println("DEBUG: currentCo status = ${currentCo.status}, isActiveCoroutine = $isActiveCoroutine")
-                    println("DEBUG: callStackBase = ${currentCo.thread.callStackBase}")
-                    println("DEBUG: stackView.size = ${stackView.size}")
-                    println("DEBUG: filteredCFrames.size = ${filteredCFrames.size}")
-                    println("DEBUG: filteredCFrames BEFORE dropLast = ${filteredCFrames.map { "line ${it.getCurrentLine()}" }}")
-                }
+                val isActiveCoroutine = isInCoroutine && currentCo!!.status == ai.tenum.lua.runtime.CoroutineStatus.RUNNING
+
                 val filteredByBoundary =
                     if (isActiveCoroutine) {
                         // Only apply filtering when getting traceback of current thread (not another coroutine)
@@ -891,10 +885,7 @@ class DebugLib : LuaLibrary {
                         val totalFrames = if (lastErrorStack != null) filteredCFrames.size else stackView.size
                         if (callStackBase > 0 && callStackBase < totalFrames) {
                             val framesToDrop = callStackBase
-                            val result = filteredCFrames.dropLast(framesToDrop)
-                            println("DEBUG: After dropLast($framesToDrop), result.size = ${result.size}")
-                            println("DEBUG: result frames = ${result.map { "line ${it.getCurrentLine()}: ${it.isNative}" }}")
-                            result
+                            filteredCFrames.dropLast(framesToDrop)
                         } else {
                             filteredCFrames
                         }
@@ -921,8 +912,6 @@ class DebugLib : LuaLibrary {
                             }
                         }
                     }
-                
-                println("DEBUG: callStack.size after filtering = ${callStack.size}")
 
                 // Level semantics:
                 // level 0 = include debug.traceback itself (start at index 0)
@@ -937,7 +926,6 @@ class DebugLib : LuaLibrary {
                         val offset = if (snapshot != null) 0 else 1
                         (requestedLevel - 1 + offset).coerceIn(0, callStack.size)
                     }
-                println("DEBUG: startIndex = $startIndex, requestedLevel = $requestedLevel")
                 // Pass isInCoroutine flag to control whether to append final [C]: in ? frame
                 // Use isActiveCoroutine (not just currentCo != null) to avoid including final [C] for dead coroutines
                 TracebackFormatter.formatTraceback(callStack, message, startIndex, isInCoroutine = isActiveCoroutine)

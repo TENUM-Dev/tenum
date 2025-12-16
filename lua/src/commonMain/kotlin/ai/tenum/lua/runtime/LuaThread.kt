@@ -4,7 +4,9 @@ package ai.tenum.lua.runtime
  * Represents a Lua thread (coroutine) value
  * Threads are used for cooperative multitasking in Lua
  */
-class LuaThread : LuaValue<Unit>, ai.tenum.lua.vm.debug.ThreadHookState {
+class LuaThread :
+    LuaValue<Unit>,
+    ai.tenum.lua.vm.debug.ThreadHookState {
     override val value: Unit = Unit
 
     /**

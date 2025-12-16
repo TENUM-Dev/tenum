@@ -276,6 +276,7 @@ class LuaVmImpl(
 
     // Debug components
     private val debugTracer = DebugTracer()
+
     /**
      * Get the current thread's hook state holder (LuaThread for main, CoroutineThread for coroutines)
      */
