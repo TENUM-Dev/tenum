@@ -615,4 +615,52 @@ end
         """,
             )
         }
+
+    @Test
+    fun testReturnHooksForCloseMetamethods() =
+        runTest {
+            // Test from locals.lua:780-808
+            // Return hooks should fire when __close metamethods return
+            vm.debugEnabled = true
+            execute(
+                """
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            local trace = {}
+            
+            local function hook (event)
+              trace[#trace + 1] = event .. " " .. debug.getinfo(2).name
+            end
+            
+            local function foo (...)
+              local x <close> = func2close(function (_,msg)
+                trace[#trace + 1] = "x"
+              end)
+            
+              local y <close> = func2close(function (_,msg)
+                debug.sethook(hook, "r")
+              end)
+            
+              return ...
+            end
+            
+            local t = {foo(10,20,30)}
+            debug.sethook()
+            
+            -- Check results
+            assert(#t == 3 and t[1] == 10 and t[2] == 20 and t[3] == 30, "Results should be 10, 20, 30")
+            
+            -- Check trace
+            -- Expected: "return sethook", "return close", "x", "return close", "return foo"
+            assert(#trace == 5, "Expected 5 trace entries, got " .. #trace)
+            assert(trace[1] == "return sethook", "Expected 'return sethook', got '" .. tostring(trace[1]) .. "'")
+            assert(trace[2] == "return close", "Expected 'return close', got '" .. tostring(trace[2]) .. "'")
+            assert(trace[3] == "x", "Expected 'x', got '" .. tostring(trace[3]) .. "'")
+            assert(trace[4] == "return close", "Expected 'return close', got '" .. tostring(trace[4]) .. "'")
+            assert(trace[5] == "return foo", "Expected 'return foo', got '" .. tostring(trace[5]) .. "'")
+        """,
+            )
+        }
 }

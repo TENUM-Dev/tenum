@@ -625,6 +625,7 @@ class LuaVmImpl(
                     try {
                         // Pass the current error to the __close metamethod
                         // Mark this as a __close metamethod call so debug.getinfo can skip it
+                        setMetamethodCallContext("__close")
                         nextCallIsCloseMetamethod = true
                         callFunctionInternal(closeMethod, listOf(capturedValue, currentError), isCloseMetamethod = true)
                     } catch (closeEx: LuaException) {

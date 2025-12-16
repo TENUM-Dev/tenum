@@ -311,6 +311,7 @@ object CallOpcodes {
                 val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
                 if (closeFn != null) {
                     // Call __close - errors should propagate normally
+                    env.setMetamethodCallContext("__close")
                     env.setNextCallIsCloseMetamethod()
                     env.callFunction(closeFn, listOf(capturedValue, errorArg))
                 }

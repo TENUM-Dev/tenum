@@ -389,6 +389,7 @@ internal class OpcodeDispatcher(
 
             OpCode.CLOSE -> {
                 FrameOpcodes.executeClose(instr, execFrame, env) { closeFun, value, errorArg ->
+                    env.setMetamethodCallContext("__close")
                     env.setNextCallIsCloseMetamethod()
                     callFunction(closeFun, listOf(value, errorArg)) // Return value is ignored by executeClose
                     Unit // Explicitly return Unit
