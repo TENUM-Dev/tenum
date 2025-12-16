@@ -87,6 +87,14 @@ class ExecutionEnvironment(
 
     fun getCloseException(): Exception? = vmCapabilities.getCloseException()
 
+    fun setYieldResumeContext(
+        targetReg: Int,
+        encodedCount: Int,
+        stayOnSamePc: Boolean = false,
+    ) = vmCapabilities.setYieldResumeContext(targetReg, encodedCount, stayOnSamePc)
+
+    fun clearYieldResumeContext() = vmCapabilities.clearYieldResumeContext()
+
     fun storeCapturedReturnValues(values: List<LuaValue<*>>) {
         // Store captured return values so they survive __close exceptions
         // This is implemented directly since it's specific to LuaVmImpl

@@ -35,6 +35,10 @@ class ExecutionFrame(
     existingRegisters: MutableList<LuaValue<*>>? = null,
     /** Existing varargs (for resumption) */
     existingVarargs: List<LuaValue<*>>? = null,
+    /** Existing to-be-closed variables (for resumption) */
+    existingToBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>? = null,
+    /** Existing open upvalues map (for resumption) */
+    existingOpenUpvalues: MutableMap<Int, Upvalue>? = null,
 ) {
     /** Register array (local variables and temporaries) - uses MutableList for dynamic growth */
     val registers: MutableList<LuaValue<*>> =
@@ -92,14 +96,14 @@ class ExecutionFrame(
      * Key: register index, Value: Upvalue object.
      * Must be closed when frame exits or when CLOSE instruction executes.
      */
-    val openUpvalues = mutableMapOf<Int, Upvalue>()
+    val openUpvalues: MutableMap<Int, Upvalue> = existingOpenUpvalues ?: mutableMapOf()
 
     /**
      * To-be-closed variables - tracks <close> variables for proper __close metamethod invocation.
      * Stores (register index, value) pairs in declaration order.
      * __close called in reverse order on scope exit.
      */
-    val toBeClosedVars = mutableListOf<Pair<Int, LuaValue<*>>>()
+    val toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>> = existingToBeClosedVars ?: mutableListOf()
 
     init {
         // Load initial arguments into parameter registers (if not resuming)

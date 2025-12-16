@@ -45,6 +45,7 @@ data class ResumptionState(
     val varargs: List<LuaValue<*>>,
     val yieldTargetRegister: Int,
     val yieldExpectedResults: Int,
+    val toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>,
     /**
      * Call stack frames for debug tracebacks.
      * These represent the accumulated call history across all yield/resume cycles.

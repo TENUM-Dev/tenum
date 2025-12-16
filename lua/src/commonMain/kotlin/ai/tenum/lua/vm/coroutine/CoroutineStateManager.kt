@@ -274,6 +274,8 @@ class CoroutineStateManager {
         yieldTargetRegister: Int,
         yieldExpectedResults: Int,
         callStack: List<ai.tenum.lua.vm.CallFrame>,
+        toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>,
+        incrementPc: Boolean = true,
     ) {
         val co = coroutine ?: return
 
@@ -284,13 +286,14 @@ class CoroutineStateManager {
             }
 
         thread.proto = proto
-        thread.pc = programCounter + 1 // Resume at next instruction after yield
+        thread.pc = programCounter + if (incrementPc) 1 else 0 // Optionally stay on same PC (e.g., __close yields)
         thread.registers = registers.toMutableList()
         thread.upvalues = upvalues.toList() // Save upvalues for correct closure context
         thread.varargs = varargs
         thread.yieldedValues = yieldedValues
         thread.yieldTargetRegister = yieldTargetRegister
         thread.yieldExpectedResults = yieldExpectedResults
+        thread.toBeClosedVars = toBeClosedVars
         thread.savedCallStack = callStack.toList() // Save a copy of the call stack
     }
 }

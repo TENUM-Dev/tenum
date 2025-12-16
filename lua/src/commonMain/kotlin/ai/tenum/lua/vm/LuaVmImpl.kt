@@ -114,6 +114,22 @@ class LuaVmImpl(
 
     fun getCapturedReturnValues(): List<LuaValue<*>>? = capturedReturnValues
 
+    override fun setYieldResumeContext(
+        targetReg: Int,
+        encodedCount: Int,
+        stayOnSamePc: Boolean,
+    ) {
+        pendingYieldTargetReg = targetReg
+        pendingYieldEncodedCount = encodedCount
+        pendingYieldStayOnSamePc = stayOnSamePc
+    }
+
+    override fun clearYieldResumeContext() {
+        pendingYieldTargetReg = null
+        pendingYieldEncodedCount = null
+        pendingYieldStayOnSamePc = false
+    }
+
     override fun preserveErrorCallStack(callStack: List<CallFrame>) {
         lastErrorCallStack = callStack
     }
@@ -263,6 +279,14 @@ class LuaVmImpl(
      */
     private var capturedReturnValues: List<LuaValue<*>>? = null
 
+    /**
+     * Yield resume context for yields triggered outside CALL opcodes (e.g., __close metamethods).
+     * When coroutine.yield is invoked from an internal call whose results are ignored,
+     * we set encodedCount=1 (store zero results) to avoid corrupting registers on resume.
+     */
+    private var pendingYieldTargetReg: Int? = null
+    private var pendingYieldEncodedCount: Int? = null
+    private var pendingYieldStayOnSamePc: Boolean = false
     /**
      * Original call stack snapshot for hooks.
      * When a hook is executing, this contains the call stack from where the hook was triggered,
@@ -627,7 +651,12 @@ class LuaVmImpl(
                         // Mark this as a __close metamethod call so debug.getinfo can skip it
                         setMetamethodCallContext("__close")
                         nextCallIsCloseMetamethod = true
-                        callFunctionInternal(closeMethod, listOf(capturedValue, currentError), isCloseMetamethod = true)
+                        setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+                        try {
+                            callFunctionInternal(closeMethod, listOf(capturedValue, currentError), isCloseMetamethod = true)
+                        } finally {
+                            clearYieldResumeContext()
+                        }
                     } catch (closeEx: LuaException) {
                         // If __close throws, that becomes the new error
                         // The errorValue from LuaException already has location info for strings
@@ -739,6 +768,7 @@ class LuaVmImpl(
                 initialPc = resumptionState?.pc ?: 0,
                 existingRegisters = resumptionState?.registers,
                 existingVarargs = resumptionState?.varargs,
+                existingToBeClosedVars = resumptionState?.toBeClosedVars,
             )
 
         // Local aliases for frequently accessed frame state
@@ -1248,8 +1278,8 @@ class LuaVmImpl(
             if (!e.stateSaved) {
                 // The yield was triggered by a CALL instruction, so instructions[pc] has the target register and result count
                 val yieldInstr = if (pc < instructions.size) instructions[pc] else null
-                val yieldTargetReg = yieldInstr?.a ?: 0
-                val yieldExpectedResults = yieldInstr?.c ?: 0
+                val yieldTargetReg = pendingYieldTargetReg ?: yieldInstr?.a ?: 0
+                val yieldExpectedResults = pendingYieldEncodedCount ?: yieldInstr?.c ?: 0
 
                 // Filter call stack to only include coroutine's frames (not main thread frames)
                 // Save coroutine state for resume
@@ -1268,9 +1298,12 @@ class LuaVmImpl(
                     yieldTargetReg,
                     yieldExpectedResults,
                     coroutineCallStack, // Save only coroutine's call stack (without main thread frames)
+                    execFrame.toBeClosedVars.toMutableList(),
+                    incrementPc = !pendingYieldStayOnSamePc,
                 )
                 e.stateSaved = true // Mark that state has been saved
             }
+            clearYieldResumeContext()
             throw e // Re-throw to be caught by coroutineResume
         } catch (e: LuaRuntimeError) {
             // Preserve the full call stack from LuaRuntimeError BEFORE converting to LuaException
@@ -1468,6 +1501,7 @@ class LuaVmImpl(
         } finally {
             // Restore call depth to entry value (cleans up leaked increments on error paths)
             callDepth = callDepthBase
+            clearYieldResumeContext()
 
             // Remove all frames added during this execution (including tail-called frames)
             // This cleans up the call stack after trampolined tail calls
@@ -1713,6 +1747,7 @@ class LuaVmImpl(
                                     varargs = thread.varargs,
                                     yieldTargetRegister = thread.yieldTargetRegister,
                                     yieldExpectedResults = thread.yieldExpectedResults,
+                                    toBeClosedVars = thread.toBeClosedVars,
                                     debugCallStack = thread.savedCallStack,
                                 ),
                             )

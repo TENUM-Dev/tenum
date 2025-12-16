@@ -66,6 +66,7 @@ class CoroutineThread : ai.tenum.lua.vm.debug.ThreadHookState {
     var varargs: List<LuaValue<*>> = emptyList() // Save varargs for VARARG opcode
     var yieldTargetRegister: Int = 0 // Register where yield call results should go
     var yieldExpectedResults: Int = 0 // Number of results expected by CALL (c field)
+    var toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>> = mutableListOf()
 
     // Call stack boundary: index in global call stack where this coroutine's frames start
     // Used to filter out main thread frames when saving coroutine's call stack
@@ -103,6 +104,7 @@ class CoroutineThread : ai.tenum.lua.vm.debug.ThreadHookState {
         savedCallStack = emptyList()
         yieldedValues = emptyList()
         returnValues = emptyList()
+        toBeClosedVars = mutableListOf()
         // Don't reset hook state - it persists across yields
         continuation = null
         savedNativeCallDepth = 0

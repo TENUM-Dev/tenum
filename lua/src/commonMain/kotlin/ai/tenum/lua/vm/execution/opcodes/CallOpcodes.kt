@@ -312,8 +312,13 @@ object CallOpcodes {
                 if (closeFn != null) {
                     // Call __close - errors should propagate normally
                     env.setMetamethodCallContext("__close")
+                    env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true) // store zero results on resume
                     env.setNextCallIsCloseMetamethod()
-                    env.callFunction(closeFn, listOf(capturedValue, errorArg))
+                    try {
+                        env.callFunction(closeFn, listOf(capturedValue, errorArg))
+                    } finally {
+                        env.clearYieldResumeContext()
+                    }
                 }
             }
         } catch (e: Exception) {

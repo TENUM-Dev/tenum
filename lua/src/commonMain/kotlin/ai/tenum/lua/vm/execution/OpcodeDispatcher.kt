@@ -390,9 +390,14 @@ internal class OpcodeDispatcher(
             OpCode.CLOSE -> {
                 FrameOpcodes.executeClose(instr, execFrame, env) { closeFun, value, errorArg ->
                     env.setMetamethodCallContext("__close")
+                    env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true) // __close results ignored
                     env.setNextCallIsCloseMetamethod()
-                    callFunction(closeFun, listOf(value, errorArg)) // Return value is ignored by executeClose
-                    Unit // Explicitly return Unit
+                    try {
+                        callFunction(closeFun, listOf(value, errorArg)) // Return value is ignored by executeClose
+                        Unit // Explicitly return Unit
+                    } finally {
+                        env.clearYieldResumeContext()
+                    }
                 }
                 DispatchResult.Continue
             }

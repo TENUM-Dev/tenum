@@ -38,6 +38,15 @@ interface VmCapabilities {
 
     fun getCloseException(): Exception?
 
+    /**
+     * When a function call can yield but its results are ignored (e.g., __close metamethods),
+     * we need to control how coroutine resume stores the yielded values.
+     * Setting encodedCount=1 makes resume store zero results (Lua CALL c=1 semantics).
+     */
+    fun setYieldResumeContext(targetReg: Int, encodedCount: Int, stayOnSamePc: Boolean = false)
+
+    fun clearYieldResumeContext()
+
     fun isTruthy(value: LuaValue<*>): Boolean
 
     fun luaEquals(
