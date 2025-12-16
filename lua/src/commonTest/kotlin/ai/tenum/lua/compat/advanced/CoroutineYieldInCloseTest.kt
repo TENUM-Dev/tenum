@@ -154,8 +154,10 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
             end)
             local result = co()
             assert(result == "z", "First yield should be 'z' but is " .. tostring(result))
-            assert(co() == "y", "Second yield should be 'y'")
-            assert(co() == "x", "Third yield should be 'x'")
+            local result = co()
+            assert(result == "y", "Second yield should be 'y' but is " .. tostring(result))
+            local result = co()
+            assert(result == "x", "Third yield should be 'x' but is " .. tostring(result))
             
             local results = {co()}
             assert(#results == 4, "Should have 4 return values, got " .. #results)

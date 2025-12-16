@@ -345,6 +345,13 @@ class LuaVmImpl(
     private val closeOwnerFrameStack = mutableListOf<ExecutionFrame>()
 
     /**
+     * Currently active execution frame.
+     * Set at the start of executeProto and used by callFunction to push caller frames.
+     * This allows native functions (like pcall) to access their calling frame for TBC tracking.
+     */
+    private var activeExecutionFrame: ExecutionFrame? = null
+
+    /**
      * Yield resume context for yields triggered outside CALL opcodes (e.g., __close metamethods).
      * When coroutine.yield is invoked from an internal call whose results are ignored,
      * we set encodedCount=1 (store zero results) to avoid corrupting registers on resume.
@@ -849,6 +856,9 @@ class LuaVmImpl(
             }
         }
 
+        // Track active execution frame for native function calls
+        activeExecutionFrame = execFrame
+
         // Local aliases for frequently accessed frame state
         var registers = execFrame.registers
         var constants = execFrame.constants
@@ -881,58 +891,8 @@ class LuaVmImpl(
                 )
             }
 
-            // Step 2: Only process remaining TBC if we don't have captured returns
+            // Step 2: Check if we should return captured values immediately
             // If we have captured returns, the close chain is complete - just return them
-            val shouldProcessRemainingTbc = closeState.capturedReturnValues == null || closeState.capturedReturnValues.isEmpty()
-            
-            val remainingTbc = if (shouldProcessRemainingTbc) {
-                closeState.pendingTbcList
-                    .filter { (regIndex, _) ->
-                        // Process vars declared before pendingCloseVar (lower register indices)
-                        // Close in reverse order: if pendingCloseVar is reg 1, we process reg 0 next
-                        val pendingReg = closeState.pendingCloseVar?.first ?: Int.MAX_VALUE
-                        regIndex >= closeState.startReg && regIndex < pendingReg
-                    }
-                    .asReversed() // close in reverse declaration order
-            } else {
-                emptyList()
-            }
-
-            if (remainingTbc.isNotEmpty()) {
-                try {
-                    // Process remaining TBC variables using captured values
-                    // Note: pendingTbcList has (regIndex, capturedValue) pairs
-                    // execFrame.toBeClosedVars has (regIndex, upvalue) pairs
-                    for ((regIndex, capturedValue) in remainingTbc) {
-                        // Find the upvalue in the frame's TBC list
-                        val tbcEntry = execFrame.toBeClosedVars.find { it.first == regIndex }
-                        if (tbcEntry != null) {
-                            val tbcValue = tbcEntry.second // This is the LuaValue with __close metamethod
-                            
-                            // Get __close metamethod from the value
-                            val closeFn = getMetamethod(tbcValue, "__close") as? LuaFunction
-                            if (closeFn != null) {
-                                env.setMetamethodCallContext("__close")
-                                env.setPendingCloseVar(regIndex, capturedValue)
-                                env.setPendingCloseErrorArg(closeState.errorArg)
-                                env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
-                                env.setNextCallIsCloseMetamethod()
-                                try {
-                                    env.callFunction(closeFn, listOf(capturedValue, closeState.errorArg))
-                                } finally {
-                                    env.clearPendingCloseVar()
-                                    env.clearYieldResumeContext()
-                                }
-                            }
-                            execFrame.toBeClosedVars.removeAll { it.first == regIndex }
-                        }
-                    }
-                } catch (e: Exception) {
-                    throw e
-                }
-            }
-
-            // Step 3: Check if we should return captured values or continue execution
             if (closeState.capturedReturnValues != null && closeState.capturedReturnValues.isNotEmpty()) {
                 // Clear active close state - we're done with this close chain
                 activeCloseResumeState = null
@@ -940,12 +900,15 @@ class LuaVmImpl(
                 return closeState.capturedReturnValues
             }
 
-            // Step 4: If no return values, rebuild owner frame and continue dispatch
+            // Step 3: Rebuild owner frame if we're resuming into a different frame (e.g., after pcall)
+            // This must happen BEFORE processing TBC vars so we use the correct frame's TBC list
+            val frameToUseForTbc: ExecutionFrame
             if (closeState.ownerProto != null) {
                 // Clear active close state - we're continuing with the owner frame
                 activeCloseResumeState = null
                 
                 println("[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}")
+                println("[RESUME CloseState] pendingTbcList.size=${closeState.pendingTbcList.size} pendingTbcList=${ closeState.pendingTbcList}")
                 
                 // Restore TBC list from CloseResumeState, filtering out vars we've already processed
                 val restoredTbc = closeState.pendingTbcList
@@ -979,8 +942,69 @@ class LuaVmImpl(
                 toBeClosedVars = ownerFrame.toBeClosedVars
                 varargs = ownerFrame.varargs
                 env = ExecutionEnvironment(ownerFrame, globals, this)
-                // Continue to opcode dispatch
+                
+                frameToUseForTbc = ownerFrame
+            } else {
+                // No owner frame rebuild needed, use current execFrame
+                frameToUseForTbc = execFrame
             }
+
+            // Step 4: Process remaining TBC variables from the correct frame
+            val shouldProcessRemainingTbc = closeState.capturedReturnValues == null || closeState.capturedReturnValues.isEmpty()
+            
+            val remainingTbc = if (shouldProcessRemainingTbc) {
+                val filtered = closeState.pendingTbcList
+                    .filter { (regIndex, _) ->
+                        // Process vars declared before pendingCloseVar (lower register indices)
+                        // Close in reverse order: if pendingCloseVar is reg 1, we process reg 0 next
+                        val pendingReg = closeState.pendingCloseVar?.first ?: Int.MAX_VALUE
+                        regIndex >= closeState.startReg && regIndex < pendingReg
+                    }
+                    .asReversed() // close in reverse declaration order
+                println("[RESUME CloseState] After filtering: remainingTbc.size=${filtered.size} remainingTbc=$filtered")
+                println("[RESUME CloseState] startReg=${closeState.startReg} pendingCloseVar=${closeState.pendingCloseVar}")
+                filtered
+            } else {
+                emptyList()
+            }
+
+            if (remainingTbc.isNotEmpty()) {
+                try {
+                    // Process remaining TBC variables using captured values
+                    // Note: pendingTbcList has (regIndex, capturedValue) pairs
+                    // frameToUseForTbc.toBeClosedVars has (regIndex, upvalue) pairs
+                    for ((regIndex, capturedValue) in remainingTbc) {
+                        // Find the upvalue in the frame's TBC list
+                        val tbcEntry = frameToUseForTbc.toBeClosedVars.find { it.first == regIndex }
+                        if (tbcEntry != null) {
+                            val tbcValue = tbcEntry.second // This is the LuaValue with __close metamethod
+                            
+                            // Get __close metamethod from the value
+                            val closeFn = getMetamethod(tbcValue, "__close") as? LuaFunction
+                            if (closeFn != null) {
+                                env.setMetamethodCallContext("__close")
+                                env.setPendingCloseVar(regIndex, capturedValue)
+                                env.setPendingCloseErrorArg(closeState.errorArg)
+                                env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+                                env.setNextCallIsCloseMetamethod()
+                                try {
+                                    env.callFunction(closeFn, listOf(capturedValue, closeState.errorArg))
+                                } finally {
+                                    env.clearPendingCloseVar()
+                                    env.clearYieldResumeContext()
+                                }
+                            }
+                            frameToUseForTbc.toBeClosedVars.removeAll { it.first == regIndex }
+                        }
+                    }
+                } catch (e: Exception) {
+                    throw e
+                }
+            }
+
+            // Step 5: If owner frame was rebuilt, continue to opcode dispatch
+            // The frame was already rebuilt in Step 3 above
+            // No additional action needed here
         }
 
         // Handle coroutine resumption - place resume args as yield return values
@@ -1534,12 +1558,16 @@ class LuaVmImpl(
                     )
                     
                     // Owner frame selection:
-                    // - Use pendingCloseOwnerFrame if set (current function returning)
-                    // - Fall back to closeOwnerFrameStack for cross-native-boundary cases
-                    val ownerFrameFromStack = closeOwnerFrameStack.lastOrNull()
-                    val ownerFrame = pendingCloseOwnerFrame ?: ownerFrameFromStack
+                    // - PREFER closeOwnerFrameStack (contains caller's frame with outer __close handlers)
+                    // - Find the LAST frame that has TBC vars (outer frames with __close to process)
+                    // - Fall back to pendingCloseOwnerFrame only if no frames with TBC found
+                    // This ensures that for pcall cases, we capture the outer caller's TBC list (x)
+                    // not just the inner function's TBC list (z, y)
+                    val ownerFrameFromStack = closeOwnerFrameStack.lastOrNull { it.toBeClosedVars.isNotEmpty() }
+                    val ownerFrame = ownerFrameFromStack ?: pendingCloseOwnerFrame
                     println("[YIELD CloseState] closeOwnerFrameStack.size=${closeOwnerFrameStack.size}, pendingCloseOwnerFrame=${pendingCloseOwnerFrame != null}")
-                    println("[YIELD CloseState] Using ownerFrame from ${if (pendingCloseOwnerFrame != null) "pendingCloseOwnerFrame" else "STACK"}")
+                    println("[YIELD CloseState] Frames with TBC: ${closeOwnerFrameStack.count { it.toBeClosedVars.isNotEmpty() }}")
+                    println("[YIELD CloseState] Using ownerFrame from ${if (ownerFrameFromStack != null) "STACK (with TBC)" else "pendingCloseOwnerFrame"}")
                     
                     // If we're yielding from a __close that's itself resuming a previous close-yield,
                     // inherit the TBC list from the active CloseResumeState (already in progress)
@@ -1840,6 +1868,9 @@ class LuaVmImpl(
             callDepth = callDepthBase
             clearYieldResumeContext()
 
+            // Clear active execution frame
+            activeExecutionFrame = null
+
             // Remove all frames added during this execution (including tail-called frames)
             // This cleans up the call stack after trampolined tail calls
             callStackManager.cleanupFrames(initialCallStackSize)
@@ -1855,11 +1886,13 @@ class LuaVmImpl(
         callerFrame: ExecutionFrame? = null,
     ): List<LuaValue<*>> {
         // Push caller frame onto close owner stack to preserve context across native boundaries
-        // Snapshot the TBC list to capture current state (it's mutable and may change)
-        if (callerFrame != null) {
-            val tbcSnapshot = callerFrame.toBeClosedVars.toMutableList()
+        // IMPORTANT: Share the TBC list reference (don't copy) so that changes made by CLOSE
+        // instructions after this call are visible when building CloseResumeState during yields
+        // ONLY push if not already at top (avoid duplicates from nested native calls)
+        if (callerFrame != null && (closeOwnerFrameStack.isEmpty() || closeOwnerFrameStack.last().proto != callerFrame.proto)) {
+            println("[callFunction] Pushing caller frame: proto.name=${callerFrame.proto.name} TBC.size=${callerFrame.toBeClosedVars.size} TBC=${callerFrame.toBeClosedVars}")
             // Create a shallow snapshot - most fields are immutable or shouldn't change
-            // Only TBC list needs deep copy as it gets modified during close handling
+            // TBC list is shared (not copied) so CLOSE instructions update it
             val snapshotFrame = ExecutionFrame(
                 proto = callerFrame.proto,
                 initialArgs = emptyList(), // Not used after construction
@@ -1867,7 +1900,7 @@ class LuaVmImpl(
                 initialPc = callerFrame.pc,
                 existingRegisters = callerFrame.registers,
                 existingVarargs = callerFrame.varargs,
-                existingToBeClosedVars = tbcSnapshot,
+                existingToBeClosedVars = callerFrame.toBeClosedVars, // Share, don't copy!
                 existingOpenUpvalues = callerFrame.openUpvalues,
             )
             closeOwnerFrameStack.add(snapshotFrame)
@@ -1907,7 +1940,7 @@ class LuaVmImpl(
     override fun callFunction(
         func: LuaValue<*>,
         args: List<LuaValue<*>>,
-    ): List<LuaValue<*>> = callFunction(func, args, null)
+    ): List<LuaValue<*>> = callFunction(func, args, activeExecutionFrame)
 
     /**
      * Call a function with explicit __close error handling.
