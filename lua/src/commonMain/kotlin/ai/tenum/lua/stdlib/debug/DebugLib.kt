@@ -832,18 +832,35 @@ class DebugLib : LuaLibrary {
                         // Normal path: get stack from view - automatically handles hook context
                         // If in hook, combine hook frame with observed frames
                         if (snapshot != null && stackView.size > 0) {
-                            // Hook context: find the hook frame (skip native frames like debug.traceback)
-                            // and combine with observed frames from when the hook was triggered
-                            val hookFrame = stackView.forTraceback().firstOrNull { !it.isNative }
-                            if (hookFrame != null) {
-                                listOf(hookFrame) + snapshot.frames.asReversed()
-                            } else {
-                                snapshot.frames.asReversed()
-                            }
+                            // Hook context: combine current Lua frames (from within hook) with observed frames
+                            // C frames will be filtered out later, so we just need all Lua frames
+                            // The current stack includes frames like [caller of debug.traceback, hook function, ...]
+                            // We combine these with the observed frames from when the hook was triggered
+                            stackView.forTraceback() + snapshot.frames.asReversed()
                         } else {
                             // Normal context: use stack as-is (most-recent-first for traceback)
                             stackView.forTraceback()
                         }
+                    }
+
+                // Filter out C frames when called from within a hook
+                // PUC Lua's debug.traceback() filters intermediate C frames (like assert, string.match)
+                // when called from within a hook function, but NOT in normal contexts
+                // Error tracebacks always show C frames regardless of context
+                val filteredCFrames =
+                    if (snapshot != null && rawCallStack.isNotEmpty()) {
+                        // In hook context: filter out C frames except the final runner
+                        val nonNativeFrames = rawCallStack.filter { !it.isNative }
+                        val lastFrame = rawCallStack.lastOrNull()
+                        // Add back the final C frame if it exists and looks like the top-level runner
+                        if (lastFrame != null && lastFrame.isNative && lastFrame != nonNativeFrames.lastOrNull()) {
+                            nonNativeFrames + lastFrame
+                        } else {
+                            nonNativeFrames
+                        }
+                    } else {
+                        // Normal context or error stack: keep all frames
+                        rawCallStack
                     }
 
                 // When in a coroutine, filter frames to only show those within the coroutine
@@ -853,18 +870,18 @@ class DebugLib : LuaLibrary {
                     if (currentCo != null) {
                         // Only apply filtering when getting traceback of current thread (not another coroutine)
                         val callStackBase = currentCo.thread.callStackBase
-                        // rawCallStack is most-recent-first, so we need to filter from the end
+                        // filteredCFrames is most-recent-first, so we need to filter from the end
                         // Frames at the end (oldest) before callStackBase should be excluded
                         // stackView.size gives us total frames including the ones before callStackBase
-                        val totalFrames = if (lastErrorStack != null) rawCallStack.size else stackView.size
+                        val totalFrames = if (lastErrorStack != null) filteredCFrames.size else stackView.size
                         if (callStackBase > 0 && callStackBase < totalFrames) {
                             val framesToDrop = callStackBase
-                            rawCallStack.dropLast(framesToDrop)
+                            filteredCFrames.dropLast(framesToDrop)
                         } else {
-                            rawCallStack
+                            filteredCFrames
                         }
                     } else {
-                        rawCallStack
+                        filteredCFrames
                     }
 
                 // Filter out anonymous native wrapper functions (e.g., from coroutine.wrap)
