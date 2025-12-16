@@ -110,18 +110,12 @@ object TracebackFormatter {
         var nextIndex = startIndex
 
         if (frame.isTailCall) {
-            // Find the end of the tail call sequence
-            val tailStart = startIndex
-            while (nextIndex < callStack.size && callStack[nextIndex].isTailCall) {
-                nextIndex++
-            }
+            // Show the tail-called frame
+            formatFrame(frame, useUpvalueDescriptor)
 
-            // Show the first tail-called frame
-            formatFrame(callStack[tailStart], useUpvalueDescriptor)
-
-            // Insert tail call marker if there was more than one tail call
-            val tailCallCount = nextIndex - tailStart
-            if (tailCallCount > 1) {
+            // Insert tail call marker if there were collapsed tail calls (tailCallDepth > 0)
+            // PUC-Lua shows (...tail calls...) when multiple tail calls were collapsed
+            if (frame.tailCallDepth > 0) {
                 appendLine()
                 append("\t(...tail calls...)")
             }
@@ -130,6 +124,8 @@ object TracebackFormatter {
             if (addNewlineAfter) {
                 appendLine()
             }
+
+            nextIndex = startIndex + 1
         } else {
             // Regular frame (not tail called)
             formatFrame(frame, useUpvalueDescriptor)

@@ -33,6 +33,7 @@ data class CallFrame(
     val registers: MutableList<LuaValue<*>>,
     val isNative: Boolean = false,
     val isTailCall: Boolean = false,
+    val tailCallDepth: Int = 0, // Lua 5.4: number of tail calls collapsed into this frame (0 = not a tail call, 1+ = tail call depth)
     val inferredFunctionName: InferredFunctionName? = null,
     val varargs: List<LuaValue<*>> = emptyList(),
     val ftransfer: Int = 0, // Lua 5.4: first index of transferred values (1-based)

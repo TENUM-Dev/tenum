@@ -1149,11 +1149,22 @@ class LuaVmImpl(
                         // Get function object for frame (use saved reference since register may be overwritten)
                         val luaFunc = dispatchResult.savedFunc
 
-                        // TAIL CALL: Remove the caller's frame before adding the tail-called frame
-                        // This implements proper Lua tail call semantics where the caller is replaced
+                        // TAIL CALL: Increment tail call depth on the previous frame, or replace it if not already a tail call
+                        // This implements proper Lua tail call semantics while tracking the collapsed call chain
+                        val previousFrame = callStackManager.lastFrame()
+                        val newTailCallDepth =
+                            if (previousFrame?.isTailCall == true) {
+                                // Already a tail call frame - increment its depth
+                                previousFrame.tailCallDepth + 1
+                            } else {
+                                // First tail call in the chain
+                                1
+                            }
+
+                        // Remove the previous frame
                         callStackManager.removeLastFrame()
 
-                        // Push new call frame (preserves call stack for debug.getinfo)
+                        // Push new call frame with accumulated tail call depth
                         // The trampoline still avoids JVM stack growth by continuing in this loop
                         val tailFrame =
                             CallFrame(
@@ -1164,6 +1175,7 @@ class LuaVmImpl(
                                 registers = registers,
                                 isNative = false,
                                 isTailCall = true, // Mark as tail call for debug library
+                                tailCallDepth = newTailCallDepth, // Track accumulated tail calls
                                 inferredFunctionName = pendingInferredName,
                                 varargs = varargs,
                                 ftransfer = if (args.isEmpty()) 0 else 1, // Lua 5.4: 0 if no parameters, else 1
