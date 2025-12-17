@@ -136,7 +136,6 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
 
     @Test
     fun testYieldInCloseWithPcall() {
-        vm.debugEnabled = true
         val result =
             execute(
                 """

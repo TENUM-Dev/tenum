@@ -50,6 +50,13 @@ class ExecutionFrame(
      */
     var capturedReturns: List<LuaValue<*>>? = null
 
+    /**
+     * True if this frame is resuming after a yield that occurred during THIS frame's RETURN
+     * instruction's __close handler execution (Phase 2 of two-phase return).
+     * This distinguishes "resuming after my own close handler yielded" from "inherited capturedReturns".
+     */
+    var isMidReturn: Boolean = false
+
     /** Register array (local variables and temporaries) - uses MutableList for dynamic growth */
     val registers: MutableList<LuaValue<*>> =
         if (existingRegisters != null) {

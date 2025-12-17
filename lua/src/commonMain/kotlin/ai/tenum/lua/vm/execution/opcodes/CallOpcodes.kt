@@ -282,11 +282,14 @@ object CallOpcodes {
         currentLine: Int,
         triggerHookFn: (HookEvent, Int) -> Unit,
     ): List<LuaValue<*>> {
-        // Step 0: If frame already has captured returns (from previous execution before yield-in-close),
-        // use those as the return values. But still process remaining TBC vars if any exist.
-        val isResumeAfterYield = frame.capturedReturns != null
+        // Step 0: Determine whether to use captured returns or collect from registers
+        // Use capturedReturns if available (either from isMidReturn restoration or previous setting)
+        val useCapturedReturns = frame.capturedReturns != null
+        // Determine if this is a resume after yield (should skip close handlers)  
+        val isResumeAfterYield = frame.isMidReturn
+        println("[RETURN-DEBUG] useCapturedReturns=$useCapturedReturns, isResumeAfterYield=$isResumeAfterYield, capturedSize=${frame.capturedReturns?.size}, tbcSize=${frame.toBeClosedVars.size}")
         val results =
-            if (isResumeAfterYield) {
+            if (useCapturedReturns) {
                 env.debug("  Return using captured returns: ${frame.capturedReturns}")
                 frame.capturedReturns!!
             } else {
@@ -294,6 +297,7 @@ object CallOpcodes {
                 val collector = ArgumentCollector(registers, frame)
                 collector.collectResults(instr.a, instr.b)
             }
+        println("[RETURN-DEBUG] results.size=${results.size}, willSkipClose=$isResumeAfterYield")
         env.debug("  Return ${results.size} values (before __close): $results")
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
 
@@ -357,7 +361,7 @@ object CallOpcodes {
             }
         } else {
             // Resume after yield-in-close: __close already ran in Phase 1, skip it
-            println("[CallOpcodes RETURN] Skipping __close (already ran in Phase 1), using capturedReturns")
+            env.debug("[CallOpcodes RETURN] Skipping __close (already ran in Phase 1), using capturedReturns")
         }
 
         env.debug("  Return ${results.size} values (after __close): $results")
@@ -389,6 +393,12 @@ object CallOpcodes {
 
         // Trigger RETURN hook
         triggerHookFn(HookEvent.RETURN, currentLine)
+
+        // Clear capturedReturns after successful return to prevent leakage to other operations
+        // This is safe because:  
+        // 1. If we yielded during close handlers, we'll restore from segments with capturedReturns
+        // 2. If we didn't yield, we already used the results and don't need them anymore
+        frame.capturedReturns = null
 
         return results
     }

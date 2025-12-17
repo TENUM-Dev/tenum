@@ -848,6 +848,12 @@ class LuaVmImpl(
                 existingVarargs = resumptionState?.varargs,
                 existingToBeClosedVars = resumptionState?.toBeClosedVars,
             )
+        
+        // CRITICAL: Restore capturedReturns from resumption state (single source of truth for mid-RETURN frames)
+        if (resumptionState != null && resumptionState.capturedReturnValues != null) {
+            execFrame.capturedReturns = resumptionState.capturedReturnValues
+            execFrame.isMidReturn = true
+        }
 
         // Restore close owner frame stack on resume
         if (resumptionState != null && resumptionState.closeOwnerFrameStack.isNotEmpty()) {
@@ -890,7 +896,9 @@ class LuaVmImpl(
 
             // Phase 1: Resume the __close continuation if present
             val continuation = closeState.pendingCloseContinuation
+            println("[PHASE-DEBUG] continuation=${if (continuation != null) "EXISTS" else "NULL"}, segments=${closeState.ownerSegments.size}")
             if (continuation != null) {
+                println("[PHASE-DEBUG] Executing __close continuation")
                 executeProto(
                     continuation.proto,
                     args,
@@ -898,9 +906,11 @@ class LuaVmImpl(
                     function,
                     ExecutionMode.ResumeContinuation(continuation),
                 )
+                println("[PHASE-DEBUG] __close continuation completed")
             }
 
             // Phase 2: Orchestrate through owner segments
+            println("[PHASE-DEBUG] Starting segment processing")
             if (closeState.ownerSegments.isNotEmpty()) {
                 val firstSegment = closeState.ownerSegments.first()
                 val isSingleFrame = closeState.ownerSegments.size == 1
@@ -920,10 +930,15 @@ class LuaVmImpl(
                         existingToBeClosedVars = firstSegment.toBeClosedVars,
                         existingOpenUpvalues = mutableMapOf(),
                     )
+                // CRITICAL: capturedReturns from segment is the single source of truth for mid-RETURN frames
                 segmentFrame.capturedReturns = firstSegment.capturedReturns
+                segmentFrame.isMidReturn = firstSegment.isMidReturn
 
+                println("[SEGMENT-DEBUG] First segment: capturedReturns=${firstSegment.capturedReturns?.size}, isMidReturn=${firstSegment.isMidReturn}")
+                println("[SEGMENT-DEBUG] Frame after restore: capturedReturns=${segmentFrame.capturedReturns?.size}, isMidReturn=${segmentFrame.isMidReturn}")
+                
                 debugSink.debug {
-                    "[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}"
+                    "[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}, isMidReturn=${firstSegment.isMidReturn}"
                 }
 
                 // For single-frame case: clear activeCloseResumeState (old behavior)
@@ -1264,7 +1279,11 @@ class LuaVmImpl(
                                         existingToBeClosedVars = nextSegment.toBeClosedVars,
                                         existingOpenUpvalues = mutableMapOf(),
                                     )
-                                segmentFrame.capturedReturns = nextSegment.capturedReturns ?: dispatchResult.values
+                                // CRITICAL: For mid-RETURN frames, capturedReturns is the single source of truth
+                                // Use the segment's capturedReturns unconditionally if it's mid-RETURN
+                                // Do NOT mix dispatchResult.values (which may be yield values from close continuation)
+                                segmentFrame.capturedReturns = nextSegment.capturedReturns
+                                segmentFrame.isMidReturn = nextSegment.isMidReturn
 
                                 // Update remaining segments
                                 val remainingSegments = activeCloseState.ownerSegments.drop(1)
@@ -1305,7 +1324,13 @@ class LuaVmImpl(
                                 // Continue execution - don't return yet
                             } else {
                                 // No remaining segments - this is the final return
-                                return dispatchResult.values
+                                // Use dispatchResult.values (which contains the values returned by the RETURN opcode)
+                                // NOTE: capturedReturns is cleared by RETURN after use (CallOpcodes.kt:399)
+                                val returnValues = dispatchResult.values
+                                debugSink.debug {
+                                    "[Segment Orchestrator] Final return: using dispatchResult.values (size=${returnValues.size})"
+                                }
+                                return returnValues
                             }
                         }
                     }
@@ -1578,6 +1603,14 @@ class LuaVmImpl(
 
                 // Yielding from coroutine
 
+                // CRITICAL: When yielding from __close, capturedReturns are in pendingCloseOwnerFrame
+                // This is set in CallOpcodes.executeReturn before calling __close handlers
+                // Copy them to closeContext so they're saved with the coroutine state
+                val ownerFrame = closeContext.pendingCloseOwnerFrame
+                if (ownerFrame != null && ownerFrame.capturedReturns != null) {
+                    closeContext.setCapturedReturnValues(ownerFrame.capturedReturns!!)
+                }
+
                 // When yielding from __close, create CloseResumeState with owner frame snapshot
                 val closeResumeState: CloseResumeState? =
                     if (isCloseYield) {
@@ -1597,10 +1630,10 @@ class LuaVmImpl(
                                 pendingCloseVar = null, // Not relevant for continuation
                                 execStack = execStack.toList(),
                                 pendingCloseYield = false,
-                                capturedReturnValues = null, // Not used in new model
+                                capturedReturnValues = closeContext.pendingCloseOwnerFrame?.capturedReturns,
                                 debugCallStack = coroutineCallStack,
                                 closeResumeState = null,
-                                closeOwnerFrameStack = filterCoroutineFrames(callerContext.snapshot(), callStackBase),
+                                closeOwnerFrameStack = callerContext.snapshot(),
                             )
 
                         // Use resumption service to select owner frame and build close resume state
@@ -1609,28 +1642,6 @@ class LuaVmImpl(
                                 coroutineCallStack[coroutineCallStack.size - 2]
                             } else {
                                 null
-                            }
-
-                        // CRITICAL FIX: Collect TBC vars from ALL frames in callerContext
-                        // When yielding from __close during RETURN through native boundaries (pcall),
-                        // outer frames in callerContext have TBC vars that must be processed.
-                        // We need to include them in ownerContext.tbcVars so they're saved in
-                        // CloseResumeState and processed when we resume.
-                        // FILTER: Only include frames belonging to current coroutine (not main chunk)
-                        val allCallerTbc = mutableListOf<Pair<Int, LuaValue<*>>>()
-                        if (isCloseYield) {
-                            val allFrames = filterCoroutineFrames(callerContext.snapshot(), callStackBase)
-                            for (frame in allFrames) {
-                                allCallerTbc.addAll(frame.toBeClosedVars)
-                            }
-                        }
-
-                        // If there are caller TBC vars, merge them with owner TBC
-                        val effectiveOwnerTbc =
-                            if (allCallerTbc.isNotEmpty()) {
-                                allCallerTbc + ownerTbc
-                            } else {
-                                ownerTbc
                             }
 
                         val ownerContext =
@@ -1642,13 +1653,12 @@ class LuaVmImpl(
                                 currentRegisters = registers,
                                 currentUpvalues = execFrame.upvalues,
                                 currentVarargs = varargs,
-                                defaultTbc = effectiveOwnerTbc,
+                                defaultTbc = ownerTbc,
                             )
 
                         debugSink.debug {
                             "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}"
                         }
-                        debugSink.debug { "[YIELD CloseState] allCallerTbc.size=${allCallerTbc.size}" }
                         debugSink.debug { "[YIELD CloseState] Selected owner: proto=${ownerContext.proto.name} pc=${ownerContext.pc}" }
                         debugSink.debug { "[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars.size}" }
                         debugSink.debug { "[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}" }
