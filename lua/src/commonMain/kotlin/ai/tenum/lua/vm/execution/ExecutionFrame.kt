@@ -5,6 +5,7 @@ import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaTable
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
+import ai.tenum.lua.vm.CloseHandler
 
 /**
  * Encapsulates the execution state for a single Lua function call frame.
@@ -210,66 +211,38 @@ class ExecutionFrame(
         callCloseFn: (Int, Upvalue, LuaValue<*>, LuaValue<*>) -> Unit,
     ) {
         val snapshot = toBeClosedVars.toList() // iterate over a stable view
-        var chainedError: LuaValue<*> = initialError
-        var lastException: Throwable? = null
 
         // Clear only the vars that will be closed (reg >= registerIndex)
         // This prevents double-closing while preserving outer-scope TBC vars
         toBeClosedVars.removeAll { it.first >= registerIndex }
 
-        for ((reg, capturedValue) in snapshot.asReversed()) {
-            if (reg < registerIndex) continue
-
-            // Use the captured value for closing. Register may be stale if a close yielded.
-            val currentValue = capturedValue
-
-            // nil and false don't need closing
-            if (currentValue is ai.tenum.lua.runtime.LuaNil ||
-                (currentValue is ai.tenum.lua.runtime.LuaBoolean && !currentValue.value)
-            ) {
-                continue
-            }
-
-            // Get __close metamethod - must exist and be callable at close time
-            val closeMethod = getCloseMetamethodRaw(currentValue)
-            try {
-                when {
-                    closeMethod == null || closeMethod is ai.tenum.lua.runtime.LuaNil -> {
-                        // __close doesn't exist - create error
-                        throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
-                            "attempt to call a nil value (metamethod 'close')",
-                        )
-                    }
-                    closeMethod is ai.tenum.lua.runtime.LuaFunction -> {
-                        // Valid function - call it with current error (if any)
-                        callCloseFn(reg, Upvalue(closedValue = closeMethod), currentValue, chainedError)
-                        // Vars already removed from toBeClosedVars at the start of executeCloseMetamethods
-                        // If no error was thrown, the chained error continues to next handler
-                        // (Don't clear it - only a new error replaces the old one)
-                    }
-                    else -> {
-                        // __close exists but is not a function
-                        val typeName = closeMethod.type().name.lowercase()
-                        throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
-                            "attempt to call a $typeName value (metamethod 'close')",
-                        )
-                    }
+        // Use CloseHandler for execution logic
+        val closeHandler = CloseHandler()
+        closeHandler.executeClose(
+            startReg = registerIndex,
+            tbcVars = snapshot,
+            initialError = initialError,
+        ) { reg, value, errorArg ->
+            // Validate __close metamethod exists and is callable
+            val closeMethod = getCloseMetamethodRaw(value)
+            when {
+                closeMethod == null || closeMethod is ai.tenum.lua.runtime.LuaNil -> {
+                    throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                        "attempt to call a nil value (metamethod 'close')",
+                    )
                 }
-            } catch (e: ai.tenum.lua.vm.errorhandling.LuaException) {
-                // Capture the original error value and exception
-                chainedError = e.errorValue
-                lastException = e
-            } catch (e: ai.tenum.lua.vm.errorhandling.LuaRuntimeError) {
-                // For runtime errors (from validation), create a formatted error message
-                chainedError =
-                    ai.tenum.lua.runtime
-                        .LuaString(e.message ?: "error in close")
-                lastException = e
+                closeMethod is ai.tenum.lua.runtime.LuaFunction -> {
+                    // Call the close function via callback
+                    callCloseFn(reg, Upvalue(closedValue = closeMethod), value, errorArg)
+                }
+                else -> {
+                    val typeName = closeMethod.type().name.lowercase()
+                    throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                        "attempt to call a $typeName value (metamethod 'close')",
+                    )
+                }
             }
         }
-
-        // If there's a final error, re-throw the last exception
-        lastException?.let { throw it }
     }
 
     /**
