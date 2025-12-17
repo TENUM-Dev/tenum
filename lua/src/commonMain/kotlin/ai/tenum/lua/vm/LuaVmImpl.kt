@@ -896,9 +896,7 @@ class LuaVmImpl(
 
             // Phase 1: Resume the __close continuation if present
             val continuation = closeState.pendingCloseContinuation
-            println("[PHASE-DEBUG] continuation=${if (continuation != null) "EXISTS" else "NULL"}, segments=${closeState.ownerSegments.size}")
             if (continuation != null) {
-                println("[PHASE-DEBUG] Executing __close continuation")
                 executeProto(
                     continuation.proto,
                     args,
@@ -906,11 +904,9 @@ class LuaVmImpl(
                     function,
                     ExecutionMode.ResumeContinuation(continuation),
                 )
-                println("[PHASE-DEBUG] __close continuation completed")
             }
 
             // Phase 2: Orchestrate through owner segments
-            println("[PHASE-DEBUG] Starting segment processing")
             if (closeState.ownerSegments.isNotEmpty()) {
                 val firstSegment = closeState.ownerSegments.first()
                 val isSingleFrame = closeState.ownerSegments.size == 1
@@ -933,9 +929,6 @@ class LuaVmImpl(
                 // CRITICAL: capturedReturns from segment is the single source of truth for mid-RETURN frames
                 segmentFrame.capturedReturns = firstSegment.capturedReturns
                 segmentFrame.isMidReturn = firstSegment.isMidReturn
-
-                println("[SEGMENT-DEBUG] First segment: capturedReturns=${firstSegment.capturedReturns?.size}, isMidReturn=${firstSegment.isMidReturn}")
-                println("[SEGMENT-DEBUG] Frame after restore: capturedReturns=${segmentFrame.capturedReturns?.size}, isMidReturn=${segmentFrame.isMidReturn}")
                 
                 debugSink.debug {
                     "[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}, isMidReturn=${firstSegment.isMidReturn}"

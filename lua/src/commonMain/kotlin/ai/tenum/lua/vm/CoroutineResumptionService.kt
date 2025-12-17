@@ -176,7 +176,6 @@ class CoroutineResumptionService {
         // Outer segments: frames from closeOwnerFrameStack (starting from startIndex)
         // When yielding from RETURN, we start from the RETURN frame (skipping earlier callers)
         // When yielding from CLOSE, we start from index 0 (all caller frames)
-        println("[SEGMENT-BUILD-DEBUG] startIndex=$startIndex, closeOwnerFrameStack.size=${closeOwnerFrameStack.size}, hasCapturedReturnValues=${capturedReturnValues != null}")
         for (i in startIndex until closeOwnerFrameStack.size) {
             val frame = closeOwnerFrameStack[i]
             
@@ -188,11 +187,8 @@ class CoroutineResumptionService {
             val isFrameMidReturn = frame.capturedReturns != null
             
             if (!isOwnerFrameWithCapturedReturns && !isFrameMidReturn) {
-                println("[SEGMENT-BUILD-DEBUG] Skipping segment $i: not mid-RETURN")
                 continue
             }
-            
-            println("[SEGMENT-BUILD-DEBUG] Adding segment $i: proto=${frame.proto.name}, ownerWithCaptured=$isOwnerFrameWithCapturedReturns, midReturn=$isFrameMidReturn")
 
             // CRITICAL: When yielding from RETURN, the first segment (i == startIndex) IS the RETURN frame.
             // Use capturedReturnValues parameter (which has the return values) instead of frame.capturedReturns

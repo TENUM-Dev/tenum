@@ -287,7 +287,6 @@ object CallOpcodes {
         val useCapturedReturns = frame.capturedReturns != null
         // Determine if this is a resume after yield (should skip close handlers)  
         val isResumeAfterYield = frame.isMidReturn
-        println("[RETURN-DEBUG] useCapturedReturns=$useCapturedReturns, isResumeAfterYield=$isResumeAfterYield, capturedSize=${frame.capturedReturns?.size}, tbcSize=${frame.toBeClosedVars.size}")
         val results =
             if (useCapturedReturns) {
                 env.debug("  Return using captured returns: ${frame.capturedReturns}")
@@ -297,7 +296,6 @@ object CallOpcodes {
                 val collector = ArgumentCollector(registers, frame)
                 collector.collectResults(instr.a, instr.b)
             }
-        println("[RETURN-DEBUG] results.size=${results.size}, willSkipClose=$isResumeAfterYield")
         env.debug("  Return ${results.size} values (before __close): $results")
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
 
