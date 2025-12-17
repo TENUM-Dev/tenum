@@ -870,28 +870,30 @@ class LuaVmImpl(
                 )
             }
 
-            // Step 2: Check if we should return captured values immediately
-            // If we have captured returns, the close chain is complete - just return them
-            if (closeState.capturedReturnValues != null && closeState.capturedReturnValues.isNotEmpty()) {
-                // Clear active close state - we're done with this close chain
-                closeContext.setActiveCloseResumeState(null)
-                // Return the captured values from the owner frame
-                return closeState.capturedReturnValues
-            }
+            // Step 2: Don't return captured values immediately - continue execution
+            // The captured values are stored in ownerFrame.capturedReturns and will be
+            // returned through normal RETURN instruction handling, allowing:
+            // - pcall wrappers to run
+            // - outer close handlers to execute
+            // - normal control flow to continue
 
-            // Step 3: Check if we should return captured values immediately
-            // Step 4: Process remaining TBC or rebuild owner frame based on context
-            // IMPORTANT: Only process remaining TBC if we're actually IN a __close handler (pendingCloseVar != null)
-            // If pendingCloseVar is null, we're just resuming normal execution - restore frame but don't process TBC
-            val shouldProcessRemainingTbc =
-                (closeState.capturedReturnValues == null || closeState.capturedReturnValues.isEmpty()) && closeState.pendingCloseVar != null
+            // Step 3: Process remaining TBC or rebuild owner frame based on context
+            // IMPORTANT: Process remaining TBC if we're IN a __close handler (pendingCloseVar != null)
+            // OR if we have outer TBC vars that need processing (even with captured returns)
+            // If pendingCloseVar is null AND no outer TBC vars, we're just resuming normal execution
+            val shouldProcessRemainingTbc = closeState.pendingCloseVar != null || closeState.pendingTbcList.isNotEmpty()
 
             // When ownerProto is present, we're crossing frame boundaries (e.g., pcall)
             // In this case, pendingTbcList contains outer frame's TBC vars with their register indices
+            // CRITICAL FIX: If there are outer frames in resumptionState.closeOwnerFrameStack with TBC vars,
+            // DON'T rebuild the owner frame here. Instead, let normal execution flow continue,
+            // which will return through native boundaries (pcall) and eventually reach the outer RETURN.
+            val hasOuterTbcFrames = resumptionState.closeOwnerFrameStack.any { it.toBeClosedVars.isNotEmpty() }
+            
             val frameToUseForTbc: ExecutionFrame
             val remainingTbc =
-                if (closeState.ownerProto != null) {
-                    // Cross-frame scenario: rebuild owner frame
+                if (closeState.ownerProto != null && !hasOuterTbcFrames) {
+                    // Cross-frame scenario WITHOUT outer TBC: rebuild owner frame
                     debugSink.debug {
                         "[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}"
                     }
@@ -994,7 +996,13 @@ class LuaVmImpl(
                 }
             }
 
-            // Step 5: If owner frame was rebuilt, continue to opcode dispatch
+            // Step 5: Don't return captured values here - continue normal dispatch
+            // The captured returns are stored in execFrame.capturedReturns and will be
+            // returned through the RETURN instruction (which checks for captured returns first)
+            // or when PC reaches end of instructions.
+            // This allows outer __close handlers and pcall wrappers to run.
+
+            // Step 6: Continue to opcode dispatch
             // The frame was already rebuilt in Step 3 above
             // No additional action needed here
 
@@ -1516,7 +1524,13 @@ class LuaVmImpl(
                 hookManager.checkCountHook(currentLineForHook)
             }
 
-            // If we reach here without a return, return no values
+            // If we reach here without a return, check for captured returns first
+            // Captured returns are set by RETURN opcode when yielding from __close
+            if (execFrame.capturedReturns != null) {
+                return execFrame.capturedReturns!!
+            }
+
+            // Otherwise return no values
             return emptyList()
         } catch (e: LuaYieldException) {
             // Coroutine yielded - save execution state for resumption
@@ -1571,30 +1585,54 @@ class LuaVmImpl(
                                 null
                             }
 
+                        // CRITICAL FIX: Collect TBC vars from ALL frames in callerContext
+                        // When yielding from __close during RETURN through native boundaries (pcall),
+                        // outer frames in callerContext have TBC vars that must be processed.
+                        // We need to include them in ownerContext.tbcVars so they're saved in
+                        // CloseResumeState and processed when we resume.
+                        val allCallerTbc = mutableListOf<Pair<Int, LuaValue<*>>>()
+                        if (isCloseYield) {
+                            val allFrames = callerContext.snapshot()
+                            for (frame in allFrames) {
+                                allCallerTbc.addAll(frame.toBeClosedVars)
+                            }
+                        }
+                        
+                        // If there are caller TBC vars, merge them with owner TBC
+                        val effectiveOwnerTbc = if (allCallerTbc.isNotEmpty()) {
+                            allCallerTbc + ownerTbc
+                        } else {
+                            ownerTbc
+                        }
+
                         val ownerContext =
                             resumptionService.selectOwnerFrameContext(
                                 pendingCloseOwnerFrame = closeContext.pendingCloseOwnerFrame,
-                                callStack = emptyList(), // Not used - owner selection uses pendingCloseOwnerFrame
+                                callStack = emptyList(),
                                 currentProto = currentProto,
                                 currentPc = pc,
                                 currentRegisters = registers,
                                 currentUpvalues = execFrame.upvalues,
                                 currentVarargs = varargs,
-                                defaultTbc = ownerTbc,
+                                defaultTbc = effectiveOwnerTbc,
                             )
 
                         debugSink.debug {
                             "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}"
                         }
+                        debugSink.debug { "[YIELD CloseState] allCallerTbc.size=${allCallerTbc.size}" }
                         debugSink.debug { "[YIELD CloseState] Selected owner: proto=${ownerContext.proto.name} pc=${ownerContext.pc}" }
-                        debugSink.debug { "[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars}" }
+                        debugSink.debug { "[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars.size}" }
                         debugSink.debug { "[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}" }
 
                         // Calculate effective owner PC using resumption service
+                        // CRITICAL: For close-yields during RETURN, we need to re-execute the RETURN instruction
+                        // when we resume (it will use capturedReturns and skip double-__close). So use the
+                        // RETURN instruction's PC (current PC), not PC+1.
                         val effectiveOwnerPc =
                             resumptionService.calculateResumePc(
                                 currentPc = closeContext.pendingCloseOwnerFrame?.pc ?: callerFrame?.pc ?: pc,
-                                incrementPc = true,
+                                incrementPc = false, // DON'T increment - we need to re-execute RETURN
                             )
 
                         // Build close resume state using resumption service

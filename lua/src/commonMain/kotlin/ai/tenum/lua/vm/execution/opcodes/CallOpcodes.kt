@@ -282,10 +282,17 @@ object CallOpcodes {
         currentLine: Int,
         triggerHookFn: (HookEvent, Int) -> Unit,
     ): List<LuaValue<*>> {
-        // Step 1: Snapshot return values BEFORE calling __close
-        // This ensures return values are not corrupted by __close metamethods
-        val collector = ArgumentCollector(registers, frame)
-        val results = collector.collectResults(instr.a, instr.b)
+        // Step 0: If frame already has captured returns (from previous execution before yield-in-close),
+        // use those as the return values. But still process remaining TBC vars if any exist.
+        val results =
+            if (frame.capturedReturns != null) {
+                env.debug("  Return using captured returns: ${frame.capturedReturns}")
+                frame.capturedReturns!!
+            } else {
+                // Collect return values normally
+                val collector = ArgumentCollector(registers, frame)
+                collector.collectResults(instr.a, instr.b)
+            }
 
         env.debug("  Return ${results.size} values (before __close): $results")
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
