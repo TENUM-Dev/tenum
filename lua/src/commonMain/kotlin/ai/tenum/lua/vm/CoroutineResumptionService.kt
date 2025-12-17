@@ -7,6 +7,7 @@ import ai.tenum.lua.vm.CallFrame
 import ai.tenum.lua.vm.execution.CloseResumeState
 import ai.tenum.lua.vm.execution.ExecContext
 import ai.tenum.lua.vm.execution.ExecutionFrame
+import ai.tenum.lua.vm.execution.OwnerSegment
 import ai.tenum.lua.vm.execution.ResumptionState
 
 /**
@@ -127,37 +128,74 @@ class CoroutineResumptionService {
         debugCallStack: List<CallFrame>,
         closeOwnerFrameStack: List<ExecutionFrame>,
     ): ResumptionState {
+        // Build owner segments: innermost (immediate owner) + outer frames from closeOwnerFrameStack
+        val segments = mutableListOf<OwnerSegment>()
+        
+        // Innermost segment: the immediate owner frame
+        segments.add(
+            OwnerSegment(
+                proto = ownerProto,
+                pcToResume = ownerPc,
+                registers = ownerRegisters.toMutableList(),
+                upvalues = ownerUpvalues.toList(),
+                varargs = ownerVarargs.toList(),
+                toBeClosedVars = pendingTbcList.toMutableList(),
+                capturedReturns = capturedReturnValues?.toList(),
+                pendingCloseStartReg = startReg,
+                pendingCloseVar = pendingCloseVar,
+                execStack = closeContinuationExecStack.toList(),
+                debugCallStack = debugCallStack.toList(),
+                isMidReturn = capturedReturnValues != null,
+            ),
+        )
+        
+        // Outer segments: frames from closeOwnerFrameStack (caller frames across native boundaries)
+        for (frame in closeOwnerFrameStack) {
+            segments.add(
+                OwnerSegment(
+                    proto = frame.proto,
+                    pcToResume = frame.pc,
+                    registers = frame.registers.toMutableList(),
+                    upvalues = frame.upvalues.toList(),
+                    varargs = frame.varargs.toList(),
+                    toBeClosedVars = frame.toBeClosedVars, // Share, don't copy!
+                    capturedReturns = frame.capturedReturns?.toList(),
+                    pendingCloseStartReg = 0,
+                    pendingCloseVar = null,
+                    execStack = emptyList(),
+                    debugCallStack = debugCallStack.toList(),
+                    isMidReturn = frame.capturedReturns != null,
+                ),
+            )
+        }
+        
         val closeState =
             CloseResumeState(
                 pendingCloseContinuation =
-                    ResumptionState(
-                        proto = closeContinuationProto,
-                        pc = closeContinuationPc,
-                        registers = closeContinuationRegisters.toMutableList(),
-                        upvalues = closeContinuationUpvalues.toList(),
-                        varargs = closeContinuationVarargs.toList(),
-                        yieldTargetRegister = yieldTargetReg,
-                        yieldExpectedResults = yieldExpectedResults,
-                        toBeClosedVars = mutableListOf(),
-                        pendingCloseStartReg = 0,
-                        pendingCloseVar = null,
-                        execStack = closeContinuationExecStack.toList(),
-                        pendingCloseYield = false,
-                        capturedReturnValues = null,
-                        debugCallStack = debugCallStack.toList(),
-                        closeResumeState = null,
-                        closeOwnerFrameStack = closeOwnerFrameStack.toList(),
-                    ),
-                ownerProto = ownerProto,
-                ownerPc = ownerPc,
-                ownerRegisters = ownerRegisters.toMutableList(),
-                ownerUpvalues = ownerUpvalues.toList(),
-                ownerVarargs = ownerVarargs.toList(),
-                startReg = startReg,
-                pendingTbcList = pendingTbcList.toList(),
-                pendingCloseVar = pendingCloseVar,
+                    if (closeContinuationProto != ownerProto || closeContinuationPc != ownerPc) {
+                        ResumptionState(
+                            proto = closeContinuationProto,
+                            pc = closeContinuationPc,
+                            registers = closeContinuationRegisters.toMutableList(),
+                            upvalues = closeContinuationUpvalues.toList(),
+                            varargs = closeContinuationVarargs.toList(),
+                            yieldTargetRegister = yieldTargetReg,
+                            yieldExpectedResults = yieldExpectedResults,
+                            toBeClosedVars = mutableListOf(),
+                            pendingCloseStartReg = 0,
+                            pendingCloseVar = null,
+                            execStack = closeContinuationExecStack.toList(),
+                            pendingCloseYield = false,
+                            capturedReturnValues = null,
+                            debugCallStack = debugCallStack.toList(),
+                            closeResumeState = null,
+                            closeOwnerFrameStack = emptyList(),
+                        )
+                    } else {
+                        null
+                    },
+                ownerSegments = segments,
                 errorArg = errorArg,
-                capturedReturnValues = capturedReturnValues?.toList(),
             )
 
         return buildResumptionState(

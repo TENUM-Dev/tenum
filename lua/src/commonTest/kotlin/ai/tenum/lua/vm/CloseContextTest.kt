@@ -6,6 +6,7 @@ import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.vm.execution.CloseResumeState
 import ai.tenum.lua.vm.execution.ExecutionFrame
+import ai.tenum.lua.vm.execution.OwnerSegment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -81,19 +82,26 @@ class CloseContextTest {
     fun testSetActiveCloseResumeState() {
         val context = CloseContext()
         val proto = createDummyProto()
+        val segment =
+            OwnerSegment(
+                proto = proto,
+                pcToResume = 10,
+                registers = mutableListOf(),
+                upvalues = emptyList(),
+                varargs = emptyList(),
+                toBeClosedVars = mutableListOf(),
+                capturedReturns = null,
+                pendingCloseStartReg = 0,
+                pendingCloseVar = null,
+                execStack = emptyList(),
+                debugCallStack = emptyList(),
+                isMidReturn = false,
+            )
         val closeState =
             CloseResumeState(
                 pendingCloseContinuation = null,
-                ownerProto = proto,
-                ownerPc = 10,
-                ownerRegisters = mutableListOf(),
-                ownerUpvalues = emptyList(),
-                ownerVarargs = emptyList(),
-                startReg = 0,
-                pendingTbcList = emptyList(),
-                pendingCloseVar = null,
+                ownerSegments = listOf(segment),
                 errorArg = LuaNil,
-                capturedReturnValues = null,
             )
 
         context.setActiveCloseResumeState(closeState)

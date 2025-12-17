@@ -851,14 +851,12 @@ class LuaVmImpl(
         var env = ExecutionEnvironment(execFrame, globals, this)
 
         // If resuming from a yield that occurred inside __close, use CloseResumeState
+        // NEW ARCHITECTURE: Two-phase resumption orchestrator for multi-frame TBC chains
         if (mode is ExecutionMode.ResumeContinuation && resumptionState != null && resumptionState.closeResumeState != null) {
             val closeState = resumptionState.closeResumeState
             env.clearYieldResumeContext()
 
-            // Set as active so nested yields can inherit TBC list
-            closeContext.setActiveCloseResumeState(closeState)
-
-            // Step 1: Resume the __close continuation if present
+            // Phase 1: Resume the __close continuation if present
             val continuation = closeState.pendingCloseContinuation
             if (continuation != null) {
                 executeProto(
@@ -870,141 +868,63 @@ class LuaVmImpl(
                 )
             }
 
-            // Step 2: Don't return captured values immediately - continue execution
-            // The captured values are stored in ownerFrame.capturedReturns and will be
-            // returned through normal RETURN instruction handling, allowing:
-            // - pcall wrappers to run
-            // - outer close handlers to execute
-            // - normal control flow to continue
+            // Phase 2: Orchestrate through owner segments (innermost to outermost)
+            // We'll process only the FIRST segment here and store the remaining ones
+            // When this segment completes, we'll process the next one
+            if (closeState.ownerSegments.isNotEmpty()) {
+                val firstSegment = closeState.ownerSegments.first()
+                debugSink.debug {
+                    "[Segment Orchestrator] Processing first segment: proto=${firstSegment.proto.name}"
+                }
 
-            // Step 3: Process remaining TBC or rebuild owner frame based on context
-            // IMPORTANT: Process remaining TBC if we're IN a __close handler (pendingCloseVar != null)
-            // OR if we have outer TBC vars that need processing (even with captured returns)
-            // If pendingCloseVar is null AND no outer TBC vars, we're just resuming normal execution
-            val shouldProcessRemainingTbc = closeState.pendingCloseVar != null || closeState.pendingTbcList.isNotEmpty()
+                // Rebuild first segment's frame
+                val segmentFrame =
+                    ExecutionFrame(
+                        proto = firstSegment.proto,
+                        initialArgs = emptyList(),
+                        upvalues = firstSegment.upvalues,
+                        initialPc = firstSegment.pcToResume,
+                        existingRegisters = firstSegment.registers.toMutableList(),
+                        existingVarargs = firstSegment.varargs,
+                        existingToBeClosedVars = firstSegment.toBeClosedVars,
+                        existingOpenUpvalues = mutableMapOf(),
+                    )
+                segmentFrame.capturedReturns = firstSegment.capturedReturns
 
-            // When ownerProto is present, we're crossing frame boundaries (e.g., pcall)
-            // In this case, pendingTbcList contains outer frame's TBC vars with their register indices
-            // CRITICAL FIX: If there are outer frames in resumptionState.closeOwnerFrameStack with TBC vars,
-            // DON'T rebuild the owner frame here. Instead, let normal execution flow continue,
-            // which will return through native boundaries (pcall) and eventually reach the outer RETURN.
-            val hasOuterTbcFrames = resumptionState.closeOwnerFrameStack.any { it.toBeClosedVars.isNotEmpty() }
-            
-            val frameToUseForTbc: ExecutionFrame
-            val remainingTbc =
-                if (closeState.ownerProto != null && !hasOuterTbcFrames) {
-                    // Cross-frame scenario WITHOUT outer TBC: rebuild owner frame
+                debugSink.debug {
+                    "[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}"
+                }
+
+                // Store remaining segments in closeContext so we can process them after this one completes
+                val remainingSegments = closeState.ownerSegments.drop(1)
+                if (remainingSegments.isNotEmpty()) {
                     debugSink.debug {
-                        "[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}"
+                        "[Segment Orchestrator] Storing ${remainingSegments.size} remaining segments for later processing"
                     }
-                    debugSink.debug {
-                        "[RESUME CloseState] pendingTbcList.size=${closeState.pendingTbcList.size} pendingCloseVar=${closeState.pendingCloseVar}"
-                    }
-
-                    // Clear active close state - we're continuing with the owner frame
-                    closeContext.setActiveCloseResumeState(null)
-
-                    // Restore TBC vars to frame (they'll be processed by CLOSE/RETURN instructions later)
-                    val restoredTbc = closeState.pendingTbcList.toMutableList()
-
-                    val ownerFrame =
-                        ExecutionFrame(
-                            proto = closeState.ownerProto,
-                            initialArgs = emptyList(),
-                            upvalues = closeState.ownerUpvalues,
-                            initialPc = closeState.ownerPc,
-                            existingRegisters = closeState.ownerRegisters.toMutableList(),
-                            existingVarargs = closeState.ownerVarargs,
-                            existingToBeClosedVars = restoredTbc,
-                            existingOpenUpvalues = mutableMapOf(),
-                        )
-                    ownerFrame.capturedReturns = closeState.capturedReturnValues
-
-                    // Update local variables to continue execution from owner frame
-                    execFrame = ownerFrame
-                    flowState.setActiveExecutionFrame(ownerFrame) // Re-sync active frame after rebuild
-                    registers = ownerFrame.registers
-                    currentProto = ownerFrame.proto
-                    constants = ownerFrame.constants
-                    instructions = ownerFrame.instructions
-                    pc = ownerFrame.pc
-                    openUpvalues = ownerFrame.openUpvalues
-                    toBeClosedVars = ownerFrame.toBeClosedVars
-                    varargs = ownerFrame.varargs
-                    env = ExecutionEnvironment(ownerFrame, globals, this)
-
-                    frameToUseForTbc = ownerFrame
-
-                    // Only process TBC if we're IN a __close handler, not just resuming normal execution
-                    // If pendingCloseVar is null, we're resuming after inner function returned - don't process yet
-                    if (shouldProcessRemainingTbc) {
-                        debugSink.debug { "[RESUME CloseState] Processing TBC vars (inside __close handler)" }
-                        restoredTbc.asReversed()
-                    } else {
-                        debugSink.debug { "[RESUME CloseState] Skipping TBC processing (normal execution resume)" }
-                        emptyList()
-                    }
+                    closeContext.setActiveCloseResumeState(
+                        CloseResumeState(
+                            pendingCloseContinuation = null,
+                            ownerSegments = remainingSegments,
+                            errorArg = closeState.errorArg,
+                        ),
+                    )
                 } else {
-                    // Same-frame scenario: filter based on pendingCloseVar
-                    frameToUseForTbc = execFrame
-
-                    if (shouldProcessRemainingTbc) {
-                        val filtered =
-                            closeState.pendingTbcList
-                                .filter { (regIndex, _) ->
-                                    val pendingReg = closeState.pendingCloseVar?.first ?: Int.MAX_VALUE
-                                    regIndex >= closeState.startReg && regIndex < pendingReg
-                                }.asReversed()
-                        debugSink.debug { "[RESUME CloseState] Same-frame filtering: remainingTbc.size=${filtered.size}" }
-                        filtered
-                    } else {
-                        emptyList()
-                    }
+                    closeContext.setActiveCloseResumeState(null)
                 }
 
-            if (remainingTbc.isNotEmpty()) {
-                try {
-                    // Process remaining TBC variables using captured values
-                    // Note: pendingTbcList has (regIndex, capturedValue) pairs
-                    // frameToUseForTbc.toBeClosedVars has (regIndex, upvalue) pairs
-                    for ((regIndex, capturedValue) in remainingTbc) {
-                        // Find the upvalue in the frame's TBC list
-                        val tbcEntry = frameToUseForTbc.toBeClosedVars.find { it.first == regIndex }
-                        if (tbcEntry != null) {
-                            val tbcValue = tbcEntry.second // This is the LuaValue with __close metamethod
-
-                            // Get __close metamethod from the value
-                            val closeFn = getMetamethod(tbcValue, "__close") as? LuaFunction
-                            if (closeFn != null) {
-                                env.setMetamethodCallContext("__close")
-                                env.setPendingCloseVar(regIndex, capturedValue)
-                                env.setPendingCloseErrorArg(closeState.errorArg)
-                                env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
-                                env.setNextCallIsCloseMetamethod()
-                                try {
-                                    env.callFunction(closeFn, listOf(capturedValue, closeState.errorArg))
-                                } finally {
-                                    env.clearPendingCloseVar()
-                                    env.clearYieldResumeContext()
-                                }
-                            }
-                            frameToUseForTbc.toBeClosedVars.removeAll { it.first == regIndex }
-                        }
-                    }
-                } catch (e: Exception) {
-                    throw e
-                }
+                // Set up execution context for first segment
+                execFrame = segmentFrame
+                flowState.setActiveExecutionFrame(segmentFrame)
+                registers = segmentFrame.registers
+                currentProto = segmentFrame.proto
+                constants = segmentFrame.constants
+                instructions = segmentFrame.instructions
+                pc = segmentFrame.pc
+                openUpvalues = segmentFrame.openUpvalues
+                toBeClosedVars = segmentFrame.toBeClosedVars
+                varargs = segmentFrame.varargs
+                env = ExecutionEnvironment(segmentFrame, globals, this)
             }
-
-            // Step 5: Don't return captured values here - continue normal dispatch
-            // The captured returns are stored in execFrame.capturedReturns and will be
-            // returned through the RETURN instruction (which checks for captured returns first)
-            // or when PC reaches end of instructions.
-            // This allows outer __close handlers and pcall wrappers to run.
-
-            // Step 6: Continue to opcode dispatch
-            // The frame was already rebuilt in Step 3 above
-            // No additional action needed here
 
             // Ensure activeExecutionFrame points to the current live frame after any rebuild
             flowState.setActiveExecutionFrame(execFrame)
@@ -1279,8 +1199,65 @@ class LuaVmImpl(
                             // Continue execution in caller
                             // pc will be incremented at end of loop
                         } else {
-                            // No caller on stack - this is the final return
-                            return dispatchResult.values
+                            // No caller on stack - check if there are remaining segments to process
+                            val activeCloseState = closeContext.activeCloseResumeState
+                            if (activeCloseState != null && activeCloseState.ownerSegments.isNotEmpty()) {
+                                // Process next segment
+                                val nextSegment = activeCloseState.ownerSegments.first()
+                                debugSink.debug {
+                                    "[Segment Orchestrator] First segment completed, processing next segment: proto=${nextSegment.proto.name}"
+                                }
+
+                                // Rebuild next segment's frame
+                                val segmentFrame =
+                                    ExecutionFrame(
+                                        proto = nextSegment.proto,
+                                        initialArgs = emptyList(),
+                                        upvalues = nextSegment.upvalues,
+                                        initialPc = nextSegment.pcToResume,
+                                        existingRegisters = nextSegment.registers.toMutableList(),
+                                        existingVarargs = nextSegment.varargs,
+                                        existingToBeClosedVars = nextSegment.toBeClosedVars,
+                                        existingOpenUpvalues = mutableMapOf(),
+                                    )
+                                segmentFrame.capturedReturns = nextSegment.capturedReturns ?: dispatchResult.values
+
+                                // Update remaining segments
+                                val remainingSegments = activeCloseState.ownerSegments.drop(1)
+                                if (remainingSegments.isNotEmpty()) {
+                                    debugSink.debug {
+                                        "[Segment Orchestrator] ${remainingSegments.size} segments remaining after this one"
+                                    }
+                                    closeContext.setActiveCloseResumeState(
+                                        CloseResumeState(
+                                            pendingCloseContinuation = null,
+                                            ownerSegments = remainingSegments,
+                                            errorArg = activeCloseState.errorArg,
+                                        ),
+                                    )
+                                } else {
+                                    closeContext.setActiveCloseResumeState(null)
+                                }
+
+                                // Update execution context to next segment
+                                currentProto = nextSegment.proto
+                                execFrame = segmentFrame
+                                flowState.setActiveExecutionFrame(segmentFrame)
+                                registers = segmentFrame.registers
+                                constants = segmentFrame.constants
+                                instructions = segmentFrame.instructions
+                                pc = segmentFrame.pc
+                                openUpvalues = segmentFrame.openUpvalues
+                                toBeClosedVars = segmentFrame.toBeClosedVars
+                                varargs = segmentFrame.varargs
+                                currentUpvalues = execFrame.upvalues
+                                env = ExecutionEnvironment(segmentFrame, globals, this)
+
+                                // Continue execution - don't return yet
+                            } else {
+                                // No remaining segments - this is the final return
+                                return dispatchResult.values
+                            }
                         }
                     }
                     is DispatchResult.CallTrampoline -> {
@@ -1674,13 +1651,14 @@ class LuaVmImpl(
                 val stateUpvalues: List<Upvalue>
                 val stateVarargs: List<LuaValue<*>>
 
-                if (closeResumeState != null && closeResumeState.ownerProto != null) {
-                    // Use owner frame from CloseResumeState
-                    stateProto = closeResumeState.ownerProto
-                    statePc = closeResumeState.ownerPc
-                    stateRegs = closeResumeState.ownerRegisters.toMutableList()
-                    stateUpvalues = closeResumeState.ownerUpvalues
-                    stateVarargs = closeResumeState.ownerVarargs
+                if (closeResumeState != null && closeResumeState.ownerSegments.isNotEmpty()) {
+                    // NEW: Use first (innermost) segment from ownerSegments
+                    val innermostSegment = closeResumeState.ownerSegments.first()
+                    stateProto = innermostSegment.proto
+                    statePc = innermostSegment.pcToResume
+                    stateRegs = innermostSegment.registers.toMutableList()
+                    stateUpvalues = innermostSegment.upvalues
+                    stateVarargs = innermostSegment.varargs
                 } else {
                     // Not a close yield, use current state
                     stateProto = currentProto
