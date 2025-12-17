@@ -20,22 +20,33 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
         val result =
             execute(
                 """
+                print("[SCRIPT START]")
                 local function func2close(f)
                   return setmetatable({}, {__close = f})
                 end
                 
+                print("[SCRIPT] Creating coroutine")
                 local co = coroutine.wrap(function ()
+                  print("[COROUTINE] Starting wrapped function")
                   local x <close> = func2close(function ()
+                    print("[CLOSE] About to yield")
                     coroutine.yield("yielding")
+                    print("[CLOSE] Resumed after yield")
                   end)
                   
+                  print("[COROUTINE] About to return result")
                   return "result"
                 end)
                 
+                print("[SCRIPT] Calling co() first time")
                 local r1 = co()
-                assert(r1 == "yielding", "First resume should yield 'yielding', got: " .. type(r1) .. " = " .. tostring(r1))
+                print("[SCRIPT] r1 type=" .. type(r1) .. " value=" .. tostring(r1))
+                print("[SCRIPT] Checking r1 == 'yielding': " .. tostring(r1 == "yielding"))
+                assert(r1 == "yielding", "First resume should yield 'yielding'")
                 
+                print("[SCRIPT] First assert passed! Calling co() second time")
                 local r2 = co()
+                print("[SCRIPT] r2 type=" .. type(r2) .. " value=" .. tostring(r2))
                 assert(r2 == "result", "Second resume should return 'result', got: " .. tostring(r2))
                 
                 return "OK"

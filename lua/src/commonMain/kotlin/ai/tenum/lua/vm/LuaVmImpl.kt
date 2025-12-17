@@ -872,7 +872,6 @@ class LuaVmImpl(
             if (closeState.ownerSegments.isNotEmpty()) {
                 val firstSegment = closeState.ownerSegments.first()
                 val isSingleFrame = closeState.ownerSegments.size == 1
-                
                 debugSink.debug {
                     "[Segment Orchestrator] Processing first segment: proto=${firstSegment.proto.name}, total segments=${closeState.ownerSegments.size}"
                 }
@@ -926,6 +925,9 @@ class LuaVmImpl(
                 toBeClosedVars = segmentFrame.toBeClosedVars
                 varargs = segmentFrame.varargs
                 env = ExecutionEnvironment(segmentFrame, globals, this)
+                
+                // DON'T clear TBC vars - keep them intact so remaining close handlers can run
+                // The close chain must be preserved across yield/resume boundaries
                 
                 // Restore close context state for this segment
                 if (firstSegment.pendingCloseVar != null) {
@@ -1618,13 +1620,12 @@ class LuaVmImpl(
                         debugSink.debug { "[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}" }
 
                         // Calculate effective owner PC using resumption service
-                        // CRITICAL: For close-yields during RETURN, we need to re-execute the RETURN instruction
-                        // when we resume (it will use capturedReturns and skip double-__close). So use the
-                        // RETURN instruction's PC (current PC), not PC+1.
+                        // The owner should resume AFTER the RETURN instruction so we don't re-execute it
+                        val rawOwnerPc = closeContext.pendingCloseOwnerFrame?.pc ?: callerFrame?.pc ?: pc
                         val effectiveOwnerPc =
                             resumptionService.calculateResumePc(
-                                currentPc = closeContext.pendingCloseOwnerFrame?.pc ?: callerFrame?.pc ?: pc,
-                                incrementPc = false, // DON'T increment - we need to re-execute RETURN
+                                currentPc = rawOwnerPc,
+                                incrementPc = true, // Increment to skip past RETURN instruction
                             )
 
                         // Build close resume state using resumption service
@@ -1828,6 +1829,14 @@ class LuaVmImpl(
             // Already a LuaException - close to-be-closed vars and handle error chaining
             handleErrorAndCloseToBeClosedVars(e)
         } catch (e: Exception) {
+            // Don't catch LuaYieldException - it should propagate to coroutineResume
+            if (e is LuaYieldException) {
+                println("[EXCEPTION HANDLER] Rethrowing LuaYieldException")
+                throw e
+            }
+            
+            println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
+            
             // Convert RuntimeException to LuaException, optionally with enhanced diagnostic info
             val extraInfo =
                 if (debugEnabled) {

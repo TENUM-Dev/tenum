@@ -59,6 +59,9 @@ class CloseHandler {
             try {
                 closeCallback(reg, value, currentError)
                 // If no exception, currentError continues to next handler
+            } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
+                // Yield exceptions MUST propagate immediately - don't catch and chain them
+                throw e
             } catch (e: Exception) {
                 // Capture exception and update chained error
                 currentError =

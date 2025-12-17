@@ -390,7 +390,8 @@ internal class OpcodeDispatcher(
             OpCode.CLOSE -> {
                 // Set owner frame for CLOSE-mode yields (nested scopes)
                 env.setPendingCloseOwnerFrame(execFrame)
-                println("[CLOSE] Before executeClose: TBC list size=${execFrame.toBeClosedVars.size} vars=${execFrame.toBeClosedVars}")
+                // CRITICAL: Snapshot TBC list BEFORE executeClose clears it
+                env.setPendingCloseOwnerTbc(execFrame.toBeClosedVars)
                 FrameOpcodes.executeClose(instr, execFrame, env) { closeFun, value, errorArg, regIndex ->
                     env.setMetamethodCallContext("__close")
                     env.setPendingCloseVar(regIndex, value)

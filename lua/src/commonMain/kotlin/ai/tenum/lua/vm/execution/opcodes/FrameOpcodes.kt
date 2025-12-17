@@ -50,6 +50,8 @@ object FrameOpcodes {
 
                 // Use the shared executeCloseMetamethods which handles validation and error chaining
                 env.setPendingCloseStartReg(a)
+                // Save owner frame snapshot for yield-in-close
+                // PC will be incremented by calculateResumePc(incrementPc=true) in yield catch
                 env.setPendingCloseOwnerFrame(frame)
                 // Capture snapshot BEFORE executeCloseMetamethods clears the live list
                 val ownerTbcSnapshot = frame.toBeClosedVars.toMutableList()

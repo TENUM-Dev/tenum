@@ -103,7 +103,8 @@ class CloseContext {
         tbcList: MutableList<Pair<Int, LuaValue<*>>>,
     ) {
         pendingCloseOwnerFrame = frame
-        pendingCloseOwnerTbc = tbcList
+        // Store a snapshot copy; callers may mutate/clear the original list (e.g., executeCloseMetamethods)
+        pendingCloseOwnerTbc = tbcList.toMutableList()
     }
 
     /**

@@ -284,8 +284,9 @@ object CallOpcodes {
     ): List<LuaValue<*>> {
         // Step 0: If frame already has captured returns (from previous execution before yield-in-close),
         // use those as the return values. But still process remaining TBC vars if any exist.
+        val isResumeAfterYield = frame.capturedReturns != null
         val results =
-            if (frame.capturedReturns != null) {
+            if (isResumeAfterYield) {
                 env.debug("  Return using captured returns: ${frame.capturedReturns}")
                 frame.capturedReturns!!
             } else {
@@ -293,7 +294,6 @@ object CallOpcodes {
                 val collector = ArgumentCollector(registers, frame)
                 collector.collectResults(instr.a, instr.b)
             }
-
         env.debug("  Return ${results.size} values (before __close): $results")
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
 
@@ -315,13 +315,23 @@ object CallOpcodes {
         // This allows xpcall to access return values even when __close fails
         // This matches Lua 5.4 semantics where return values are placed on stack before __close runs
         env.clearCloseException()
-        frame.capturedReturns = results
+        // DON'T overwrite capturedReturns if already set (after yield-in-close resume)
+        if (frame.capturedReturns == null) {
+            frame.capturedReturns = results
+        }
         env.setPendingCloseStartReg(0)
-        env.setPendingCloseOwnerFrame(frame) // Save owner frame for yield-in-close
-        // Share the TBC list reference so updates remain visible across yield boundaries
-        env.setPendingCloseOwnerTbc(frame.toBeClosedVars)
-        try {
-            frame.executeCloseMetamethods(0) { regIndex, upvalue, capturedValue, errorArg ->
+        
+        // CRITICAL: If this is a resume after yield-in-close, the __close metamethods already ran (Phase 1 completed them).
+        // Skip executeCloseMetamethods and just return the captured results directly.
+        if (!isResumeAfterYield) {
+            // Normal RETURN path: execute __close metamethods
+            env.setPendingCloseOwnerFrame(frame) // Save owner frame for yield-in-close
+            // Share the TBC list reference so updates remain visible across yield boundaries
+            // IMPORTANT: take a snapshot copy here; executeCloseMetamethods will clear frame.toBeClosedVars
+            // and we need the captured values when saving close-yield state.
+            env.setPendingCloseOwnerTbc(frame.toBeClosedVars.toMutableList())
+            try {
+                frame.executeCloseMetamethods(0) { regIndex, upvalue, capturedValue, errorArg ->
                 env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
                 val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
                 if (closeFn != null) {
@@ -337,18 +347,22 @@ object CallOpcodes {
                     env.clearYieldResumeContext()
                 }
             }
-        } catch (e: Exception) {
-            // Store the __close exception for two-phase handling
-            env.setCloseException(e)
-            // Re-throw so normal error handling works
-            throw e
-        } finally {
-            env.clearPendingCloseStartReg()
+            } catch (e: Exception) {
+                // Store the __close exception for two-phase handling
+                env.setCloseException(e)
+                // Re-throw so normal error handling works
+                throw e
+            } finally {
+                env.clearPendingCloseStartReg()
+            }
+        } else {
+            // Resume after yield-in-close: __close already ran in Phase 1, skip it
+            println("[CallOpcodes RETURN] Skipping __close (already ran in Phase 1), using capturedReturns")
         }
 
         env.debug("  Return ${results.size} values (after __close): $results")
 
-        // Update current CallFrame with return transfer info before triggering RETURN hook
+        // Uenv.debug("eturn transfer info before triggering RETURN hook
         // This allows debug.getinfo('r') in the hook to access ftransfer and ntransfer
         val callStack = env.getCallStack()
         if (callStack.isNotEmpty()) {
