@@ -319,6 +319,32 @@ class LuaVmImpl(
     private val resumptionService = CoroutineResumptionService()
 
     /**
+     * Filter frames to only include those belonging to the current coroutine.
+     * This prevents main chunk or outer native caller frames from being incorrectly
+     * used as owner segments when resuming from yield-in-close.
+     *
+     * @param frames The frames from callerContext.snapshot()
+     * @param callStackBase The base index for the current coroutine's call stack
+     * @return Filtered list containing only coroutine-owned frames
+     */
+    private fun filterCoroutineFrames(frames: List<ExecutionFrame>, callStackBase: Int): List<ExecutionFrame> {
+        if (callStackBase == 0) {
+            // No filtering needed - we're in the main thread
+            return frames
+        }
+        
+        // Get the full call stack and build a set of protos that belong to the coroutine
+        val fullStack = callStackManager.captureSnapshot()
+        val coroutineFrameProtos = fullStack.drop(callStackBase).mapNotNull { callFrame -> 
+            callFrame.proto 
+        }.toSet()
+        
+        // Filter callerContext frames to only those whose proto appears in the coroutine's stack
+        // This excludes main chunk and native caller frames that are before callStackBase
+        return frames.filter { execFrame -> execFrame.proto in coroutineFrameProtos }
+    }
+
+    /**
      * Encapsulates yield/resume context state for coroutine operations.
      * Groups 3 yield-related variables into a single cohesive context.
      */
@@ -1568,7 +1594,7 @@ class LuaVmImpl(
                                 capturedReturnValues = null, // Not used in new model
                                 debugCallStack = coroutineCallStack,
                                 closeResumeState = null,
-                                closeOwnerFrameStack = callerContext.snapshot(),
+                                closeOwnerFrameStack = filterCoroutineFrames(callerContext.snapshot(), callStackBase),
                             )
 
                         // Use resumption service to select owner frame and build close resume state
@@ -1584,9 +1610,10 @@ class LuaVmImpl(
                         // outer frames in callerContext have TBC vars that must be processed.
                         // We need to include them in ownerContext.tbcVars so they're saved in
                         // CloseResumeState and processed when we resume.
+                        // FILTER: Only include frames belonging to current coroutine (not main chunk)
                         val allCallerTbc = mutableListOf<Pair<Int, LuaValue<*>>>()
                         if (isCloseYield) {
-                            val allFrames = callerContext.snapshot()
+                            val allFrames = filterCoroutineFrames(callerContext.snapshot(), callStackBase)
                             for (frame in allFrames) {
                                 allCallerTbc.addAll(frame.toBeClosedVars)
                             }
@@ -1650,7 +1677,7 @@ class LuaVmImpl(
                                 yieldTargetReg = yieldTargetReg,
                                 yieldExpectedResults = yieldExpectedResults,
                                 debugCallStack = coroutineCallStack,
-                                closeOwnerFrameStack = callerContext.snapshot(),
+                                closeOwnerFrameStack = filterCoroutineFrames(callerContext.snapshot(), callStackBase),
                             )
 
                         closeResumeStateWrapped.closeResumeState
@@ -1667,22 +1694,12 @@ class LuaVmImpl(
                 val stateUpvalues: List<Upvalue>
                 val stateVarargs: List<LuaValue<*>>
 
-                if (closeResumeState != null && closeResumeState.ownerSegments.isNotEmpty()) {
-                    // NEW: Use first (innermost) segment from ownerSegments
-                    val innermostSegment = closeResumeState.ownerSegments.first()
-                    stateProto = innermostSegment.proto
-                    statePc = innermostSegment.pcToResume
-                    stateRegs = innermostSegment.registers.toMutableList()
-                    stateUpvalues = innermostSegment.upvalues
-                    stateVarargs = innermostSegment.varargs
-                } else {
-                    // Not a close yield, use current state
-                    stateProto = currentProto
-                    statePc = pc
-                    stateRegs = registers
-                    stateUpvalues = execFrame.upvalues
-                    stateVarargs = varargs
-                }
+                // Always resume from the current proto/pc; closeResumeState carries owner segments separately
+                stateProto = currentProto
+                statePc = pc
+                stateRegs = registers
+                stateUpvalues = execFrame.upvalues
+                stateVarargs = varargs
 
                 coroutineStateManager.saveCoroutineState(
                     currentCoroutine,
@@ -1703,9 +1720,11 @@ class LuaVmImpl(
                     capturedReturnValues = getCapturedReturnValues(),
                     pendingCloseContinuation = closeContext.pendingCloseContinuation,
                     pendingCloseErrorArg = closeContext.pendingCloseErrorArg,
-                    incrementPc = true,
+                    // For close-yield we set stayOnSamePc=true so we must NOT increment the PC here,
+                    // otherwise we skip over the RETURN/CLOSE that needs to finish after resumption.
+                    incrementPc = !yieldContext.pendingYieldStayOnSamePc,
                     closeResumeState = closeResumeState,
-                    closeOwnerFrameStack = callerContext.snapshot(),
+                    closeOwnerFrameStack = filterCoroutineFrames(callerContext.snapshot(), callStackBase),
                 )
                 closeContext.setPendingCloseVar(null, 0)
                 e.stateSaved = true // Mark that state has been saved
