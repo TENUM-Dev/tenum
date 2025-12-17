@@ -175,18 +175,29 @@ class CoroutineResumptionService {
 
         // Outer segments: frames from closeOwnerFrameStack (starting from startIndex)
         // When yielding from RETURN, we start from the RETURN frame (skipping earlier callers)
-        // When yielding from CLOSE, we start from index 0 (all caller frames)
-        for (i in startIndex until closeOwnerFrameStack.size) {
+        // When yielding from CLOSE, startIndex is past the end, so loop from 0 to include outer frames
+        val loopStart = if (startIndex >= closeOwnerFrameStack.size) 0 else startIndex
+        val alreadyAddedOwnerProto = if (segments.isNotEmpty() && segments.first().capturedReturns == null) {
+            segments.first().proto
+        } else null
+        
+        for (i in loopStart until closeOwnerFrameStack.size) {
             val frame = closeOwnerFrameStack[i]
             
-            // CRITICAL: Only include frames that are mid-RETURN
-            // - The owner frame (i == startIndex) when we have capturedReturnValues (it's being enriched)
-            // - Any frame that has frame.capturedReturns (it was mid-RETURN when snapshotted)
-            // Regular caller frames waiting for return values should NOT become segments
-            val isOwnerFrameWithCapturedReturns = (i == startIndex && capturedReturnValues != null)
-            val isFrameMidReturn = frame.capturedReturns != null
+            // Skip the owner frame if it was already added manually (when yielding from CLOSE)
+            // Compare by proto reference to avoid duplicate segments
+            if (alreadyAddedOwnerProto != null && frame.proto === alreadyAddedOwnerProto) {
+                continue
+            }
             
-            if (!isOwnerFrameWithCapturedReturns && !isFrameMidReturn) {
+            // Include frames that are:
+            // 1. Mid-RETURN (owner with capturedReturnValues, or frame.capturedReturns != null)
+            // 2. Have TBC variables (will need to process __close when they eventually RETURN)
+            val isOwnerWithCapturedReturns = (i == startIndex && capturedReturnValues != null)
+            val hasStoredCapturedReturns = frame.capturedReturns != null
+            val hasTBC = frame.toBeClosedVars.isNotEmpty()
+            
+            if (!isOwnerWithCapturedReturns && !hasStoredCapturedReturns && !hasTBC) {
                 continue
             }
 

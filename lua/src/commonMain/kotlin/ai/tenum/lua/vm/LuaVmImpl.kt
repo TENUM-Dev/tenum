@@ -1254,6 +1254,28 @@ class LuaVmImpl(
                             // No caller on stack - check if there are remaining segments to process
                             val activeCloseState = closeContext.activeCloseResumeState
                             if (activeCloseState != null && activeCloseState.ownerSegments.isNotEmpty()) {
+                                // The FIRST segment in ownerSegments is the one that just completed its RETURN
+                                // We're now processing the NEXT segment (the second in the list)
+                                // Capture return values from the FIRST (just-completed) segment
+                                val justCompletedSegment = activeCloseState.ownerSegments.firstOrNull()
+                                println("[SEGMENT DBG] justCompletedSegment.capturedReturns=${justCompletedSegment?.capturedReturns?.size}, isMidReturn=${justCompletedSegment?.isMidReturn}")
+                                println("[SEGMENT DBG] execFrame.capturedReturns=${execFrame.capturedReturns?.size}, isMidReturn=${execFrame.isMidReturn}")
+                                println("[SEGMENT DBG] dispatchResult.values.size=${dispatchResult.values.size}")
+                                
+                                val segmentReturnValues = if (justCompletedSegment != null && justCompletedSegment.capturedReturns != null) {
+                                    // Segment was mid-RETURN, use its stored capturedReturns
+                                    println("[SEGMENT RETURN] Using just-completed segment's capturedReturns: ${justCompletedSegment.capturedReturns.size} values")
+                                    justCompletedSegment.capturedReturns
+                                } else if (execFrame.isMidReturn && execFrame.capturedReturns != null) {
+                                    // Current frame still mid-RETURN (shouldn't happen here)
+                                    println("[SEGMENT RETURN] Using execFrame.capturedReturns: ${execFrame.capturedReturns!!.size} values")
+                                    execFrame.capturedReturns!!
+                                } else {
+                                    // Use dispatchResult from the RETURN that just completed
+                                    println("[SEGMENT RETURN] Using dispatchResult.values: ${dispatchResult.values.size} values, frame=${execFrame.proto.name}")
+                                    dispatchResult.values
+                                }
+                                
                                 // Process next segment
                                 val nextSegment = activeCloseState.ownerSegments.first()
                                 debugSink.debug {
@@ -1273,10 +1295,38 @@ class LuaVmImpl(
                                         existingOpenUpvalues = mutableMapOf(),
                                     )
                                 // CRITICAL: For mid-RETURN frames, capturedReturns is the single source of truth
-                                // Use the segment's capturedReturns unconditionally if it's mid-RETURN
-                                // Do NOT mix dispatchResult.values (which may be yield values from close continuation)
-                                segmentFrame.capturedReturns = nextSegment.capturedReturns
-                                segmentFrame.isMidReturn = nextSegment.isMidReturn
+                                // For NOT-mid-RETURN frames (suspended at CALL), store prev segment's return as CALL result
+                                if (nextSegment.isMidReturn) {
+                                    // Mid-RETURN: restore capturedReturns
+                                    segmentFrame.capturedReturns = nextSegment.capturedReturns
+                                    segmentFrame.isMidReturn = true
+                                } else {
+                                    // NOT mid-RETURN: frame was suspended at CALL, store dispatchResult as CALL result
+                                    segmentFrame.capturedReturns = null
+                                    segmentFrame.isMidReturn = false
+                                    
+                                    // Store previous segment's return values as this segment's CALL result
+                                    // The segment's pc points AFTER the CALL instruction
+                                    val prevCallInstr = if (nextSegment.pcToResume > 0) {
+                                        nextSegment.proto.instructions[nextSegment.pcToResume - 1]
+                                    } else null
+                                    
+                                    if (prevCallInstr != null && prevCallInstr.opcode == OpCode.CALL) {
+                                        println("[CALL-Resume] Storing ${segmentReturnValues.size} values to R${prevCallInstr.a}")
+                                        val storage = ResultStorage(ExecutionEnvironment(segmentFrame, globals, this))
+                                        storage.storeResults(
+                                            targetReg = prevCallInstr.a,
+                                            encodedCount = prevCallInstr.c,
+                                            results = segmentReturnValues,
+                                            opcodeName = "SEGMENT-CALL-RESUME",
+                                        )
+                                        debugSink.debug {
+                                            "[Segment CALL-Resume] Stored ${dispatchResult.values.size} values from prev segment"
+                                        }
+                                    } else {
+                                        println("[CALL-Resume] FAILED: prevCallInstr=${prevCallInstr?.opcode}, pc=${nextSegment.pcToResume}")
+                                    }
+                                }
 
                                 // Update remaining segments
                                 val remainingSegments = activeCloseState.ownerSegments.drop(1)
@@ -1316,14 +1366,18 @@ class LuaVmImpl(
 
                                 // Continue execution - don't return yet
                             } else {
-                                // No remaining segments - this is the final return
-                                // Use dispatchResult.values (which contains the values returned by the RETURN opcode)
-                                // NOTE: capturedReturns is cleared by RETURN after use (CallOpcodes.kt:399)
-                                val returnValues = dispatchResult.values
-                                debugSink.debug {
-                                    "[Segment Orchestrator] Final return: using dispatchResult.values (size=${returnValues.size})"
+                                // No remaining segments - all segments completed
+                                // Return the final values to coroutine caller
+                                // Use segmentReturnValues captured from the last completing segment
+                                val finalReturnValues = if (execFrame.isMidReturn && execFrame.capturedReturns != null) {
+                                    execFrame.capturedReturns!!
+                                } else {
+                                    dispatchResult.values
                                 }
-                                return returnValues
+                                debugSink.debug {
+                                    "[Segment Orchestrator] All segments completed, returning (size=${finalReturnValues.size})"
+                                }
+                                return finalReturnValues
                             }
                         }
                     }
