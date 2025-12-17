@@ -7,7 +7,6 @@ import ai.tenum.lua.vm.execution.ExecutionFrame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -34,13 +33,12 @@ class ExecutionFlowStateTest {
             lineEvents = emptyList(),
         )
 
-    private fun createDummyFrame(): ExecutionFrame {
-        return ExecutionFrame(
+    private fun createDummyFrame(): ExecutionFrame =
+        ExecutionFrame(
             proto = createDummyProto(),
             initialArgs = emptyList(),
             upvalues = emptyList(),
         )
-    }
 
     @Test
     fun testInitialStateIsEmpty() {

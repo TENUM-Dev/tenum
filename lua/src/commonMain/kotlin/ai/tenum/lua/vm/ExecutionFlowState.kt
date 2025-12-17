@@ -66,20 +66,17 @@ class ExecutionFlowState {
     /**
      * Checks if there is an active execution frame.
      */
-    fun hasActiveFrame(): Boolean {
-        return activeExecutionFrame != null
-    }
+    fun hasActiveFrame(): Boolean = activeExecutionFrame != null
 
     /**
      * Creates a snapshot of current execution flow state.
      */
-    fun snapshot(): ExecutionFlowStateSnapshot {
-        return ExecutionFlowStateSnapshot(
+    fun snapshot(): ExecutionFlowStateSnapshot =
+        ExecutionFlowStateSnapshot(
             currentEnvUpvalue = currentEnvUpvalue,
             activeExecutionFrame = activeExecutionFrame,
             nextCallIsCloseMetamethod = nextCallIsCloseMetamethod,
         )
-    }
 
     /**
      * Restores execution flow state from a snapshot.

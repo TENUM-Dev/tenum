@@ -95,7 +95,7 @@ class LuaVmImpl(
     }
 
     override fun setNextCallIsCloseMetamethod() {
-        nextCallIsCloseMetamethod = true
+        flowState.setNextCallIsCloseMetamethod(true)
     }
 
     override fun clearCloseException() {
@@ -286,24 +286,10 @@ class LuaVmImpl(
         )
 
     /**
-     * Track current _ENV upvalue for load() inheritance.
-     * Note: _ENV is NOT always at upvalue[0] - functions can have other upvalues before _ENV!
-     * We must find _ENV by name from proto.upvalueInfo, not assume a fixed position.
-     */
-    private var currentEnvUpvalue: Upvalue? = null
-
-    /**
      * Function call context for name inference (Phase 6.4 - debug.getinfo)
      * These track the inferred name from bytecode analysis before a CALL
      */
     private var pendingInferredName: InferredFunctionName? = null
-
-    /**
-     * Flag to mark the next function call as a __close metamethod call.
-     * When true, the call frame will be marked with isCloseMetamethod=true.
-     * This makes the frame transparent for debug.getinfo level counting.
-     */
-    private var nextCallIsCloseMetamethod: Boolean = false
 
     /**
      * Last error call stack for debug.traceback.
@@ -339,11 +325,16 @@ class LuaVmImpl(
     private val yieldContext = CoroutineYieldContext()
 
     /**
-     * Currently active execution frame.
-     * Set at the start of executeProto and used by callFunction to push caller frames.
-     * This allows native functions (like pcall) to access their calling frame for TBC tracking.
+     * Encapsulates execution flow state.
+     * Groups 3 execution-control variables: currentEnvUpvalue, activeExecutionFrame, nextCallIsCloseMetamethod.
      */
-    private var activeExecutionFrame: ExecutionFrame? = null
+    private val flowState = ExecutionFlowState()
+
+    /**
+     * Debug sink for logging and debugging output.
+     * Defaults to NOOP to avoid console clutter in production.
+     */
+    private var debugSink: VmDebugSink = VmDebugSink.NOOP
 
     /**
      * Original call stack snapshot for hooks.
@@ -708,7 +699,7 @@ class LuaVmImpl(
                         // Pass the current error to the __close metamethod
                         // Mark this as a __close metamethod call so debug.getinfo can skip it
                         setMetamethodCallContext("__close")
-                        nextCallIsCloseMetamethod = true
+                        flowState.setNextCallIsCloseMetamethod(true)
                         setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
                         callFunctionInternal(closeMethod, listOf(capturedValue, currentError), isCloseMetamethod = true)
                         clearYieldResumeContext()
@@ -839,13 +830,13 @@ class LuaVmImpl(
                 execFrame.toBeClosedVars.isEmpty() &&
                 topFrame.toBeClosedVars.isNotEmpty()
             ) {
-                println("[RESUME] Restoring TBC list from stack: ${topFrame.toBeClosedVars.size} vars")
+                debugSink.debug { "[RESUME] Restoring TBC list from stack: ${topFrame.toBeClosedVars.size} vars" }
                 execFrame.toBeClosedVars.addAll(topFrame.toBeClosedVars)
             }
         }
 
         // Track active execution frame for native function calls
-        activeExecutionFrame = execFrame
+        flowState.setActiveExecutionFrame(execFrame)
 
         // Local aliases for frequently accessed frame state
         var registers = execFrame.registers
@@ -901,12 +892,12 @@ class LuaVmImpl(
             val remainingTbc =
                 if (closeState.ownerProto != null) {
                     // Cross-frame scenario: rebuild owner frame
-                    println(
-                        "[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}",
-                    )
-                    println(
-                        "[RESUME CloseState] pendingTbcList.size=${closeState.pendingTbcList.size} pendingCloseVar=${closeState.pendingCloseVar}",
-                    )
+                    debugSink.debug {
+                        "[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}"
+                    }
+                    debugSink.debug {
+                        "[RESUME CloseState] pendingTbcList.size=${closeState.pendingTbcList.size} pendingCloseVar=${closeState.pendingCloseVar}"
+                    }
 
                     // Clear active close state - we're continuing with the owner frame
                     closeContext.setActiveCloseResumeState(null)
@@ -929,7 +920,7 @@ class LuaVmImpl(
 
                     // Update local variables to continue execution from owner frame
                     execFrame = ownerFrame
-                    activeExecutionFrame = ownerFrame // Re-sync active frame after rebuild
+                    flowState.setActiveExecutionFrame(ownerFrame) // Re-sync active frame after rebuild
                     registers = ownerFrame.registers
                     currentProto = ownerFrame.proto
                     constants = ownerFrame.constants
@@ -945,10 +936,10 @@ class LuaVmImpl(
                     // Only process TBC if we're IN a __close handler, not just resuming normal execution
                     // If pendingCloseVar is null, we're resuming after inner function returned - don't process yet
                     if (shouldProcessRemainingTbc) {
-                        println("[RESUME CloseState] Processing TBC vars (inside __close handler)")
+                        debugSink.debug { "[RESUME CloseState] Processing TBC vars (inside __close handler)" }
                         restoredTbc.asReversed()
                     } else {
-                        println("[RESUME CloseState] Skipping TBC processing (normal execution resume)")
+                        debugSink.debug { "[RESUME CloseState] Skipping TBC processing (normal execution resume)" }
                         emptyList()
                     }
                 } else {
@@ -962,7 +953,7 @@ class LuaVmImpl(
                                     val pendingReg = closeState.pendingCloseVar?.first ?: Int.MAX_VALUE
                                     regIndex >= closeState.startReg && regIndex < pendingReg
                                 }.asReversed()
-                        println("[RESUME CloseState] Same-frame filtering: remainingTbc.size=${filtered.size}")
+                        debugSink.debug { "[RESUME CloseState] Same-frame filtering: remainingTbc.size=${filtered.size}" }
                         filtered
                     } else {
                         emptyList()
@@ -1008,7 +999,7 @@ class LuaVmImpl(
             // No additional action needed here
 
             // Ensure activeExecutionFrame points to the current live frame after any rebuild
-            activeExecutionFrame = execFrame
+            flowState.setActiveExecutionFrame(execFrame)
         }
 
         // Handle coroutine resumption - place resume args as yield return values
@@ -1042,13 +1033,13 @@ class LuaVmImpl(
                 args = args,
                 inferredName = pendingInferredName,
                 pc = pc,
-                isCloseMetamethod = nextCallIsCloseMetamethod,
+                isCloseMetamethod = flowState.nextCallIsCloseMetamethod,
             )
         }
 
         // Clear call context after using it
         pendingInferredName = null
-        nextCallIsCloseMetamethod = false
+        flowState.setNextCallIsCloseMetamethod(false)
 
         // Trigger CALL hook (Phase 6.4)
         triggerHook(HookEvent.CALL, currentProto.lineDefined)
@@ -1071,10 +1062,10 @@ class LuaVmImpl(
 
         // Track current upvalues for this execution context and _ENV
         var currentUpvalues = upvalues
-        val previousEnv = currentEnvUpvalue
+        val previousEnv = flowState.currentEnvUpvalue
         // Find _ENV by name, not position (_ENV is not always at index 0!)
         val envIndex = currentProto.upvalueInfo.indexOfFirst { it.name == "_ENV" }
-        currentEnvUpvalue = if (envIndex >= 0) currentUpvalues.getOrNull(envIndex) else null
+        flowState.setCurrentEnvUpvalue(if (envIndex >= 0) currentUpvalues.getOrNull(envIndex) else null)
 
         // Execution stack for trampolined calls (non-tail calls)
         // Each entry represents a caller waiting for callee to return
@@ -1168,7 +1159,7 @@ class LuaVmImpl(
 
             whileLoop@ while (pc < instructions.size) {
                 // Keep activeExecutionFrame in sync with the frame currently executing bytecode
-                activeExecutionFrame = execFrame
+                flowState.setActiveExecutionFrame(execFrame)
 
                 // Update current frame PC (for both debug stack and execution frame)
                 callStackManager.updateLastFramePc(pc)
@@ -1241,7 +1232,9 @@ class LuaVmImpl(
                             val callerContext = execStack.removeLast()
                             debug { "  Unwinding from trampolined call, restoring caller" }
 
-                            println("[RETURN unwind] Restoring caller, TBC list size=${callerContext.execFrame.toBeClosedVars.size}")
+                            debugSink.debug {
+                                "[RETURN unwind] Restoring caller, TBC list size=${callerContext.execFrame.toBeClosedVars.size}"
+                            }
 
                             // Pop callee's call frame from debug stack
                             callStackManager.removeLastFrame()
@@ -1462,7 +1455,7 @@ class LuaVmImpl(
                             )
 
                         // Re-sync active frame after TCO frame replacement
-                        activeExecutionFrame = execFrame
+                        flowState.setActiveExecutionFrame(execFrame)
 
                         // Recreate execution environment with the new frame
                         // Made mutable (var) to allow recreation during tail call optimization (TCO)
@@ -1590,12 +1583,12 @@ class LuaVmImpl(
                                 defaultTbc = ownerTbc,
                             )
 
-                        println(
-                            "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}",
-                        )
-                        println("[YIELD CloseState] Selected owner: proto=${ownerContext.proto.name} pc=${ownerContext.pc}")
-                        println("[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars}")
-                        println("[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}")
+                        debugSink.debug {
+                            "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}"
+                        }
+                        debugSink.debug { "[YIELD CloseState] Selected owner: proto=${ownerContext.proto.name} pc=${ownerContext.pc}" }
+                        debugSink.debug { "[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars}" }
+                        debugSink.debug { "[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}" }
 
                         // Calculate effective owner PC using resumption service
                         val effectiveOwnerPc =
@@ -1780,20 +1773,20 @@ class LuaVmImpl(
                     val proto = currentProto
                     val start = maxOf(0, pc - 8)
                     val end = minOf(proto.instructions.size - 1, pc + 8)
-                    println("--- Proto dump for ${proto.name} source=${proto.source} pc=$pc ---")
+                    debugSink.debug { "--- Proto dump for ${proto.name} source=${proto.source} pc=$pc ---" }
                     for (i in start..end) {
                         val ins = proto.instructions[i]
-                        println(
-                            "  PC=$i: ${ins.opcode} a=${ins.a} b=${ins.b} c=${ins.c}  # line=${stackTraceBuilder.getCurrentLine(proto, i)}",
-                        )
+                        debugSink.debug {
+                            "  PC=$i: ${ins.opcode} a=${ins.a} b=${ins.b} c=${ins.c}  # line=${stackTraceBuilder.getCurrentLine(proto, i)}"
+                        }
                     }
-                    println("--- Constants (${proto.constants.size}) ---")
+                    debugSink.debug { "--- Constants (${proto.constants.size}) ---" }
                     for ((ci, c) in proto.constants.withIndex()) {
-                        if (ci in (0..199)) println("  K[$ci] = $c")
+                        if (ci in (0..199)) debugSink.debug { "  K[$ci] = $c" }
                     }
-                    println("--- Line events (${proto.lineEvents.size}) ---")
-                    for (li in proto.lineEvents) println("  PC=${li.pc} -> line=${li.line} kind=${li.kind}")
-                    println("--- End proto dump ---")
+                    debugSink.debug { "--- Line events (${proto.lineEvents.size}) ---" }
+                    for (li in proto.lineEvents) debugSink.debug { "  PC=${li.pc} -> line=${li.line} kind=${li.kind}" }
+                    debugSink.debug { "--- End proto dump ---" }
                 }
             } catch (_: Exception) {
             }
@@ -1886,14 +1879,14 @@ class LuaVmImpl(
             clearYieldResumeContext()
 
             // Clear active execution frame
-            activeExecutionFrame = null
+            flowState.setActiveExecutionFrame(null)
 
             // Remove all frames added during this execution (including tail-called frames)
             // This cleans up the call stack after trampolined tail calls
             callStackManager.cleanupFrames(initialCallStackSize)
 
             // Restore previous _ENV upvalue
-            currentEnvUpvalue = previousEnv
+            flowState.setCurrentEnvUpvalue(previousEnv)
         }
     }
 
@@ -1955,29 +1948,29 @@ class LuaVmImpl(
             // This ensures outer __close handlers (like x in pcall test) are processed by RETURN
             if (!didYield && callerFrame != null && callerContext.size > 0 && callerContext.peek()?.proto == callerFrame.proto) {
                 val frameToPop = callerContext.peek()
-                val activeFrame = activeExecutionFrame
-                println(
-                    "[callFunction finally] Popping frame: proto=${frameToPop?.proto?.name} TBC.size=${frameToPop?.toBeClosedVars?.size}",
-                )
-                println("[callFunction finally] activeFrame=${activeFrame != null} activeProto=${activeFrame?.proto?.name}")
+                val activeFrame = flowState.activeExecutionFrame
+                debugSink.debug {
+                    "[callFunction finally] Popping frame: proto=${frameToPop?.proto?.name} TBC.size=${frameToPop?.toBeClosedVars?.size}"
+                }
+                debugSink.debug { "[callFunction finally] activeFrame=${activeFrame != null} activeProto=${activeFrame?.proto?.name}" }
 
                 // Transfer TBC vars to active frame so RETURN instruction can process them
                 // BUT only if they're different lists (we share the TBC reference when pushing, so check identity)
                 if (frameToPop != null && frameToPop.toBeClosedVars.isNotEmpty() && activeFrame != null) {
-                    println("[callFunction finally] Transferring ${frameToPop.toBeClosedVars.size} TBC vars to active frame")
-                    println("[callFunction finally] Active frame proto: ${activeFrame.proto.name}")
-                    println("[callFunction finally] Active frame TBC before: ${activeFrame.toBeClosedVars}")
-                    println("[callFunction finally] Same list? ${frameToPop.toBeClosedVars === activeFrame.toBeClosedVars}")
+                    debugSink.debug { "[callFunction finally] Transferring ${frameToPop.toBeClosedVars.size} TBC vars to active frame" }
+                    debugSink.debug { "[callFunction finally] Active frame proto: ${activeFrame.proto.name}" }
+                    debugSink.debug { "[callFunction finally] Active frame TBC before: ${activeFrame.toBeClosedVars}" }
+                    debugSink.debug { "[callFunction finally] Same list? ${frameToPop.toBeClosedVars === activeFrame.toBeClosedVars}" }
 
                     // Only transfer if they're different list instances
                     // When we push, we share the TBC list reference, so they'll be identical
                     if (frameToPop.toBeClosedVars !== activeFrame.toBeClosedVars) {
-                        println("[callFunction finally] Lists are different, transferring")
+                        debugSink.debug { "[callFunction finally] Lists are different, transferring" }
                         activeFrame.toBeClosedVars.addAll(frameToPop.toBeClosedVars)
                     } else {
-                        println("[callFunction finally] Lists are same (shared), no transfer needed")
+                        debugSink.debug { "[callFunction finally] Lists are same (shared), no transfer needed" }
                     }
-                    println("[callFunction finally] Active frame TBC after: ${activeFrame.toBeClosedVars}")
+                    debugSink.debug { "[callFunction finally] Active frame TBC after: ${activeFrame.toBeClosedVars}" }
                 }
 
                 callerContext.pop()
@@ -1988,7 +1981,7 @@ class LuaVmImpl(
     override fun callFunction(
         func: LuaValue<*>,
         args: List<LuaValue<*>>,
-    ): List<LuaValue<*>> = callFunction(func, args, activeExecutionFrame)
+    ): List<LuaValue<*>> = callFunction(func, args, flowState.activeExecutionFrame)
 
     /**
      * Call a function with explicit __close error handling.
@@ -2007,7 +2000,7 @@ class LuaVmImpl(
             is LuaFunction -> {
                 // Clear any previous state, but preserve captured return values if this is a __close call
                 // __close might be called during RETURN, and we need to preserve the return values
-                val savedCaptured = if (nextCallIsCloseMetamethod) getCapturedReturnValues() else null
+                val savedCaptured = if (flowState.nextCallIsCloseMetamethod) getCapturedReturnValues() else null
                 clearCloseException()
                 savedCaptured?.let { setCapturedReturnValues(it) }
 
@@ -2223,7 +2216,7 @@ class LuaVmImpl(
                         }
                     executeProto(proto, args, upvalues, function, mode)
                 }, // For coroutine resumption with saved state
-                getCurrentEnv = { currentEnvUpvalue }, // Provide current _ENV for load() inheritance
+                getCurrentEnv = { flowState.currentEnvUpvalue }, // Provide current _ENV for load() inheritance
                 getCurrentCoroutine = { coroutineStateManager.getCurrentCoroutine() }, // Get currently executing coroutine
                 getMainThread = { coroutineStateManager.mainThread }, // Get main thread
                 setCurrentCoroutine = { coroutine -> coroutineStateManager.setCurrentCoroutine(coroutine) }, // Set current coroutine
@@ -2262,7 +2255,7 @@ class LuaVmImpl(
                         varargs = emptyList(),
                         ftransfer = if (args.isEmpty()) 0 else 1, // Lua 5.4: 0 if no parameters, else 1
                         ntransfer = args.size, // Lua 5.4: number of parameters
-                        isCloseMetamethod = nextCallIsCloseMetamethod,
+                        isCloseMetamethod = flowState.nextCallIsCloseMetamethod,
                     )
 
                 val initialCallStackSize = callStackManager.size
@@ -2270,7 +2263,7 @@ class LuaVmImpl(
 
                 // Clear call context after using it
                 pendingInferredName = null
-                nextCallIsCloseMetamethod = false
+                flowState.setNextCallIsCloseMetamethod(false)
 
                 // Check call depth for native functions too
                 callDepth++
@@ -2323,16 +2316,16 @@ class LuaVmImpl(
             is LuaCompiledFunction -> {
                 // Save activeExecutionFrame before nested call and restore after
                 // This ensures the caller's frame is available for native/library calls (pcall, etc.)
-                val savedActiveFrame = activeExecutionFrame
+                val savedActiveFrame = flowState.activeExecutionFrame
                 try {
                     val result = executeProto(func.proto, args, func.upvalues, func)
                     // Restore IMMEDIATELY after return, before any other code runs
                     // (executeProto's finally clears it, so we must restore before our finally)
-                    activeExecutionFrame = savedActiveFrame
+                    flowState.setActiveExecutionFrame(savedActiveFrame)
                     result
                 } catch (e: Throwable) {
                     // Also restore on exception path
-                    activeExecutionFrame = savedActiveFrame
+                    flowState.setActiveExecutionFrame(savedActiveFrame)
                     throw e
                 }
             }
