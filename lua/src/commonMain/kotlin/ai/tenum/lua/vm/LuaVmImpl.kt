@@ -99,63 +99,72 @@ class LuaVmImpl(
     }
 
     override fun clearCloseException() {
-        pendingCloseException = null
-        capturedReturnValues = null
+        closeContext.setPendingException(null)
+        closeContext.setCapturedReturnValues(null)
     }
 
     override fun setCloseException(exception: Exception) {
-        pendingCloseException = exception
+        closeContext.setPendingException(exception)
     }
 
-    override fun getCloseException(): Exception? = pendingCloseException
+    override fun getCloseException(): Exception? = closeContext.pendingCloseException
 
     fun setCapturedReturnValues(values: List<LuaValue<*>>) {
-        capturedReturnValues = values
+        closeContext.setCapturedReturnValues(values)
     }
 
-    fun getCapturedReturnValues(): List<LuaValue<*>>? = capturedReturnValues
+    fun getCapturedReturnValues(): List<LuaValue<*>>? = closeContext.capturedReturnValues
 
     override fun setPendingCloseVar(
         register: Int,
         value: LuaValue<*>,
     ) {
-        pendingCloseVar = register to value
+        closeContext.setPendingCloseVar(register to value, closeContext.pendingCloseStartReg)
     }
 
     override fun clearPendingCloseVar() {
-        pendingCloseVar = null
+        closeContext.setPendingCloseVar(null, 0)
         clearPendingCloseErrorArg()
         clearPendingCloseOwnerTbc()
     }
 
     override fun setPendingCloseStartReg(registerIndex: Int) {
-        pendingCloseStartReg = registerIndex
+        if (closeContext.pendingCloseVar != null) {
+            closeContext.setPendingCloseVar(closeContext.pendingCloseVar!!, registerIndex)
+        } else {
+            closeContext.setPendingCloseVar(null, registerIndex)
+        }
     }
 
     override fun clearPendingCloseStartReg() {
-        pendingCloseStartReg = 0
+        if (closeContext.pendingCloseVar != null) {
+            closeContext.setPendingCloseVar(closeContext.pendingCloseVar!!, 0)
+        }
     }
 
     override fun setPendingCloseOwnerTbc(vars: MutableList<Pair<Int, LuaValue<*>>>) {
-        pendingCloseOwnerTbc = vars
+        if (closeContext.pendingCloseOwnerFrame != null) {
+            closeContext.setOwnerFrame(closeContext.pendingCloseOwnerFrame!!, vars)
+        }
     }
 
     override fun clearPendingCloseOwnerTbc() {
-        pendingCloseOwnerTbc = null
+        // TBC list is cleared when owner frame is cleared
     }
 
     override fun setPendingCloseOwnerFrame(frame: ExecutionFrame) {
-        pendingCloseOwnerFrame = frame
+        val tbcList = closeContext.pendingCloseOwnerTbc ?: mutableListOf()
+        closeContext.setOwnerFrame(frame, tbcList)
     }
 
-    override fun getPendingCloseOwnerFrame(): ExecutionFrame? = pendingCloseOwnerFrame
+    override fun getPendingCloseOwnerFrame(): ExecutionFrame? = closeContext.pendingCloseOwnerFrame
 
     override fun setPendingCloseErrorArg(error: LuaValue<*>) {
-        pendingCloseErrorArg = error
+        closeContext.setCloseErrorArg(error)
     }
 
     override fun clearPendingCloseErrorArg() {
-        pendingCloseErrorArg = LuaNil
+        closeContext.setCloseErrorArg(LuaNil)
     }
 
     override fun setYieldResumeContext(
@@ -309,31 +318,10 @@ class LuaVmImpl(
     private var lastErrorCallStack: List<CallFrame>? = null
 
     /**
-     * Exception from __close metamethods during RETURN.
-     * When __close throws during function return, we store it here so that
-     * callFunctionWithCloseHandling can access both return values and the exception.
-     * This matches Lua 5.4 semantics where return values are on stack before __close runs.
+     * Encapsulates all __close metamethod handling state.
+     * Groups 9 close-related variables into a single cohesive context.
      */
-    private var pendingCloseException: Exception? = null
-
-    /**
-     * Return values captured before __close ran.
-     * Stored here so they survive __close exceptions and can be accessed by
-     * callFunctionWithCloseHandling.
-     */
-    private var capturedReturnValues: List<LuaValue<*>>? = null
-
-    /**
-     * Currently executing __close variable (register, value) when a close handler yields.
-     * Re-queued on resume to ensure the in-progress __close runs again.
-     */
-    private var pendingCloseVar: Pair<Int, LuaValue<*>>? = null
-    private var pendingCloseStartReg: Int = 0
-    private var pendingCloseOwnerTbc: MutableList<Pair<Int, LuaValue<*>>>? = null
-    private var pendingCloseErrorArg: LuaValue<*> = LuaNil
-    private var pendingCloseContinuation: ResumptionState? = null
-    private var pendingCloseOwnerFrame: ExecutionFrame? = null // Owner frame that's returning
-    private var activeCloseResumeState: CloseResumeState? = null // Active close state for nested yields
+    private val closeContext = CloseContext()
 
     /**
      * Caller context tracker for close handling across native boundaries.
@@ -884,7 +872,7 @@ class LuaVmImpl(
             env.clearYieldResumeContext()
 
             // Set as active so nested yields can inherit TBC list
-            activeCloseResumeState = closeState
+            closeContext.setActiveCloseResumeState(closeState)
 
             // Step 1: Resume the __close continuation if present
             val continuation = closeState.pendingCloseContinuation
@@ -902,7 +890,7 @@ class LuaVmImpl(
             // If we have captured returns, the close chain is complete - just return them
             if (closeState.capturedReturnValues != null && closeState.capturedReturnValues.isNotEmpty()) {
                 // Clear active close state - we're done with this close chain
-                activeCloseResumeState = null
+                closeContext.setActiveCloseResumeState(null)
                 // Return the captured values from the owner frame
                 return closeState.capturedReturnValues
             }
@@ -928,7 +916,7 @@ class LuaVmImpl(
                     )
 
                     // Clear active close state - we're continuing with the owner frame
-                    activeCloseResumeState = null
+                    closeContext.setActiveCloseResumeState(null)
 
                     // Restore TBC vars to frame (they'll be processed by CLOSE/RETURN instructions later)
                     val restoredTbc = closeState.pendingTbcList.toMutableList()
@@ -1559,8 +1547,8 @@ class LuaVmImpl(
                 val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
                 val callStackBase = (currentCoroutine as? LuaCoroutine.LuaFunctionCoroutine)?.thread?.callStackBase ?: 0
                 val coroutineCallStack = callStackManager.captureSnapshotFrom(callStackBase)
-                val isCloseYield = pendingCloseVar != null
-                val ownerTbc = pendingCloseOwnerTbc ?: execFrame.toBeClosedVars
+                val isCloseYield = closeContext.pendingCloseVar != null
+                val ownerTbc = closeContext.pendingCloseOwnerTbc ?: execFrame.toBeClosedVars
 
                 // Yielding from coroutine
 
@@ -1599,7 +1587,7 @@ class LuaVmImpl(
 
                         val ownerContext =
                             resumptionService.selectOwnerFrameContext(
-                                pendingCloseOwnerFrame = pendingCloseOwnerFrame,
+                                pendingCloseOwnerFrame = closeContext.pendingCloseOwnerFrame,
                                 callStack = emptyList(), // Not used - owner selection uses pendingCloseOwnerFrame
                                 currentProto = currentProto,
                                 currentPc = pc,
@@ -1610,16 +1598,16 @@ class LuaVmImpl(
                             )
 
                         println(
-                            "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${pendingCloseOwnerFrame != null}",
+                            "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}",
                         )
                         println("[YIELD CloseState] Selected owner: proto=${ownerContext.proto.name} pc=${ownerContext.pc}")
                         println("[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars}")
-                        println("[YIELD CloseState] pendingCloseVar=$pendingCloseVar")
+                        println("[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}")
 
                         // Calculate effective owner PC using resumption service
                         val effectiveOwnerPc =
                             resumptionService.calculateResumePc(
-                                currentPc = pendingCloseOwnerFrame?.pc ?: callerFrame?.pc ?: pc,
+                                currentPc = closeContext.pendingCloseOwnerFrame?.pc ?: callerFrame?.pc ?: pc,
                                 incrementPc = true,
                             )
 
@@ -1637,11 +1625,11 @@ class LuaVmImpl(
                                 ownerRegisters = ownerContext.registers,
                                 ownerUpvalues = ownerContext.upvalues,
                                 ownerVarargs = ownerContext.varargs,
-                                startReg = pendingCloseStartReg,
+                                startReg = closeContext.pendingCloseStartReg,
                                 pendingTbcList = ownerContext.tbcVars,
-                                pendingCloseVar = pendingCloseVar,
-                                errorArg = pendingCloseErrorArg,
-                                capturedReturnValues = pendingCloseOwnerFrame?.capturedReturns,
+                                pendingCloseVar = closeContext.pendingCloseVar,
+                                errorArg = closeContext.pendingCloseErrorArg,
+                                capturedReturnValues = closeContext.pendingCloseOwnerFrame?.capturedReturns,
                                 yieldTargetReg = yieldTargetReg,
                                 yieldExpectedResults = yieldExpectedResults,
                                 debugCallStack = coroutineCallStack,
@@ -1690,19 +1678,18 @@ class LuaVmImpl(
                     yieldExpectedResults,
                     coroutineCallStack, // Save only coroutine's call stack (without main thread frames)
                     pendingTbc,
-                    pendingCloseStartReg,
-                    pendingCloseVar,
+                    closeContext.pendingCloseStartReg,
+                    closeContext.pendingCloseVar,
                     execStack.toList(),
                     pendingCloseYield = isCloseYield || pendingYieldStayOnSamePc,
                     capturedReturnValues = getCapturedReturnValues(),
-                    pendingCloseContinuation = pendingCloseContinuation,
-                    pendingCloseErrorArg = pendingCloseErrorArg,
+                    pendingCloseContinuation = closeContext.pendingCloseContinuation,
+                    pendingCloseErrorArg = closeContext.pendingCloseErrorArg,
                     incrementPc = true,
                     closeResumeState = closeResumeState,
                     closeOwnerFrameStack = callerContext.snapshot(),
                 )
-                pendingCloseVar = null
-                pendingCloseStartReg = 0
+                closeContext.setPendingCloseVar(null, 0)
                 e.stateSaved = true // Mark that state has been saved
             }
             clearYieldResumeContext()

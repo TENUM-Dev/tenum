@@ -88,7 +88,7 @@ class CloseContext {
      * Sets the pending close variable and start register.
      */
     fun setPendingCloseVar(
-        closeVar: Pair<Int, LuaValue<*>>,
+        closeVar: Pair<Int, LuaValue<*>>?,
         startReg: Int,
     ) {
         pendingCloseVar = closeVar
