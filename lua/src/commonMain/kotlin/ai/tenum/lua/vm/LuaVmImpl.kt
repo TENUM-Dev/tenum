@@ -867,6 +867,9 @@ class LuaVmImpl(
                     ExecutionMode.ResumeContinuation(continuation),
                 )
             }
+            
+            // Clear any active close state from previous yield - we're now in control
+            closeContext.setActiveCloseResumeState(null)
 
             // Phase 2: Orchestrate through owner segments (innermost to outermost)
             // We'll process only the FIRST segment here and store the remaining ones
@@ -924,6 +927,11 @@ class LuaVmImpl(
                 toBeClosedVars = segmentFrame.toBeClosedVars
                 varargs = segmentFrame.varargs
                 env = ExecutionEnvironment(segmentFrame, globals, this)
+                
+                // Restore close context state for this segment
+                if (firstSegment.pendingCloseVar != null) {
+                    closeContext.setPendingCloseVar(firstSegment.pendingCloseVar, firstSegment.pendingCloseStartReg)
+                }
             }
 
             // Ensure activeExecutionFrame points to the current live frame after any rebuild
@@ -1252,6 +1260,11 @@ class LuaVmImpl(
                                 varargs = segmentFrame.varargs
                                 currentUpvalues = execFrame.upvalues
                                 env = ExecutionEnvironment(segmentFrame, globals, this)
+                                
+                                // Restore close context state for this segment
+                                if (nextSegment.pendingCloseVar != null) {
+                                    closeContext.setPendingCloseVar(nextSegment.pendingCloseVar, nextSegment.pendingCloseStartReg)
+                                }
 
                                 // Continue execution - don't return yet
                             } else {
