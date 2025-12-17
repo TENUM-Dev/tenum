@@ -114,14 +114,18 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
                   return "done"
                 end)
                 
-                assert(co() == "inner", "First yield should be from inner")
-                assert(co() == "outer", "Second yield should be from outer")
-                assert(co() == "done", "Third should return 'done'")
+                local r1 = co()
+                assert(r1 == "inner", "First yield: expected 'inner' got " .. tostring(r1))
+                local r2 = co()
+                assert(r2 == "outer", "Second yield: expected 'outer' got " .. tostring(r2))
+                local r3 = co()
+                assert(r3 == "done", "Third resume: expected 'done' got " .. tostring(r3))
                 
                 -- Check execution order
-                assert(trace[1] == "inner1" and trace[2] == "inner2" and 
-                       trace[3] == "outer1" and trace[4] == "outer2",
-                       "Trace order incorrect: " .. table.concat(trace, ", "))
+                assert(trace[1] == "inner1", "trace[1]: expected 'inner1' got " .. tostring(trace[1]))
+                assert(trace[2] == "inner2", "trace[2]: expected 'inner2' got " .. tostring(trace[2]))
+                assert(trace[3] == "outer1", "trace[3]: expected 'outer1' got " .. tostring(trace[3]))
+                assert(trace[4] == "outer2", "trace[4]: expected 'outer2' got " .. tostring(trace[4]))
                 
                 return "OK"
                 """.trimIndent(),
@@ -181,10 +185,11 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
                 assert(result == "x", "Third yield should be 'x' but is " .. tostring(result))
                 
                 local results = {co()}
-                assert(#results == 4, "Should have 4 return values, got " .. #results)
-                assert(results[1] == true and results[2] == 10 and 
-                       results[3] == 20 and results[4] == 30,
-                       "Wrong return values from pcall")
+                assert(#results == 4, "Fourth resume #results: expected 4 got " .. #results .. " (values: " .. table.concat({tostring(results[1]), tostring(results[2]), tostring(results[3]), tostring(results[4])}, ", ") .. ")")
+                assert(results[1] == true, "Fourth resume results[1]: expected true got " .. tostring(results[1]))
+                assert(results[2] == 10, "Fourth resume results[2]: expected 10 got " .. tostring(results[2]))
+                assert(results[3] == 20, "Fourth resume results[3]: expected 20 got " .. tostring(results[3]))
+                assert(results[4] == 30, "Fourth resume results[4]: expected 30 got " .. tostring(results[4]))
                 
                 local expected = {"start", "z1", "z2", "between", "y1", "y2", "x1", "x2"}
                 for i = 1, #expected do
