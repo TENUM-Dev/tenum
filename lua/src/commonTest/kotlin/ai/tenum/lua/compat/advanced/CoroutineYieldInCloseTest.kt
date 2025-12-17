@@ -33,7 +33,7 @@ class CoroutineYieldInCloseTest : LuaCompatTestBase() {
                 end)
                 
                 local r1 = co()
-                assert(r1 == "yielding", "First resume should yield 'yielding'")
+                assert(r1 == "yielding", "First resume should yield 'yielding', got: " .. type(r1) .. " = " .. tostring(r1))
                 
                 local r2 = co()
                 assert(r2 == "result", "Second resume should return 'result', got: " .. tostring(r2))

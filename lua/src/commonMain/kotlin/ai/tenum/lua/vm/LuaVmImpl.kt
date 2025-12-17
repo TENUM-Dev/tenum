@@ -868,16 +868,13 @@ class LuaVmImpl(
                 )
             }
             
-            // Clear any active close state from previous yield - we're now in control
-            closeContext.setActiveCloseResumeState(null)
-
-            // Phase 2: Orchestrate through owner segments (innermost to outermost)
-            // We'll process only the FIRST segment here and store the remaining ones
-            // When this segment completes, we'll process the next one
+            // Phase 2: Orchestrate through owner segments
             if (closeState.ownerSegments.isNotEmpty()) {
                 val firstSegment = closeState.ownerSegments.first()
+                val isSingleFrame = closeState.ownerSegments.size == 1
+                
                 debugSink.debug {
-                    "[Segment Orchestrator] Processing first segment: proto=${firstSegment.proto.name}"
+                    "[Segment Orchestrator] Processing first segment: proto=${firstSegment.proto.name}, total segments=${closeState.ownerSegments.size}"
                 }
 
                 // Rebuild first segment's frame
@@ -898,11 +895,15 @@ class LuaVmImpl(
                     "[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}"
                 }
 
-                // Store remaining segments in closeContext so we can process them after this one completes
-                val remainingSegments = closeState.ownerSegments.drop(1)
-                if (remainingSegments.isNotEmpty()) {
+                // For single-frame case: clear activeCloseResumeState (old behavior)
+                // For multi-frame case: store remaining segments for processing after this one completes
+                if (isSingleFrame) {
+                    debugSink.debug { "[Segment Orchestrator] Single frame - clearing activeCloseResumeState" }
+                    closeContext.setActiveCloseResumeState(null)
+                } else {
+                    val remainingSegments = closeState.ownerSegments.drop(1)
                     debugSink.debug {
-                        "[Segment Orchestrator] Storing ${remainingSegments.size} remaining segments for later processing"
+                        "[Segment Orchestrator] Multi-frame - storing ${remainingSegments.size} remaining segments"
                     }
                     closeContext.setActiveCloseResumeState(
                         CloseResumeState(
@@ -911,8 +912,6 @@ class LuaVmImpl(
                             errorArg = closeState.errorArg,
                         ),
                     )
-                } else {
-                    closeContext.setActiveCloseResumeState(null)
                 }
 
                 // Set up execution context for first segment
@@ -932,6 +931,9 @@ class LuaVmImpl(
                 if (firstSegment.pendingCloseVar != null) {
                     closeContext.setPendingCloseVar(firstSegment.pendingCloseVar, firstSegment.pendingCloseStartReg)
                 }
+            } else {
+                // No segments - clear activeCloseResumeState
+                closeContext.setActiveCloseResumeState(null)
             }
 
             // Ensure activeExecutionFrame points to the current live frame after any rebuild
