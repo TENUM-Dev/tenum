@@ -128,67 +128,69 @@ class CoroutineResumptionService {
         debugCallStack: List<CallFrame>,
         closeOwnerFrameStack: List<ExecutionFrame>,
     ): ResumptionState {
-
         // Build owner segments: innermost (immediate owner) + outer frames from closeOwnerFrameStack
         val segments = mutableListOf<OwnerSegment>()
-        
+
         // CRITICAL: When yielding from RETURN's __close (indicated by capturedReturnValues != null),
         // the owner frame (pendingCloseOwnerFrame) is ALREADY in closeOwnerFrameStack somewhere.
         // We need to:
         // 1. Find pendingCloseOwnerFrame in closeOwnerFrameStack
         // 2. Start segments from that frame (skip earlier frames which are callers)
         // 3. Don't create a duplicate inner segment
-        
-        val startIndex = if (capturedReturnValues != null) {
-            // Find where the owner frame appears in closeOwnerFrameStack
-            // Match by proto and pc (before increment)
-            val ownerFrameIndex = closeOwnerFrameStack.indexOfFirst { frame ->
-                frame.proto == ownerProto && frame.pc == ownerPc - 1
-            }
-            if (ownerFrameIndex >= 0) ownerFrameIndex else 0
-        } else {
-            // Yielding from CLOSE: create innermost segment for owner frame
-            // ownerPc has already been incremented by calculateResumePc(incrementPc=true)
-            // so it points AFTER the CLOSE instruction
 
-            segments.add(
-                OwnerSegment(
-                    proto = ownerProto,
-                    pcToResume = ownerPc,  // Already incremented by caller
-                    registers = ownerRegisters.toMutableList(),
-                    upvalues = ownerUpvalues.toList(),
-                    varargs = ownerVarargs.toList(),
-                    toBeClosedVars = pendingTbcList.toMutableList(),
-                    capturedReturns = null,
-                    pendingCloseStartReg = startReg,
-                    pendingCloseVar = pendingCloseVar,
-                    execStack = closeContinuationExecStack.toList(),
-                    debugCallStack = debugCallStack.toList(),
-                    isMidReturn = false,
-                ),
-            )
-            0 // Start from beginning of closeOwnerFrameStack
-        }
-        
+        val startIndex =
+            if (capturedReturnValues != null) {
+                // Find where the owner frame appears in closeOwnerFrameStack
+                // Match by proto and pc (before increment)
+                val ownerFrameIndex =
+                    closeOwnerFrameStack.indexOfFirst { frame ->
+                        frame.proto == ownerProto && frame.pc == ownerPc - 1
+                    }
+                if (ownerFrameIndex >= 0) ownerFrameIndex else 0
+            } else {
+                // Yielding from CLOSE: create innermost segment for owner frame
+                // ownerPc has already been incremented by calculateResumePc(incrementPc=true)
+                // so it points AFTER the CLOSE instruction
+
+                segments.add(
+                    OwnerSegment(
+                        proto = ownerProto,
+                        pcToResume = ownerPc, // Already incremented by caller
+                        registers = ownerRegisters.toMutableList(),
+                        upvalues = ownerUpvalues.toList(),
+                        varargs = ownerVarargs.toList(),
+                        toBeClosedVars = pendingTbcList.toMutableList(),
+                        capturedReturns = null,
+                        pendingCloseStartReg = startReg,
+                        pendingCloseVar = pendingCloseVar,
+                        execStack = closeContinuationExecStack.toList(),
+                        debugCallStack = debugCallStack.toList(),
+                        isMidReturn = false,
+                    ),
+                )
+                0 // Start from beginning of closeOwnerFrameStack
+            }
+
         // Outer segments: frames from closeOwnerFrameStack (starting from startIndex)
         // When yielding from RETURN, we start from the RETURN frame (skipping earlier callers)
         // When yielding from CLOSE, we start from index 0 (all caller frames)
         for (i in startIndex until closeOwnerFrameStack.size) {
             val frame = closeOwnerFrameStack[i]
-            
+
             // CRITICAL: When yielding from RETURN, the first segment (i == startIndex) IS the RETURN frame.
             // Use capturedReturnValues parameter (which has the return values) instead of frame.capturedReturns
             // (which is null because the frame was snapshot before capturedReturns was set).
-            val segmentCapturedReturns = if (i == startIndex && capturedReturnValues != null) {
-                capturedReturnValues
-            } else {
-                frame.capturedReturns?.toList()
-            }
-            
+            val segmentCapturedReturns =
+                if (i == startIndex && capturedReturnValues != null) {
+                    capturedReturnValues
+                } else {
+                    frame.capturedReturns?.toList()
+                }
+
             segments.add(
                 OwnerSegment(
                     proto = frame.proto,
-                    pcToResume = frame.pc + 1,  // Resume after CALL/RETURN instruction
+                    pcToResume = frame.pc + 1, // Resume after CALL/RETURN instruction
                     registers = frame.registers.toMutableList(),
                     upvalues = frame.upvalues.toList(),
                     varargs = frame.varargs.toList(),
@@ -202,7 +204,7 @@ class CoroutineResumptionService {
                 ),
             )
         }
-        
+
         val closeState =
             CloseResumeState(
                 pendingCloseContinuation =

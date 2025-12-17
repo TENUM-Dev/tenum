@@ -327,18 +327,24 @@ class LuaVmImpl(
      * @param callStackBase The base index for the current coroutine's call stack
      * @return Filtered list containing only coroutine-owned frames
      */
-    private fun filterCoroutineFrames(frames: List<ExecutionFrame>, callStackBase: Int): List<ExecutionFrame> {
+    private fun filterCoroutineFrames(
+        frames: List<ExecutionFrame>,
+        callStackBase: Int,
+    ): List<ExecutionFrame> {
         if (callStackBase == 0) {
             // No filtering needed - we're in the main thread
             return frames
         }
-        
+
         // Get the full call stack and build a set of protos that belong to the coroutine
         val fullStack = callStackManager.captureSnapshot()
-        val coroutineFrameProtos = fullStack.drop(callStackBase).mapNotNull { callFrame -> 
-            callFrame.proto 
-        }.toSet()
-        
+        val coroutineFrameProtos =
+            fullStack
+                .drop(callStackBase)
+                .mapNotNull { callFrame ->
+                    callFrame.proto
+                }.toSet()
+
         // Filter callerContext frames to only those whose proto appears in the coroutine's stack
         // This excludes main chunk and native caller frames that are before callStackBase
         return frames.filter { execFrame -> execFrame.proto in coroutineFrameProtos }
@@ -893,7 +899,7 @@ class LuaVmImpl(
                     ExecutionMode.ResumeContinuation(continuation),
                 )
             }
-            
+
             // Phase 2: Orchestrate through owner segments
             if (closeState.ownerSegments.isNotEmpty()) {
                 val firstSegment = closeState.ownerSegments.first()
@@ -951,10 +957,10 @@ class LuaVmImpl(
                 toBeClosedVars = segmentFrame.toBeClosedVars
                 varargs = segmentFrame.varargs
                 env = ExecutionEnvironment(segmentFrame, globals, this)
-                
+
                 // DON'T clear TBC vars - keep them intact so remaining close handlers can run
                 // The close chain must be preserved across yield/resume boundaries
-                
+
                 // Restore close context state for this segment
                 if (firstSegment.pendingCloseVar != null) {
                     closeContext.setPendingCloseVar(firstSegment.pendingCloseVar, firstSegment.pendingCloseStartReg)
@@ -1290,7 +1296,7 @@ class LuaVmImpl(
                                 varargs = segmentFrame.varargs
                                 currentUpvalues = execFrame.upvalues
                                 env = ExecutionEnvironment(segmentFrame, globals, this)
-                                
+
                                 // Restore close context state for this segment
                                 if (nextSegment.pendingCloseVar != null) {
                                     closeContext.setPendingCloseVar(nextSegment.pendingCloseVar, nextSegment.pendingCloseStartReg)
@@ -1618,13 +1624,14 @@ class LuaVmImpl(
                                 allCallerTbc.addAll(frame.toBeClosedVars)
                             }
                         }
-                        
+
                         // If there are caller TBC vars, merge them with owner TBC
-                        val effectiveOwnerTbc = if (allCallerTbc.isNotEmpty()) {
-                            allCallerTbc + ownerTbc
-                        } else {
-                            ownerTbc
-                        }
+                        val effectiveOwnerTbc =
+                            if (allCallerTbc.isNotEmpty()) {
+                                allCallerTbc + ownerTbc
+                            } else {
+                                ownerTbc
+                            }
 
                         val ownerContext =
                             resumptionService.selectOwnerFrameContext(
@@ -1853,9 +1860,9 @@ class LuaVmImpl(
                 println("[EXCEPTION HANDLER] Rethrowing LuaYieldException")
                 throw e
             }
-            
+
             println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
-            
+
             // Convert RuntimeException to LuaException, optionally with enhanced diagnostic info
             val extraInfo =
                 if (debugEnabled) {

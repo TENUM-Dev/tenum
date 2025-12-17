@@ -101,7 +101,7 @@ class CoroutineResumptionServiceTest {
         assertNotNull(closeState.pendingCloseContinuation)
         assertEquals(closeProto, closeState.pendingCloseContinuation?.proto)
         assertEquals(5, closeState.pendingCloseContinuation?.pc)
-        
+
         // NEW: Check ownerSegments structure
         assertEquals(1, closeState.ownerSegments.size)
         val innermostSegment = closeState.ownerSegments.first()

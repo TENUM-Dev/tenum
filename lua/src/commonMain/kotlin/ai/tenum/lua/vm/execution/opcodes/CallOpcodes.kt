@@ -320,7 +320,7 @@ object CallOpcodes {
             frame.capturedReturns = results
         }
         env.setPendingCloseStartReg(0)
-        
+
         // CRITICAL: If this is a resume after yield-in-close, the __close metamethods already ran (Phase 1 completed them).
         // Skip executeCloseMetamethods and just return the captured results directly.
         if (!isResumeAfterYield) {
@@ -332,21 +332,21 @@ object CallOpcodes {
             env.setPendingCloseOwnerTbc(frame.toBeClosedVars.toMutableList())
             try {
                 frame.executeCloseMetamethods(0) { regIndex, upvalue, capturedValue, errorArg ->
-                env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
-                val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
-                if (closeFn != null) {
-                    // Call __close - errors should propagate normally
-                    env.setMetamethodCallContext("__close")
-                    env.setPendingCloseVar(regIndex, capturedValue)
-                    env.setPendingCloseErrorArg(errorArg)
-                    env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
-                    env.setNextCallIsCloseMetamethod()
-                    env.callFunction(closeFn, listOf(capturedValue, errorArg))
-                    env.clearPendingCloseVar()
-                    // Clear yield context only after successful return (not after yield)
-                    env.clearYieldResumeContext()
+                    env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
+                    val closeFn = upvalue.closedValue as? ai.tenum.lua.runtime.LuaFunction
+                    if (closeFn != null) {
+                        // Call __close - errors should propagate normally
+                        env.setMetamethodCallContext("__close")
+                        env.setPendingCloseVar(regIndex, capturedValue)
+                        env.setPendingCloseErrorArg(errorArg)
+                        env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+                        env.setNextCallIsCloseMetamethod()
+                        env.callFunction(closeFn, listOf(capturedValue, errorArg))
+                        env.clearPendingCloseVar()
+                        // Clear yield context only after successful return (not after yield)
+                        env.clearYieldResumeContext()
+                    }
                 }
-            }
             } catch (e: Exception) {
                 // Store the __close exception for two-phase handling
                 env.setCloseException(e)
