@@ -3,6 +3,7 @@
 package ai.tenum.lua.vm.execution.opcodes
 
 import ai.tenum.lua.compiler.model.Instruction
+import ai.tenum.lua.vm.errorhandling.LuaException
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 
 /**
@@ -20,7 +21,9 @@ object CoroutineOpcodes {
         instr: Instruction,
         env: ExecutionEnvironment,
     ) {
-        // Placeholder - full implementation requires coroutine context tracking
+        // The compiler never emits a YIELD opcode; coroutine.yield is a native function.
+        // Fail fast if malformed bytecode hits this path.
+        throw LuaException("unsupported opcode YIELD")
     }
 
     /**
@@ -33,6 +36,8 @@ object CoroutineOpcodes {
         instr: Instruction,
         env: ExecutionEnvironment,
     ) {
-        // Placeholder - full implementation requires coroutine stack management
+        // The compiler never emits a RESUME opcode; coroutine.resume is a native function.
+        // Fail fast if malformed bytecode hits this path.
+        throw LuaException("unsupported opcode RESUME")
     }
 }

@@ -6,6 +6,7 @@ import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaCompiledFunction
 import ai.tenum.lua.runtime.LuaFunction
+import ai.tenum.lua.runtime.LuaNativeFunction
 import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
@@ -187,6 +188,9 @@ object CallOpcodes {
             }
 
             // Native functions: direct call
+            if (resolvedFunc is LuaNativeFunction && resolvedFunc.name == "pcall") {
+                println("[CALL debug] calling pcall; caller TBC size=${frame.toBeClosedVars.size} TBC=${frame.toBeClosedVars}")
+            }
             val results = env.callFunction(resolvedFunc, resolvedArgs)
             env.debug("    Results: $results")
             storeCallResults(instr, registers, frame, results, env)
@@ -284,7 +288,6 @@ object CallOpcodes {
         val results = collector.collectResults(instr.a, instr.b)
 
         env.debug("  Return ${results.size} values (before __close): $results")
-        println("[TBC before return] ${frame.toBeClosedVars}")
         env.debug("  toBeClosedVars: ${frame.toBeClosedVars}")
 
         // Step 2: Execute __close metamethods for all to-be-closed variables
@@ -308,6 +311,8 @@ object CallOpcodes {
         frame.capturedReturns = results
         env.setPendingCloseStartReg(0)
         env.setPendingCloseOwnerFrame(frame) // Save owner frame for yield-in-close
+        // Share the TBC list reference so updates remain visible across yield boundaries
+        env.setPendingCloseOwnerTbc(frame.toBeClosedVars)
         try {
             frame.executeCloseMetamethods(0) { regIndex, upvalue, capturedValue, errorArg ->
                 env.debug("  Calling __close for value: $capturedValue, error: $errorArg")
@@ -315,9 +320,7 @@ object CallOpcodes {
                 if (closeFn != null) {
                     // Call __close - errors should propagate normally
                     env.setMetamethodCallContext("__close")
-                    println("[CLOSE callback RETURN] reg=$regIndex val=$capturedValue")
                     env.setPendingCloseVar(regIndex, capturedValue)
-                env.setPendingCloseOwnerTbc(frame.toBeClosedVars)
                 env.setPendingCloseErrorArg(errorArg)
                 env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
                 env.setNextCallIsCloseMetamethod()

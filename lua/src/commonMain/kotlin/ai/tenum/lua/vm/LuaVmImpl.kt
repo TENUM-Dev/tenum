@@ -974,11 +974,11 @@ class LuaVmImpl(
                 }
             }
 
-            if (remainingTbc.isNotEmpty()) {
-                try {
-                    // Process remaining TBC variables using captured values
-                    // Note: pendingTbcList has (regIndex, capturedValue) pairs
-                    // frameToUseForTbc.toBeClosedVars has (regIndex, upvalue) pairs
+                if (remainingTbc.isNotEmpty()) {
+                    try {
+                        // Process remaining TBC variables using captured values
+                        // Note: pendingTbcList has (regIndex, capturedValue) pairs
+                        // frameToUseForTbc.toBeClosedVars has (regIndex, upvalue) pairs
                     for ((regIndex, capturedValue) in remainingTbc) {
                         // Find the upvalue in the frame's TBC list
                         val tbcEntry = frameToUseForTbc.toBeClosedVars.find { it.first == regIndex }
@@ -1011,6 +1011,9 @@ class LuaVmImpl(
             // Step 5: If owner frame was rebuilt, continue to opcode dispatch
             // The frame was already rebuilt in Step 3 above
             // No additional action needed here
+
+            // Ensure activeExecutionFrame points to the current live frame after any rebuild
+            activeExecutionFrame = execFrame
         }
 
         // Handle coroutine resumption - place resume args as yield return values
@@ -1168,6 +1171,9 @@ class LuaVmImpl(
             var lastLine = -1 // Track line changes for LINE hooks
 
             whileLoop@ while (pc < instructions.size) {
+                // Keep activeExecutionFrame in sync with the frame currently executing bytecode
+                activeExecutionFrame = execFrame
+
                 // Update current frame PC (for both debug stack and execution frame)
                 callStackManager.updateLastFramePc(pc)
                 execFrame.pc = pc
@@ -1894,14 +1900,8 @@ class LuaVmImpl(
         // Push caller frame onto close owner stack to preserve context across native boundaries
         // IMPORTANT: Share the TBC list reference (don't copy) so that changes made by CLOSE
         // instructions after this call are visible when building CloseResumeState during yields
-        // Debug: Always log, even if not pushing
-        println("[callFunction] callerFrame=${callerFrame != null} isEmpty=${closeOwnerFrameStack.isEmpty()} lastProto=${closeOwnerFrameStack.lastOrNull()?.proto?.name}")
-        if (callerFrame != null) {
-            println("[callFunction] Attempting push: callerProto=${callerFrame.proto.name} TBC.size=${callerFrame.toBeClosedVars.size}")
-        }
         // ONLY push if not already at top (avoid duplicates from nested native calls)
         if (callerFrame != null && (closeOwnerFrameStack.isEmpty() || closeOwnerFrameStack.last().proto != callerFrame.proto)) {
-            println("[callFunction] Pushing caller frame: proto.name=${callerFrame.proto.name} TBC.size=${callerFrame.toBeClosedVars.size} TBC=${callerFrame.toBeClosedVars}")
             // Create a shallow snapshot - most fields are immutable or shouldn't change
             // TBC list is shared (not copied) so CLOSE instructions update it
             val snapshotFrame = ExecutionFrame(
@@ -1917,6 +1917,8 @@ class LuaVmImpl(
             closeOwnerFrameStack.add(snapshotFrame)
         }
         
+        var didYield = false
+
         try {
             return when (func) {
                 is LuaFunction -> {
@@ -1938,13 +1940,14 @@ class LuaVmImpl(
         } catch (e: LuaYieldException) {
             // Don't pop the stack on yield - the owner frame must persist for resume
             // The stack will be saved with coroutine state and restored on resume
+            didYield = true
             throw e
         } finally {
             // Pop caller frame only on normal return or non-yield exception
             // Match by proto reference since we pushed a snapshot, not the exact frame
             // IMPORTANT: If the popped frame has TBC vars, transfer them to activeExecutionFrame
             // This ensures outer __close handlers (like x in pcall test) are processed by RETURN
-            if (callerFrame != null && closeOwnerFrameStack.isNotEmpty() && closeOwnerFrameStack.last().proto == callerFrame.proto) {
+            if (!didYield && callerFrame != null && closeOwnerFrameStack.isNotEmpty() && closeOwnerFrameStack.last().proto == callerFrame.proto) {
                 val frameToPop = closeOwnerFrameStack.last()
                 val activeFrame = activeExecutionFrame
                 println("[callFunction finally] Popping frame: proto=${frameToPop.proto.name} TBC.size=${frameToPop.toBeClosedVars.size}")

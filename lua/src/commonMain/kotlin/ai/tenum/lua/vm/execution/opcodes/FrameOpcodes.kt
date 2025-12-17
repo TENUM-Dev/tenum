@@ -51,13 +51,15 @@ object FrameOpcodes {
                 // Use the shared executeCloseMetamethods which handles validation and error chaining
                 env.setPendingCloseStartReg(a)
                 env.setPendingCloseOwnerFrame(frame)
+                // Capture snapshot BEFORE executeCloseMetamethods clears the live list
+                val ownerTbcSnapshot = frame.toBeClosedVars.toMutableList()
+                env.setPendingCloseOwnerTbc(ownerTbcSnapshot)
                 frame.executeCloseMetamethods(a) { regIdx, upvalue, value, errorArg ->
                     val closeFun =
                         upvalue.closedValue as? LuaFunction
                             ?: error("Expected function in upvalue")
                     env.debug("[CLOSE] calling __close for value=$value, error=$errorArg")
                     // Call with the chained error argument
-                    env.setPendingCloseOwnerTbc(frame.toBeClosedVars)
                     env.setPendingCloseErrorArg(errorArg)
                     println("[CLOSE callback CLOSE] reg=$regIdx val=$value")
                     env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
