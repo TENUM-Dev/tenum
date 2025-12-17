@@ -87,7 +87,10 @@ class ExecutionEnvironment(
 
     fun getCloseException(): Exception? = vmCapabilities.getCloseException()
 
-    fun setPendingCloseVar(register: Int, value: LuaValue<*>) = vmCapabilities.setPendingCloseVar(register, value)
+    fun setPendingCloseVar(
+        register: Int,
+        value: LuaValue<*>,
+    ) = vmCapabilities.setPendingCloseVar(register, value)
 
     fun clearPendingCloseVar() = vmCapabilities.clearPendingCloseVar()
 
@@ -98,9 +101,9 @@ class ExecutionEnvironment(
     fun setPendingCloseOwnerTbc(vars: MutableList<Pair<Int, LuaValue<*>>>) = vmCapabilities.setPendingCloseOwnerTbc(vars)
 
     fun clearPendingCloseOwnerTbc() = vmCapabilities.clearPendingCloseOwnerTbc()
-    
+
     fun setPendingCloseOwnerFrame(frame: ExecutionFrame) = vmCapabilities.setPendingCloseOwnerFrame(frame)
-    
+
     fun getPendingCloseOwnerFrame(): ExecutionFrame? = vmCapabilities.getPendingCloseOwnerFrame()
 
     fun setPendingCloseErrorArg(error: LuaValue<*>) = vmCapabilities.setPendingCloseErrorArg(error)

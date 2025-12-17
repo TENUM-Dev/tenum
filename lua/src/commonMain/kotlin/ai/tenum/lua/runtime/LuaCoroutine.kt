@@ -1,8 +1,8 @@
 package ai.tenum.lua.runtime
 
 import ai.tenum.lua.compiler.model.Proto
-import ai.tenum.lua.vm.CallFrame
 import ai.tenum.lua.runtime.LuaNil
+import ai.tenum.lua.vm.CallFrame
 
 /**
  * Represents a Lua coroutine.

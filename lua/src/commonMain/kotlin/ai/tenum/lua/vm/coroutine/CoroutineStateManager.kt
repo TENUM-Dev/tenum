@@ -3,8 +3,8 @@ package ai.tenum.lua.vm.coroutine
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.CoroutineStatus
 import ai.tenum.lua.runtime.LuaCoroutine
-import ai.tenum.lua.runtime.LuaThread
 import ai.tenum.lua.runtime.LuaNil
+import ai.tenum.lua.runtime.LuaThread
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 
@@ -287,7 +287,9 @@ class CoroutineStateManager {
         closeResumeState: ai.tenum.lua.vm.execution.CloseResumeState? = null,
         closeOwnerFrameStack: List<ai.tenum.lua.vm.execution.ExecutionFrame> = emptyList(),
     ) {
-        println("[DEBUG close-yield save] pendingCloseYield=$pendingCloseYield tbc=${toBeClosedVars.size} vals=${toBeClosedVars} captured=${capturedReturnValues?.size} cont=${pendingCloseContinuation != null} pcv=$pendingCloseVar")
+        println(
+            "[DEBUG close-yield save] pendingCloseYield=$pendingCloseYield tbc=${toBeClosedVars.size} vals=$toBeClosedVars captured=${capturedReturnValues?.size} cont=${pendingCloseContinuation != null} pcv=$pendingCloseVar",
+        )
         val co = coroutine ?: return
 
         val thread =

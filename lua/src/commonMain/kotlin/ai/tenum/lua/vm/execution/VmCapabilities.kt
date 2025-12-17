@@ -38,7 +38,10 @@ interface VmCapabilities {
 
     fun getCloseException(): Exception?
 
-    fun setPendingCloseVar(register: Int, value: LuaValue<*>)
+    fun setPendingCloseVar(
+        register: Int,
+        value: LuaValue<*>,
+    )
 
     fun clearPendingCloseVar()
 
@@ -49,9 +52,9 @@ interface VmCapabilities {
     fun setPendingCloseOwnerTbc(vars: MutableList<Pair<Int, LuaValue<*>>>)
 
     fun clearPendingCloseOwnerTbc()
-    
+
     fun setPendingCloseOwnerFrame(frame: ExecutionFrame)
-    
+
     fun getPendingCloseOwnerFrame(): ExecutionFrame?
 
     fun setPendingCloseErrorArg(error: LuaValue<*>)
@@ -63,7 +66,11 @@ interface VmCapabilities {
      * we need to control how coroutine resume stores the yielded values.
      * Setting encodedCount=1 makes resume store zero results (Lua CALL c=1 semantics).
      */
-    fun setYieldResumeContext(targetReg: Int, encodedCount: Int, stayOnSamePc: Boolean = false)
+    fun setYieldResumeContext(
+        targetReg: Int,
+        encodedCount: Int,
+        stayOnSamePc: Boolean = false,
+    )
 
     fun clearYieldResumeContext()
 

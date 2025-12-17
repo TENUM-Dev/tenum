@@ -48,7 +48,7 @@ class ExecutionFrame(
      * Non-null only when this frame has executed RETURN and captured its return values.
      */
     var capturedReturns: List<LuaValue<*>>? = null
-    
+
     /** Register array (local variables and temporaries) - uses MutableList for dynamic growth */
     val registers: MutableList<LuaValue<*>> =
         if (existingRegisters != null) {

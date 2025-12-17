@@ -321,13 +321,13 @@ object CallOpcodes {
                     // Call __close - errors should propagate normally
                     env.setMetamethodCallContext("__close")
                     env.setPendingCloseVar(regIndex, capturedValue)
-                env.setPendingCloseErrorArg(errorArg)
-                env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
-                env.setNextCallIsCloseMetamethod()
-                env.callFunction(closeFn, listOf(capturedValue, errorArg))
-                env.clearPendingCloseVar()
-                // Clear yield context only after successful return (not after yield)
-                env.clearYieldResumeContext()
+                    env.setPendingCloseErrorArg(errorArg)
+                    env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+                    env.setNextCallIsCloseMetamethod()
+                    env.callFunction(closeFn, listOf(capturedValue, errorArg))
+                    env.clearPendingCloseVar()
+                    // Clear yield context only after successful return (not after yield)
+                    env.clearYieldResumeContext()
                 }
             }
         } catch (e: Exception) {

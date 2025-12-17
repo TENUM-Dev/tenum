@@ -143,14 +143,12 @@ class LuaVmImpl(
     override fun clearPendingCloseOwnerTbc() {
         pendingCloseOwnerTbc = null
     }
-    
+
     override fun setPendingCloseOwnerFrame(frame: ExecutionFrame) {
         pendingCloseOwnerFrame = frame
     }
-    
-    override fun getPendingCloseOwnerFrame(): ExecutionFrame? {
-        return pendingCloseOwnerFrame
-    }
+
+    override fun getPendingCloseOwnerFrame(): ExecutionFrame? = pendingCloseOwnerFrame
 
     override fun setPendingCloseErrorArg(error: LuaValue<*>) {
         pendingCloseErrorArg = error
@@ -336,13 +334,13 @@ class LuaVmImpl(
     private var pendingCloseContinuation: ResumptionState? = null
     private var pendingCloseOwnerFrame: ExecutionFrame? = null // Owner frame that's returning
     private var activeCloseResumeState: CloseResumeState? = null // Active close state for nested yields
-    
+
     /**
-     * Stack of owner frames for close handling across native boundaries.
+     * Caller context tracker for close handling across native boundaries.
      * Pushed before any Lua call (including native wrappers like pcall), popped on return.
      * Used in yield-save logic to capture the owner frame even when execStack is not populated.
      */
-    private val closeOwnerFrameStack = mutableListOf<ExecutionFrame>()
+    private val callerContext = CallerContext()
 
     /**
      * Currently active execution frame.
@@ -359,6 +357,7 @@ class LuaVmImpl(
     private var pendingYieldTargetReg: Int? = null
     private var pendingYieldEncodedCount: Int? = null
     private var pendingYieldStayOnSamePc: Boolean = false
+
     /**
      * Original call stack snapshot for hooks.
      * When a hook is executing, this contains the call stack from where the hook was triggered,
@@ -839,18 +838,20 @@ class LuaVmImpl(
                 existingVarargs = resumptionState?.varargs,
                 existingToBeClosedVars = resumptionState?.toBeClosedVars,
             )
-        
+
         // Restore close owner frame stack on resume
         if (resumptionState != null && resumptionState.closeOwnerFrameStack.isNotEmpty()) {
-            closeOwnerFrameStack.clear()
-            closeOwnerFrameStack.addAll(resumptionState.closeOwnerFrameStack)
-// Restored closeOwnerFrameStack
-            
+            callerContext.restore(resumptionState.closeOwnerFrameStack)
+// Restored callerContext
+
             // Only restore TBC vars if the current frame's TBC list is EMPTY and we have a snapshot
             // This handles the case where nested calls cleared the list, but avoids double-closing
-            val topFrame = closeOwnerFrameStack.lastOrNull()
-            if (topFrame != null && topFrame.proto == execFrame.proto && 
-                execFrame.toBeClosedVars.isEmpty() && topFrame.toBeClosedVars.isNotEmpty()) {
+            val topFrame = callerContext.peek()
+            if (topFrame != null &&
+                topFrame.proto == execFrame.proto &&
+                execFrame.toBeClosedVars.isEmpty() &&
+                topFrame.toBeClosedVars.isNotEmpty()
+            ) {
                 println("[RESUME] Restoring TBC list from stack: ${topFrame.toBeClosedVars.size} vars")
                 execFrame.toBeClosedVars.addAll(topFrame.toBeClosedVars)
             }
@@ -875,7 +876,7 @@ class LuaVmImpl(
         if (mode is ExecutionMode.ResumeContinuation && resumptionState != null && resumptionState.closeResumeState != null) {
             val closeState = resumptionState.closeResumeState
             env.clearYieldResumeContext()
-            
+
             // Set as active so nested yields can inherit TBC list
             activeCloseResumeState = closeState
 
@@ -904,87 +905,94 @@ class LuaVmImpl(
             // Step 4: Process remaining TBC or rebuild owner frame based on context
             // IMPORTANT: Only process remaining TBC if we're actually IN a __close handler (pendingCloseVar != null)
             // If pendingCloseVar is null, we're just resuming normal execution - restore frame but don't process TBC
-            val shouldProcessRemainingTbc = (closeState.capturedReturnValues == null || closeState.capturedReturnValues.isEmpty()) && closeState.pendingCloseVar != null
-            
+            val shouldProcessRemainingTbc =
+                (closeState.capturedReturnValues == null || closeState.capturedReturnValues.isEmpty()) && closeState.pendingCloseVar != null
+
             // When ownerProto is present, we're crossing frame boundaries (e.g., pcall)
             // In this case, pendingTbcList contains outer frame's TBC vars with their register indices
             val frameToUseForTbc: ExecutionFrame
-            val remainingTbc = if (closeState.ownerProto != null) {
-                // Cross-frame scenario: rebuild owner frame
-                println("[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}")
-                println("[RESUME CloseState] pendingTbcList.size=${closeState.pendingTbcList.size} pendingCloseVar=${closeState.pendingCloseVar}")
-                
-                // Clear active close state - we're continuing with the owner frame
-                activeCloseResumeState = null
-                
-                // Restore TBC vars to frame (they'll be processed by CLOSE/RETURN instructions later)
-                val restoredTbc = closeState.pendingTbcList.toMutableList()
-                
-                val ownerFrame = ExecutionFrame(
-                    proto = closeState.ownerProto,
-                    initialArgs = emptyList(),
-                    upvalues = closeState.ownerUpvalues,
-                    initialPc = closeState.ownerPc,
-                    existingRegisters = closeState.ownerRegisters.toMutableList(),
-                    existingVarargs = closeState.ownerVarargs,
-                    existingToBeClosedVars = restoredTbc,
-                    existingOpenUpvalues = mutableMapOf()
-                )
-                ownerFrame.capturedReturns = closeState.capturedReturnValues
-                
-                // Update local variables to continue execution from owner frame
-                execFrame = ownerFrame
-                activeExecutionFrame = ownerFrame // Re-sync active frame after rebuild
-                registers = ownerFrame.registers
-                currentProto = ownerFrame.proto
-                constants = ownerFrame.constants
-                instructions = ownerFrame.instructions
-                pc = ownerFrame.pc
-                openUpvalues = ownerFrame.openUpvalues
-                toBeClosedVars = ownerFrame.toBeClosedVars
-                varargs = ownerFrame.varargs
-                env = ExecutionEnvironment(ownerFrame, globals, this)
-                
-                frameToUseForTbc = ownerFrame
-                
-                // Only process TBC if we're IN a __close handler, not just resuming normal execution
-                // If pendingCloseVar is null, we're resuming after inner function returned - don't process yet
-                if (shouldProcessRemainingTbc) {
-                    println("[RESUME CloseState] Processing TBC vars (inside __close handler)")
-                    restoredTbc.asReversed()
-                } else {
-                    println("[RESUME CloseState] Skipping TBC processing (normal execution resume)")
-                    emptyList()
-                }
-            } else {
-                // Same-frame scenario: filter based on pendingCloseVar
-                frameToUseForTbc = execFrame
-                
-                if (shouldProcessRemainingTbc) {
-                    val filtered = closeState.pendingTbcList
-                        .filter { (regIndex, _) ->
-                            val pendingReg = closeState.pendingCloseVar?.first ?: Int.MAX_VALUE
-                            regIndex >= closeState.startReg && regIndex < pendingReg
-                        }
-                        .asReversed()
-                    println("[RESUME CloseState] Same-frame filtering: remainingTbc.size=${filtered.size}")
-                    filtered
-                } else {
-                    emptyList()
-                }
-            }
+            val remainingTbc =
+                if (closeState.ownerProto != null) {
+                    // Cross-frame scenario: rebuild owner frame
+                    println(
+                        "[RESUME CloseState] Rebuilding owner frame: ownerPc=${closeState.ownerPc} ownerProto.name=${closeState.ownerProto.name}",
+                    )
+                    println(
+                        "[RESUME CloseState] pendingTbcList.size=${closeState.pendingTbcList.size} pendingCloseVar=${closeState.pendingCloseVar}",
+                    )
 
-                if (remainingTbc.isNotEmpty()) {
-                    try {
-                        // Process remaining TBC variables using captured values
-                        // Note: pendingTbcList has (regIndex, capturedValue) pairs
-                        // frameToUseForTbc.toBeClosedVars has (regIndex, upvalue) pairs
+                    // Clear active close state - we're continuing with the owner frame
+                    activeCloseResumeState = null
+
+                    // Restore TBC vars to frame (they'll be processed by CLOSE/RETURN instructions later)
+                    val restoredTbc = closeState.pendingTbcList.toMutableList()
+
+                    val ownerFrame =
+                        ExecutionFrame(
+                            proto = closeState.ownerProto,
+                            initialArgs = emptyList(),
+                            upvalues = closeState.ownerUpvalues,
+                            initialPc = closeState.ownerPc,
+                            existingRegisters = closeState.ownerRegisters.toMutableList(),
+                            existingVarargs = closeState.ownerVarargs,
+                            existingToBeClosedVars = restoredTbc,
+                            existingOpenUpvalues = mutableMapOf(),
+                        )
+                    ownerFrame.capturedReturns = closeState.capturedReturnValues
+
+                    // Update local variables to continue execution from owner frame
+                    execFrame = ownerFrame
+                    activeExecutionFrame = ownerFrame // Re-sync active frame after rebuild
+                    registers = ownerFrame.registers
+                    currentProto = ownerFrame.proto
+                    constants = ownerFrame.constants
+                    instructions = ownerFrame.instructions
+                    pc = ownerFrame.pc
+                    openUpvalues = ownerFrame.openUpvalues
+                    toBeClosedVars = ownerFrame.toBeClosedVars
+                    varargs = ownerFrame.varargs
+                    env = ExecutionEnvironment(ownerFrame, globals, this)
+
+                    frameToUseForTbc = ownerFrame
+
+                    // Only process TBC if we're IN a __close handler, not just resuming normal execution
+                    // If pendingCloseVar is null, we're resuming after inner function returned - don't process yet
+                    if (shouldProcessRemainingTbc) {
+                        println("[RESUME CloseState] Processing TBC vars (inside __close handler)")
+                        restoredTbc.asReversed()
+                    } else {
+                        println("[RESUME CloseState] Skipping TBC processing (normal execution resume)")
+                        emptyList()
+                    }
+                } else {
+                    // Same-frame scenario: filter based on pendingCloseVar
+                    frameToUseForTbc = execFrame
+
+                    if (shouldProcessRemainingTbc) {
+                        val filtered =
+                            closeState.pendingTbcList
+                                .filter { (regIndex, _) ->
+                                    val pendingReg = closeState.pendingCloseVar?.first ?: Int.MAX_VALUE
+                                    regIndex >= closeState.startReg && regIndex < pendingReg
+                                }.asReversed()
+                        println("[RESUME CloseState] Same-frame filtering: remainingTbc.size=${filtered.size}")
+                        filtered
+                    } else {
+                        emptyList()
+                    }
+                }
+
+            if (remainingTbc.isNotEmpty()) {
+                try {
+                    // Process remaining TBC variables using captured values
+                    // Note: pendingTbcList has (regIndex, capturedValue) pairs
+                    // frameToUseForTbc.toBeClosedVars has (regIndex, upvalue) pairs
                     for ((regIndex, capturedValue) in remainingTbc) {
                         // Find the upvalue in the frame's TBC list
                         val tbcEntry = frameToUseForTbc.toBeClosedVars.find { it.first == regIndex }
                         if (tbcEntry != null) {
                             val tbcValue = tbcEntry.second // This is the LuaValue with __close metamethod
-                            
+
                             // Get __close metamethod from the value
                             val closeFn = getMetamethod(tbcValue, "__close") as? LuaFunction
                             if (closeFn != null) {
@@ -1018,12 +1026,13 @@ class LuaVmImpl(
 
         // Handle coroutine resumption - place resume args as yield return values
         // Skip this if we just finished close handling and reconstructed the frame (indicated by empty TBC list after close handling)
-        val justFinishedCloseHandling = mode is ExecutionMode.ResumeContinuation && 
-            mode.state.pendingCloseYield && 
-            mode.state.toBeClosedVars.isEmpty() &&
-            mode.state.capturedReturnValues?.isEmpty() != false
-        
-            if (mode is ExecutionMode.ResumeContinuation && !justFinishedCloseHandling && resumptionState?.closeResumeState == null) {
+        val justFinishedCloseHandling =
+            mode is ExecutionMode.ResumeContinuation &&
+                mode.state.pendingCloseYield &&
+                mode.state.toBeClosedVars.isEmpty() &&
+                mode.state.capturedReturnValues?.isEmpty() != false
+
+        if (mode is ExecutionMode.ResumeContinuation && !justFinishedCloseHandling && resumptionState?.closeResumeState == null) {
             // Storing resume args
             val storage = ResultStorage(env)
             storage.storeResults(
@@ -1244,7 +1253,7 @@ class LuaVmImpl(
                             // Pop caller context and restore
                             val callerContext = execStack.removeLast()
                             debug { "  Unwinding from trampolined call, restoring caller" }
-                            
+
                             println("[RETURN unwind] Restoring caller, TBC list size=${callerContext.execFrame.toBeClosedVars.size}")
 
                             // Pop callee's call frame from debug stack
@@ -1550,83 +1559,97 @@ class LuaVmImpl(
                 // Yielding from coroutine
 
                 // When yielding from __close, create CloseResumeState with owner frame snapshot
-                val closeResumeState: CloseResumeState? = if (isCloseYield) {
-                    // Capture __close continuation (current execution point)
-                    // This is the __close function's state, NOT the owner's state
-                    val closeContinuation = ResumptionState(
-                        proto = currentProto,
-                        pc = pc + 1,
-                        registers = registers,
-                        upvalues = execFrame.upvalues,
-                        varargs = varargs,
-                        yieldTargetRegister = yieldTargetReg,
-                        yieldExpectedResults = yieldExpectedResults,
-                        toBeClosedVars = execFrame.toBeClosedVars,  // __close function's TBC (should be empty)
-                        pendingCloseStartReg = 0,  // Not relevant for continuation
-                        pendingCloseVar = null,  // Not relevant for continuation
-                        execStack = execStack.toList(),
-                        pendingCloseYield = false,
-                        capturedReturnValues = null, // Not used in new model
-                        debugCallStack = coroutineCallStack,
-                        closeResumeState = null,
-                        closeOwnerFrameStack = closeOwnerFrameStack.toList(),
-                    )
-                    
-                    // Owner frame selection:
-                    // - PREFER pendingCloseOwnerFrame (the frame where __close was executing)
-                    // - This frame contains the TBC vars from the SAME function scope (e.g., z and y in pcall'd function)
-                    // - closeOwnerFrameStack contains OUTER frames (e.g., wrapper with x) that should NOT be processed yet
-                    // - Outer frames are only processed when their own functions return, not during inner yields
-                    val ownerFrame = pendingCloseOwnerFrame
-                    println("[YIELD CloseState] closeOwnerFrameStack.size=${closeOwnerFrameStack.size}, pendingCloseOwnerFrame=${pendingCloseOwnerFrame != null}")
-                    println("[YIELD CloseState] Using ownerFrame from pendingCloseOwnerFrame (current function's frame)")
-                    
-                    // If we're yielding from a __close that's itself resuming a previous close-yield,
-                    // inherit the TBC list from the active CloseResumeState (already in progress)
-                    val parentTbcList = activeCloseResumeState?.pendingTbcList
-                    
-                    // Build effective owner context from the selected owner frame
-                    // For cross-native boundary (pcall), ownerFrameFromStack provides the outer frame
-                    val callerFrame = if (coroutineCallStack.size >= 2) {
-                        coroutineCallStack[coroutineCallStack.size - 2]
-                    } else null
-                    val effectiveOwnerProto = ownerFrame?.proto ?: callerFrame?.proto ?: currentProto
-                    val effectiveOwnerPc = (ownerFrame?.pc ?: callerFrame?.pc ?: pc) + 1
-                    val effectiveOwnerRegs = (ownerFrame?.registers ?: callerFrame?.registers ?: registers).toMutableList()
-                    val effectiveOwnerVarargs = ownerFrame?.varargs ?: callerFrame?.varargs ?: varargs
-                    val effectiveOwnerUpvalues = ownerFrame?.upvalues ?: execFrame.upvalues
-                    
-                    // Capture FULL TBC list from owner frame, unfiltered
-                    // Don't use parentTbcList or filter by pendingCloseVar - capture complete snapshot
-                    val effectiveOwnerTbc = ownerFrame?.toBeClosedVars ?: ownerTbc
-                    
-                    println("[YIELD CloseState] ownerFrame=${ownerFrame != null} ownerFrame.pc=${ownerFrame?.pc} effectiveOwnerPc=$effectiveOwnerPc")
-                    println("[YIELD CloseState] ownerFrame.proto.name=${ownerFrame?.proto?.name} effectiveOwnerTbc.size=${effectiveOwnerTbc.size}")
-                    println("[YIELD CloseState] effectiveOwnerTbc=$effectiveOwnerTbc")
-                    println("[YIELD CloseState] pendingCloseVar=$pendingCloseVar")
-                    
-                    // Capture TBC list with current values (don't filter yet)
-                    // Keep ALL TBC vars from owner frame including current one
-                    val pendingTbcList = effectiveOwnerTbc.map { (regIndex, value) ->
-                        Pair(regIndex, value)
+                val closeResumeState: CloseResumeState? =
+                    if (isCloseYield) {
+                        // Capture __close continuation (current execution point)
+                        // This is the __close function's state, NOT the owner's state
+                        val closeContinuation =
+                            ResumptionState(
+                                proto = currentProto,
+                                pc = pc + 1,
+                                registers = registers,
+                                upvalues = execFrame.upvalues,
+                                varargs = varargs,
+                                yieldTargetRegister = yieldTargetReg,
+                                yieldExpectedResults = yieldExpectedResults,
+                                toBeClosedVars = execFrame.toBeClosedVars, // __close function's TBC (should be empty)
+                                pendingCloseStartReg = 0, // Not relevant for continuation
+                                pendingCloseVar = null, // Not relevant for continuation
+                                execStack = execStack.toList(),
+                                pendingCloseYield = false,
+                                capturedReturnValues = null, // Not used in new model
+                                debugCallStack = coroutineCallStack,
+                                closeResumeState = null,
+                                closeOwnerFrameStack = callerContext.snapshot(),
+                            )
+
+                        // Owner frame selection:
+                        // - PREFER pendingCloseOwnerFrame (the frame where __close was executing)
+                        // - This frame contains the TBC vars from the SAME function scope (e.g., z and y in pcall'd function)
+                        // - closeOwnerFrameStack contains OUTER frames (e.g., wrapper with x) that should NOT be processed yet
+                        // - Outer frames are only processed when their own functions return, not during inner yields
+                        val ownerFrame = pendingCloseOwnerFrame
+                        println(
+                            "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${pendingCloseOwnerFrame != null}",
+                        )
+                        println("[YIELD CloseState] Using ownerFrame from pendingCloseOwnerFrame (current function's frame)")
+
+                        // If we're yielding from a __close that's itself resuming a previous close-yield,
+                        // inherit the TBC list from the active CloseResumeState (already in progress)
+                        val parentTbcList = activeCloseResumeState?.pendingTbcList
+
+                        // Build effective owner context from the selected owner frame
+                        // For cross-native boundary (pcall), ownerFrameFromStack provides the outer frame
+                        val callerFrame =
+                            if (coroutineCallStack.size >= 2) {
+                                coroutineCallStack[coroutineCallStack.size - 2]
+                            } else {
+                                null
+                            }
+                        val effectiveOwnerProto = ownerFrame?.proto ?: callerFrame?.proto ?: currentProto
+                        val effectiveOwnerPc = (ownerFrame?.pc ?: callerFrame?.pc ?: pc) + 1
+                        val effectiveOwnerRegs = (ownerFrame?.registers ?: callerFrame?.registers ?: registers).toMutableList()
+                        val effectiveOwnerVarargs = ownerFrame?.varargs ?: callerFrame?.varargs ?: varargs
+                        val effectiveOwnerUpvalues = ownerFrame?.upvalues ?: execFrame.upvalues
+
+                        // Capture FULL TBC list from owner frame, unfiltered
+                        // Don't use parentTbcList or filter by pendingCloseVar - capture complete snapshot
+                        val effectiveOwnerTbc = ownerFrame?.toBeClosedVars ?: ownerTbc
+
+                        println(
+                            "[YIELD CloseState] ownerFrame=${ownerFrame != null} ownerFrame.pc=${ownerFrame?.pc} effectiveOwnerPc=$effectiveOwnerPc",
+                        )
+                        println(
+                            "[YIELD CloseState] ownerFrame.proto.name=${ownerFrame?.proto?.name} effectiveOwnerTbc.size=${effectiveOwnerTbc.size}",
+                        )
+                        println("[YIELD CloseState] effectiveOwnerTbc=$effectiveOwnerTbc")
+                        println("[YIELD CloseState] pendingCloseVar=$pendingCloseVar")
+
+                        // Capture TBC list with current values (don't filter yet)
+                        // Keep ALL TBC vars from owner frame including current one
+                        val pendingTbcList =
+                            effectiveOwnerTbc.map { (regIndex, value) ->
+                                Pair(regIndex, value)
+                            }
+
+                        println("[YIELD CloseState] Captured pendingTbcList.size=${pendingTbcList.size}")
+
+                        CloseResumeState(
+                            pendingCloseContinuation = closeContinuation,
+                            ownerProto = effectiveOwnerProto,
+                            ownerPc = effectiveOwnerPc, // already incremented
+                            ownerRegisters = effectiveOwnerRegs,
+                            ownerUpvalues = effectiveOwnerUpvalues,
+                            ownerVarargs = effectiveOwnerVarargs,
+                            startReg = pendingCloseStartReg,
+                            pendingTbcList = pendingTbcList,
+                            pendingCloseVar = pendingCloseVar,
+                            errorArg = pendingCloseErrorArg,
+                            capturedReturnValues = ownerFrame?.capturedReturns,
+                        )
+                    } else {
+                        null
                     }
-                    
-                    println("[YIELD CloseState] Captured pendingTbcList.size=${pendingTbcList.size}")
-                    
-                    CloseResumeState(
-                        pendingCloseContinuation = closeContinuation,
-                        ownerProto = effectiveOwnerProto,
-                        ownerPc = effectiveOwnerPc,  // already incremented
-                        ownerRegisters = effectiveOwnerRegs,
-                        ownerUpvalues = effectiveOwnerUpvalues,
-                        ownerVarargs = effectiveOwnerVarargs,
-                        startReg = pendingCloseStartReg,
-                        pendingTbcList = pendingTbcList,
-                        pendingCloseVar = pendingCloseVar,
-                        errorArg = pendingCloseErrorArg,
-                        capturedReturnValues = ownerFrame?.capturedReturns
-                    )
-                } else null
 
                 val pendingTbc = ownerTbc.toMutableList()
 
@@ -1636,7 +1659,7 @@ class LuaVmImpl(
                 val stateRegs: MutableList<LuaValue<*>>
                 val stateUpvalues: List<Upvalue>
                 val stateVarargs: List<LuaValue<*>>
-                
+
                 if (closeResumeState != null && closeResumeState.ownerProto != null) {
                     // Use owner frame from CloseResumeState
                     stateProto = closeResumeState.ownerProto
@@ -1674,7 +1697,7 @@ class LuaVmImpl(
                     pendingCloseErrorArg = pendingCloseErrorArg,
                     incrementPc = true,
                     closeResumeState = closeResumeState,
-                    closeOwnerFrameStack = closeOwnerFrameStack.toList(),
+                    closeOwnerFrameStack = callerContext.snapshot(),
                 )
                 pendingCloseVar = null
                 pendingCloseStartReg = 0
@@ -1901,22 +1924,23 @@ class LuaVmImpl(
         // IMPORTANT: Share the TBC list reference (don't copy) so that changes made by CLOSE
         // instructions after this call are visible when building CloseResumeState during yields
         // ONLY push if not already at top (avoid duplicates from nested native calls)
-        if (callerFrame != null && (closeOwnerFrameStack.isEmpty() || closeOwnerFrameStack.last().proto != callerFrame.proto)) {
+        if (callerFrame != null && (callerContext.size == 0 || callerContext.peek()?.proto != callerFrame.proto)) {
             // Create a shallow snapshot - most fields are immutable or shouldn't change
             // TBC list is shared (not copied) so CLOSE instructions update it
-            val snapshotFrame = ExecutionFrame(
-                proto = callerFrame.proto,
-                initialArgs = emptyList(), // Not used after construction
-                upvalues = callerFrame.upvalues,
-                initialPc = callerFrame.pc,
-                existingRegisters = callerFrame.registers,
-                existingVarargs = callerFrame.varargs,
-                existingToBeClosedVars = callerFrame.toBeClosedVars, // Share, don't copy!
-                existingOpenUpvalues = callerFrame.openUpvalues,
-            )
-            closeOwnerFrameStack.add(snapshotFrame)
+            val snapshotFrame =
+                ExecutionFrame(
+                    proto = callerFrame.proto,
+                    initialArgs = emptyList(), // Not used after construction
+                    upvalues = callerFrame.upvalues,
+                    initialPc = callerFrame.pc,
+                    existingRegisters = callerFrame.registers,
+                    existingVarargs = callerFrame.varargs,
+                    existingToBeClosedVars = callerFrame.toBeClosedVars, // Share, don't copy!
+                    existingOpenUpvalues = callerFrame.openUpvalues,
+                )
+            callerContext.push(snapshotFrame)
         }
-        
+
         var didYield = false
 
         try {
@@ -1947,20 +1971,22 @@ class LuaVmImpl(
             // Match by proto reference since we pushed a snapshot, not the exact frame
             // IMPORTANT: If the popped frame has TBC vars, transfer them to activeExecutionFrame
             // This ensures outer __close handlers (like x in pcall test) are processed by RETURN
-            if (!didYield && callerFrame != null && closeOwnerFrameStack.isNotEmpty() && closeOwnerFrameStack.last().proto == callerFrame.proto) {
-                val frameToPop = closeOwnerFrameStack.last()
+            if (!didYield && callerFrame != null && callerContext.size > 0 && callerContext.peek()?.proto == callerFrame.proto) {
+                val frameToPop = callerContext.peek()
                 val activeFrame = activeExecutionFrame
-                println("[callFunction finally] Popping frame: proto=${frameToPop.proto.name} TBC.size=${frameToPop.toBeClosedVars.size}")
+                println(
+                    "[callFunction finally] Popping frame: proto=${frameToPop?.proto?.name} TBC.size=${frameToPop?.toBeClosedVars?.size}",
+                )
                 println("[callFunction finally] activeFrame=${activeFrame != null} activeProto=${activeFrame?.proto?.name}")
-                
+
                 // Transfer TBC vars to active frame so RETURN instruction can process them
                 // BUT only if they're different lists (we share the TBC reference when pushing, so check identity)
-                if (frameToPop.toBeClosedVars.isNotEmpty() && activeFrame != null) {
+                if (frameToPop != null && frameToPop.toBeClosedVars.isNotEmpty() && activeFrame != null) {
                     println("[callFunction finally] Transferring ${frameToPop.toBeClosedVars.size} TBC vars to active frame")
                     println("[callFunction finally] Active frame proto: ${activeFrame.proto.name}")
                     println("[callFunction finally] Active frame TBC before: ${activeFrame.toBeClosedVars}")
                     println("[callFunction finally] Same list? ${frameToPop.toBeClosedVars === activeFrame.toBeClosedVars}")
-                    
+
                     // Only transfer if they're different list instances
                     // When we push, we share the TBC list reference, so they'll be identical
                     if (frameToPop.toBeClosedVars !== activeFrame.toBeClosedVars) {
@@ -1971,8 +1997,8 @@ class LuaVmImpl(
                     }
                     println("[callFunction finally] Active frame TBC after: ${activeFrame.toBeClosedVars}")
                 }
-                
-                closeOwnerFrameStack.removeAt(closeOwnerFrameStack.size - 1)
+
+                callerContext.pop()
             }
         }
     }
