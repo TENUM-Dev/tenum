@@ -172,15 +172,11 @@ class LuaVmImpl(
         encodedCount: Int,
         stayOnSamePc: Boolean,
     ) {
-        pendingYieldTargetReg = targetReg
-        pendingYieldEncodedCount = encodedCount
-        pendingYieldStayOnSamePc = stayOnSamePc
+        yieldContext.setYieldResumeContext(targetReg, encodedCount, stayOnSamePc)
     }
 
     override fun clearYieldResumeContext() {
-        pendingYieldTargetReg = null
-        pendingYieldEncodedCount = null
-        pendingYieldStayOnSamePc = false
+        yieldContext.clearYieldResumeContext()
     }
 
     override fun preserveErrorCallStack(callStack: List<CallFrame>) {
@@ -337,20 +333,17 @@ class LuaVmImpl(
     private val resumptionService = CoroutineResumptionService()
 
     /**
+     * Encapsulates yield/resume context state for coroutine operations.
+     * Groups 3 yield-related variables into a single cohesive context.
+     */
+    private val yieldContext = CoroutineYieldContext()
+
+    /**
      * Currently active execution frame.
      * Set at the start of executeProto and used by callFunction to push caller frames.
      * This allows native functions (like pcall) to access their calling frame for TBC tracking.
      */
     private var activeExecutionFrame: ExecutionFrame? = null
-
-    /**
-     * Yield resume context for yields triggered outside CALL opcodes (e.g., __close metamethods).
-     * When coroutine.yield is invoked from an internal call whose results are ignored,
-     * we set encodedCount=1 (store zero results) to avoid corrupting registers on resume.
-     */
-    private var pendingYieldTargetReg: Int? = null
-    private var pendingYieldEncodedCount: Int? = null
-    private var pendingYieldStayOnSamePc: Boolean = false
 
     /**
      * Original call stack snapshot for hooks.
@@ -1539,8 +1532,8 @@ class LuaVmImpl(
             if (!e.stateSaved) {
                 // The yield was triggered by a CALL instruction, so instructions[pc] has the target register and result count
                 val yieldInstr = if (pc < instructions.size) instructions[pc] else null
-                val yieldTargetReg = pendingYieldTargetReg ?: yieldInstr?.a ?: 0
-                val yieldExpectedResults = pendingYieldEncodedCount ?: yieldInstr?.c ?: 0
+                val yieldTargetReg = yieldContext.pendingYieldTargetReg ?: yieldInstr?.a ?: 0
+                val yieldExpectedResults = yieldContext.pendingYieldEncodedCount ?: yieldInstr?.c ?: 0
 
                 // Filter call stack to only include coroutine's frames (not main thread frames)
                 // Save coroutine state for resume
@@ -1681,7 +1674,7 @@ class LuaVmImpl(
                     closeContext.pendingCloseStartReg,
                     closeContext.pendingCloseVar,
                     execStack.toList(),
-                    pendingCloseYield = isCloseYield || pendingYieldStayOnSamePc,
+                    pendingCloseYield = isCloseYield || yieldContext.pendingYieldStayOnSamePc,
                     capturedReturnValues = getCapturedReturnValues(),
                     pendingCloseContinuation = closeContext.pendingCloseContinuation,
                     pendingCloseErrorArg = closeContext.pendingCloseErrorArg,
