@@ -31,6 +31,7 @@ import ai.tenum.lua.vm.errorhandling.LuaRuntimeError
 import ai.tenum.lua.vm.errorhandling.NameHintResolver
 import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
 import ai.tenum.lua.vm.execution.ChunkExecutor
+import ai.tenum.lua.vm.execution.CloseErrorHandler
 import ai.tenum.lua.vm.execution.CloseResumeState
 import ai.tenum.lua.vm.execution.DispatchResult
 import ai.tenum.lua.vm.execution.DispatchResultProcessor
@@ -889,6 +890,15 @@ class LuaVmImpl(
                 ::preserveErrorCallStack,
             )
 
+        // Create close error handler
+        val closeErrorHandler =
+            CloseErrorHandler(
+                callStackManager,
+                stackTraceBuilder,
+                ::markCurrentFrameAsReturning,
+                ::closeToBeClosedVars,
+            )
+
         // Local aliases for frequently accessed frame state (from preparation)
         var registers = preparation.registers
         var constants = preparation.constants
@@ -1060,82 +1070,6 @@ class LuaVmImpl(
             ArrayDeque(
                 (mode as? ExecutionMode.ResumeContinuation)?.state?.execStack ?: emptyList(),
             )
-
-        /**
-         * Helper function to convert a LuaValue error to a displayable string message.
-         */
-        fun errorValueToMessage(errorValue: LuaValue<*>): String =
-            when (errorValue) {
-                is LuaString -> errorValue.value
-                is LuaNumber -> errorValue.toDouble().toString()
-                else -> errorValue.toString()
-            }
-
-        /**
-         * Helper function to handle error chaining through __close metamethods.
-         * Closes to-be-closed variables and throws a new exception if the error changed.
-         */
-        fun handleErrorAndCloseToBeClosedVars(originalException: Throwable): Nothing {
-            // Extract initial error value from the exception
-            val initialError =
-                when (originalException) {
-                    is LuaRuntimeError -> originalException.errorValue
-                    is LuaException -> originalException.errorValue ?: (originalException.message?.let { LuaString(it) } ?: LuaNil)
-                    else -> originalException.message?.let { LuaString(it) } ?: LuaNil
-                }
-
-            // Mark the current frame as returning BEFORE closing to-be-closed variables
-            // This makes the frame invisible to debug.getinfo during __close execution
-            // (matching Lua 5.4.8 semantics where the function is conceptually already returned)
-            if (toBeClosedVars.isNotEmpty()) {
-                markCurrentFrameAsReturning()
-            }
-
-            // Close to-be-closed variables and get the final error (possibly changed by __close handlers)
-            val finalError = closeToBeClosedVars(toBeClosedVars, alreadyClosedRegs, initialError)
-
-            // Clear the TBC list to prevent double-closing if exception propagates to outer frames
-            // This is critical: if a __close handler throws, the var is NOT removed from the list
-            // (see ExecutionFrame.executeCloseMetamethods line 246), so we must clear it here
-            // to prevent re-processing when the exception unwinds through multiple executeProto frames
-            toBeClosedVars.clear()
-
-            // If the error changed during cleanup, throw a new exception with the new error
-            if (finalError !== initialError) {
-                val errorMsg = errorValueToMessage(finalError)
-                when (originalException) {
-                    is LuaRuntimeError -> {
-                        throw LuaRuntimeError(
-                            message = errorMsg,
-                            errorValue = finalError,
-                            callStack = callStackManager.captureSnapshot(),
-                        )
-                    }
-                    is LuaException -> {
-                        throw LuaException(
-                            errorMessageOnly = errorMsg,
-                            line = stackTraceBuilder.getCurrentLine(currentProto, pc),
-                            source = currentProto.source,
-                            luaStackTrace = originalException.luaStackTrace,
-                            errorValueOverride = finalError,
-                        )
-                    }
-                    else -> {
-                        // Should not happen, but handle gracefully
-                        throw LuaException(
-                            errorMessageOnly = errorMsg,
-                            line = stackTraceBuilder.getCurrentLine(currentProto, pc),
-                            source = currentProto.source,
-                            luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
-                            errorValueOverride = finalError,
-                        )
-                    }
-                }
-            }
-
-            // Error didn't change, re-throw the original exception
-            throw originalException
-        }
 
         try {
             debug { "--- Starting execution ---" }
@@ -1580,10 +1514,10 @@ class LuaVmImpl(
             throw e // Re-throw to be caught by coroutineResume
         } catch (e: LuaRuntimeError) {
             val luaEx = errorHandler.handleRuntimeError(e, currentProto, pc)
-            handleErrorAndCloseToBeClosedVars(luaEx)
+            closeErrorHandler.handleErrorAndCloseToBeClosedVars(luaEx, toBeClosedVars, alreadyClosedRegs, currentProto, pc)
         } catch (e: LuaException) {
             // Already a LuaException - close to-be-closed vars and handle error chaining
-            handleErrorAndCloseToBeClosedVars(e)
+            closeErrorHandler.handleErrorAndCloseToBeClosedVars(e, toBeClosedVars, alreadyClosedRegs, currentProto, pc)
         } catch (e: Exception) {
             // Don't catch LuaYieldException - it should propagate to coroutineResume
             if (e is LuaYieldException) {
@@ -1593,7 +1527,7 @@ class LuaVmImpl(
 
             println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
             val luaEx = errorHandler.handleGenericException(e, currentProto, pc, registers, constants, instructions)
-            handleErrorAndCloseToBeClosedVars(luaEx)
+            closeErrorHandler.handleErrorAndCloseToBeClosedVars(luaEx, toBeClosedVars, alreadyClosedRegs, currentProto, pc)
         } catch (e: Error) {
             throw errorHandler.handlePlatformError(e, currentProto, pc)
         } finally {
