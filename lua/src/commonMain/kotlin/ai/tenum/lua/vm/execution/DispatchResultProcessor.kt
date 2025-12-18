@@ -2,6 +2,7 @@ package ai.tenum.lua.vm.execution
 
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaFunction
+import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 import ai.tenum.lua.vm.VmDebugSink
@@ -141,5 +142,98 @@ class DispatchResultProcessor(
             "[SEGMENT FINAL] No outer frame, returning ${finalReturn.size} values to coroutine caller."
         }
         return ReturnLoopAction.ExitProto(finalReturn)
+    }
+
+    /**
+     * Process a CallTrampoline to prepare the new execution state.
+     *
+     * @param dispatchResult The call trampoline result
+     * @return The new execution state for the callee
+     */
+    fun processCallTrampoline(dispatchResult: DispatchResult.CallTrampoline): CallTrampolineAction {
+        debugSink.debug { "  Trampolining into regular call" }
+
+        val funcVal = dispatchResult.newProto
+        val args = dispatchResult.newArgs
+        val calleeUpvalues = dispatchResult.newUpvalues
+
+        // Create new execution frame for callee
+        val execFrame =
+            ExecutionFrame(
+                proto = funcVal,
+                initialArgs = args,
+                upvalues = calleeUpvalues,
+                initialPc = 0,
+                existingRegisters = null, // Fresh registers for callee
+                existingVarargs =
+                    if (funcVal.hasVararg && args.size > funcVal.parameters.size) {
+                        args.subList(funcVal.parameters.size, args.size)
+                    } else {
+                        emptyList()
+                    },
+            )
+
+        return CallTrampolineAction(
+            newProto = funcVal,
+            newFrame = execFrame,
+            newUpvalues = calleeUpvalues,
+            luaFunc = dispatchResult.savedFunc,
+        )
+    }
+
+    /**
+     * Process a TailCallTrampoline to prepare the TCO state.
+     *
+     * @param dispatchResult The tail call trampoline result
+     * @param currentRegisters Current register array to reuse
+     * @param currentCallDepth Current tail call depth
+     * @return The new execution state for TCO
+     */
+    fun processTailCallTrampoline(
+        dispatchResult: DispatchResult.TailCallTrampoline,
+        currentRegisters: MutableList<LuaValue<*>>,
+        currentCallDepth: Int,
+    ): TailCallAction {
+        val funcVal = dispatchResult.newProto
+        val args = dispatchResult.newArgs
+        val calleeUpvalues = dispatchResult.newUpvalues
+
+        // TCO: Move arguments from `args` to the beginning of the current register set.
+        val calleeNumParams = funcVal.parameters.size
+        currentRegisters.fill(LuaNil)
+
+        for (i in 0 until calleeNumParams) {
+            currentRegisters[i] = args.getOrElse(i) { LuaNil }
+        }
+
+        // Recalculate varargs for the new frame
+        val varargs =
+            if (funcVal.hasVararg && args.size > calleeNumParams) {
+                args.subList(calleeNumParams, args.size)
+            } else {
+                emptyList()
+            }
+
+        // Create NEW execution frame for the tail-called function
+        val execFrame =
+            ExecutionFrame(
+                proto = funcVal,
+                initialArgs = args,
+                upvalues = calleeUpvalues,
+                initialPc = 0,
+                existingRegisters = currentRegisters,
+                existingVarargs = varargs,
+            )
+
+        // Calculate new tail call depth
+        val newTailCallDepth = currentCallDepth + 1
+
+        return TailCallAction(
+            newProto = funcVal,
+            newFrame = execFrame,
+            newUpvalues = calleeUpvalues,
+            luaFunc = dispatchResult.savedFunc,
+            newTailCallDepth = newTailCallDepth,
+        )
     }
 }

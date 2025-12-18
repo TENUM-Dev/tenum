@@ -1365,9 +1365,9 @@ class LuaVmImpl(
                         }
                     }
                     is DispatchResult.CallTrampoline -> {
-                        // Save current (caller) execution context
                         debug { "  Trampolining into regular call" }
 
+                        // Save current (caller) execution context
                         val callerContext =
                             ExecContext(
                                 proto = currentProto,
@@ -1375,7 +1375,7 @@ class LuaVmImpl(
                                 registers = registers,
                                 constants = constants,
                                 instructions = instructions,
-                                pc = pc, // Resume at next instruction after CALL returns
+                                pc = pc,
                                 varargs = varargs,
                                 currentUpvalues = currentUpvalues,
                                 callInstruction = dispatchResult.callInstruction,
@@ -1396,78 +1396,51 @@ class LuaVmImpl(
                             )
                         }
 
-                        // Switch to callee's execution context
-                        val funcVal = dispatchResult.newProto
-                        val args = dispatchResult.newArgs
-                        val calleeUpvalues = dispatchResult.newUpvalues
-                        val luaFunc = dispatchResult.savedFunc
+                        // Process trampoline using helper
+                        val action = resultProcessor.processCallTrampoline(dispatchResult)
 
-                        currentProto = funcVal
+                        // Apply state changes
+                        currentProto = action.newProto
                         constants = currentProto.constants
                         instructions = currentProto.instructions
-                        pc = -1 // Will be incremented to 0 at end of loop
-
-                        // Create new execution frame for callee
-                        execFrame =
-                            ExecutionFrame(
-                                proto = currentProto,
-                                initialArgs = args,
-                                upvalues = calleeUpvalues,
-                                initialPc = 0,
-                                existingRegisters = null, // Fresh registers for callee
-                                existingVarargs =
-                                    if (currentProto.hasVararg && args.size > currentProto.parameters.size) {
-                                        args.subList(currentProto.parameters.size, args.size)
-                                    } else {
-                                        emptyList()
-                                    },
-                            )
-
+                        pc = -1
+                        execFrame = action.newFrame
                         registers = execFrame.registers
                         openUpvalues = execFrame.openUpvalues
                         toBeClosedVars = execFrame.toBeClosedVars
                         varargs = execFrame.varargs
-                        currentUpvalues = calleeUpvalues
-
-                        // Recreate execution environment for callee
+                        currentUpvalues = action.newUpvalues
                         env = ExecutionEnvironment(execFrame, globals, this)
 
-                        // Push callee's call frame onto debug stack (caller's frame stays)
+                        // Push callee's call frame onto debug stack
                         callStackManager.addFrame(
                             CallFrame(
-                                function = luaFunc,
+                                function = action.luaFunc,
                                 proto = currentProto,
                                 pc = 0,
                                 base = 0,
                                 registers = registers,
                                 isNative = false,
-                                isTailCall = false, // Regular call, not tail call
+                                isTailCall = false,
                                 inferredFunctionName = pendingInferredName,
                                 varargs = varargs,
-                                ftransfer = if (args.isEmpty()) 0 else 1,
-                                ntransfer = args.size,
+                                ftransfer = if (dispatchResult.newArgs.isEmpty()) 0 else 1,
+                                ntransfer = dispatchResult.newArgs.size,
                             ),
                         )
                         pendingInferredName = null
 
-                        // Trigger CALL and LINE hooks for trampolined function (resets lastLine)
+                        // Trigger CALL and LINE hooks for trampolined function
                         lastLine = hookHelper.triggerEntryHooks(currentProto, preparation.isCoroutineContext)
-
-                        // Continue execution in callee (pc will be incremented to 0)
                     }
                     is DispatchResult.TailCallTrampoline -> {
-                        // Perform in-place trampoline: replace current execution context
-                        val funcVal = dispatchResult.newProto
-                        val args = dispatchResult.newArgs
-                        val calleeUpvalues = dispatchResult.newUpvalues
-
                         debug { "  TCO: Before trampoline, registers.hashCode=${registers.hashCode()}" }
 
                         // Log closure identity and upvalue wiring for diagnosis
                         if (debugEnabled) {
-                            val cid = funcVal.hashCode()
+                            val cid = dispatchResult.newProto.hashCode()
                             debug { "  TCO: trampoline into closure id=$cid" }
-                            calleeUpvalues.forEachIndexed { i, uv ->
+                            dispatchResult.newUpvalues.forEachIndexed { i, uv ->
                                 try {
                                     val regsHash = uv.registers?.hashCode() ?: 0
                                     val regIdx =
@@ -1482,16 +1455,7 @@ class LuaVmImpl(
                             }
                         }
 
-                        // Replace current execution context with callee's proto
-                        currentProto = funcVal
-                        constants = currentProto.constants
-                        instructions = currentProto.instructions
-
-                        // Reset program counter
-                        pc = -1 // Will be incremented to 0 at end of loop
-
-                        // Clear previous frame resources: open upvalues and to-be-closed lists
-                        // IMPORTANT: Close all open upvalues BEFORE clearing registers!
+                        // Clear previous frame resources
                         for ((regIdx, upvalue) in openUpvalues) {
                             if (!upvalue.isClosed) {
                                 debug { "  TCO: Closing upvalue at R[$regIdx] before trampoline" }
@@ -1502,96 +1466,55 @@ class LuaVmImpl(
                         toBeClosedVars.clear()
                         alreadyClosedRegs.clear()
 
-                        // TCO: Move arguments from `args` to the beginning of the current register set.
-                        val calleeNumParams = funcVal.parameters.size
+                        // Calculate tail call depth
+                        val previousFrame = callStackManager.lastFrame()
+                        val currentTailDepth =
+                            if (previousFrame?.isTailCall == true) {
+                                previousFrame.tailCallDepth
+                            } else {
+                                0
+                            }
+
+                        // Process tail call using helper (reuses registers for TCO)
                         debug { "  TCO: About to fill registers with nil, registers.hashCode=${registers.hashCode()}" }
-                        registers.fill(LuaNil)
+                        val action = resultProcessor.processTailCallTrampoline(dispatchResult, registers, currentTailDepth)
                         debug { "  TCO: After fill, registers[0]=${registers[0]}, registers.hashCode=${registers.hashCode()}" }
 
-                        for (i in 0 until calleeNumParams) {
-                            registers[i] = args.getOrElse(i) { LuaNil }
-                        }
-
-                        // Recalculate varargs for the new frame
-                        varargs =
-                            if (currentProto.hasVararg && args.size > calleeNumParams) {
-                                args.subList(calleeNumParams, args.size)
-                            } else {
-                                emptyList()
-                            }
-
-                        // Reset top for varargs tracking (will be set by VARARG if needed)
+                        // Apply state changes
+                        currentProto = action.newProto
+                        constants = currentProto.constants
+                        instructions = currentProto.instructions
+                        pc = -1
+                        execFrame = action.newFrame
                         execFrame.top = 0
-
-                        // Switch current upvalues to callee's upvalues
-                        currentUpvalues = calleeUpvalues
-
-                        // Create NEW execution frame for the tail-called function
-                        // Made mutable (var) to allow reassignment during tail call optimization (TCO)
-                        execFrame =
-                            ExecutionFrame(
-                                proto = currentProto,
-                                initialArgs = args,
-                                upvalues = calleeUpvalues,
-                                initialPc = 0,
-                                existingRegisters = registers,
-                                existingVarargs = varargs,
-                            )
-
-                        // Re-sync active frame after TCO frame replacement
+                        varargs = action.newFrame.varargs
+                        currentUpvalues = action.newUpvalues
                         flowState.setActiveExecutionFrame(execFrame)
-
-                        // Recreate execution environment with the new frame
-                        // Made mutable (var) to allow recreation during tail call optimization (TCO)
                         env = ExecutionEnvironment(execFrame, globals, this)
 
-                        // Get function object for frame (use saved reference since register may be overwritten)
-                        val luaFunc = dispatchResult.savedFunc
-
-                        // TAIL CALL: Increment tail call depth on the previous frame, or replace it if not already a tail call
-                        // This implements proper Lua tail call semantics while tracking the collapsed call chain
-                        val previousFrame = callStackManager.lastFrame()
-                        val newTailCallDepth =
-                            if (previousFrame?.isTailCall == true) {
-                                // Already a tail call frame - increment its depth
-                                previousFrame.tailCallDepth + 1
-                            } else {
-                                // First tail call in the chain
-                                1
-                            }
-
-                        // Remove the previous frame
+                        // Remove previous frame and push new tail call frame
                         callStackManager.removeLastFrame()
-
-                        // Push new call frame with accumulated tail call depth
-                        // The trampoline still avoids JVM stack growth by continuing in this loop
                         val tailFrame =
                             CallFrame(
-                                function = luaFunc,
+                                function = action.luaFunc,
                                 proto = currentProto,
                                 pc = pc,
                                 base = 0,
                                 registers = registers,
                                 isNative = false,
-                                isTailCall = true, // Mark as tail call for debug library
-                                tailCallDepth = newTailCallDepth, // Track accumulated tail calls
+                                isTailCall = true,
+                                tailCallDepth = action.newTailCallDepth,
                                 inferredFunctionName = pendingInferredName,
                                 varargs = varargs,
-                                ftransfer = if (args.isEmpty()) 0 else 1, // Lua 5.4: 0 if no parameters, else 1
-                                ntransfer = args.size, // Lua 5.4: number of parameters
+                                ftransfer = if (dispatchResult.newArgs.isEmpty()) 0 else 1,
+                                ntransfer = dispatchResult.newArgs.size,
                             )
                         callStackManager.addFrame(tailFrame)
-
-                        // Clear call context after using it
                         pendingInferredName = null
 
-                        // Trigger TAILCALL hook (lastLine reset not needed - tail calls don't fire LINE hooks at entry)
+                        // Trigger TAILCALL hook and reset lastLine
                         triggerHook(HookEvent.TAILCALL, currentProto.lineDefined)
-                        // Reset lastLine for new proto
                         lastLine = -1
-
-                        // Continue executing the callee in this loop (tail-call optimized)
-                        // pc will be incremented to 0 at end of loop
                     }
                 }
                 pc++
