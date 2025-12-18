@@ -949,6 +949,8 @@ class LuaVmImpl(
                             pendingCloseContinuation = null,
                             ownerSegments = remainingSegments,
                             errorArg = closeState.errorArg,
+                            pendingReturnValues = null,
+                            closeOwnerFrameStack = closeState.closeOwnerFrameStack,
                         ),
                     )
                 }
@@ -1254,27 +1256,17 @@ class LuaVmImpl(
                             // No caller on stack - check if there are remaining segments to process
                             val activeCloseState = closeContext.activeCloseResumeState
                             if (activeCloseState != null && activeCloseState.ownerSegments.isNotEmpty()) {
-                                // The FIRST segment in ownerSegments is the one that just completed its RETURN
-                                // We're now processing the NEXT segment (the second in the list)
-                                // Capture return values from the FIRST (just-completed) segment
-                                val justCompletedSegment = activeCloseState.ownerSegments.firstOrNull()
-                                println("[SEGMENT DBG] justCompletedSegment.capturedReturns=${justCompletedSegment?.capturedReturns?.size}, isMidReturn=${justCompletedSegment?.isMidReturn}")
-                                println("[SEGMENT DBG] execFrame.capturedReturns=${execFrame.capturedReturns?.size}, isMidReturn=${execFrame.isMidReturn}")
-                                println("[SEGMENT DBG] dispatchResult.values.size=${dispatchResult.values.size}")
+                                // Get return values from the just-completed segment
+                                // Priority: (a) stashed pendingReturnValues, (b) execFrame.capturedReturns, (c) dispatchResult.values
+                                println("[PENDING] pendingReturnValues=${activeCloseState.pendingReturnValues?.size}")
+                                println("[PENDING] execFrame.capturedReturns=${execFrame.capturedReturns?.size}, isMidReturn=${execFrame.isMidReturn}")
+                                println("[PENDING] dispatchResult.values.size=${dispatchResult.values.size}")
                                 
-                                val segmentReturnValues = if (justCompletedSegment != null && justCompletedSegment.capturedReturns != null) {
-                                    // Segment was mid-RETURN, use its stored capturedReturns
-                                    println("[SEGMENT RETURN] Using just-completed segment's capturedReturns: ${justCompletedSegment.capturedReturns.size} values")
-                                    justCompletedSegment.capturedReturns
-                                } else if (execFrame.isMidReturn && execFrame.capturedReturns != null) {
-                                    // Current frame still mid-RETURN (shouldn't happen here)
-                                    println("[SEGMENT RETURN] Using execFrame.capturedReturns: ${execFrame.capturedReturns!!.size} values")
-                                    execFrame.capturedReturns!!
-                                } else {
-                                    // Use dispatchResult from the RETURN that just completed
-                                    println("[SEGMENT RETURN] Using dispatchResult.values: ${dispatchResult.values.size} values, frame=${execFrame.proto.name}")
-                                    dispatchResult.values
-                                }
+                                val segmentReturnValues = activeCloseState.pendingReturnValues
+                                    ?: execFrame.capturedReturns
+                                    ?: dispatchResult.values
+                                
+                                println("[PENDING] Using segmentReturnValues.size=${segmentReturnValues.size}")
                                 
                                 // Process next segment
                                 val nextSegment = activeCloseState.ownerSegments.first()
@@ -1312,7 +1304,6 @@ class LuaVmImpl(
                                     } else null
                                     
                                     if (prevCallInstr != null && prevCallInstr.opcode == OpCode.CALL) {
-                                        println("[CALL-Resume] Storing ${segmentReturnValues.size} values to R${prevCallInstr.a}")
                                         val storage = ResultStorage(ExecutionEnvironment(segmentFrame, globals, this))
                                         storage.storeResults(
                                             targetReg = prevCallInstr.a,
@@ -1321,16 +1312,15 @@ class LuaVmImpl(
                                             opcodeName = "SEGMENT-CALL-RESUME",
                                         )
                                         debugSink.debug {
-                                            "[Segment CALL-Resume] Stored ${dispatchResult.values.size} values from prev segment"
+                                            "[Segment CALL-Resume] Stored ${segmentReturnValues.size} values from prev segment"
                                         }
-                                    } else {
-                                        println("[CALL-Resume] FAILED: prevCallInstr=${prevCallInstr?.opcode}, pc=${nextSegment.pcToResume}")
                                     }
                                 }
 
-                                // Update remaining segments
+                                // Update remaining segments and stash return values for next transition
                                 val remainingSegments = activeCloseState.ownerSegments.drop(1)
                                 if (remainingSegments.isNotEmpty()) {
+                                    println("[STASH] Stashing ${segmentReturnValues.size} return values for next segment")
                                     debugSink.debug {
                                         "[Segment Orchestrator] ${remainingSegments.size} segments remaining after this one"
                                     }
@@ -1339,9 +1329,12 @@ class LuaVmImpl(
                                             pendingCloseContinuation = null,
                                             ownerSegments = remainingSegments,
                                             errorArg = activeCloseState.errorArg,
+                                            pendingReturnValues = segmentReturnValues,
+                                            closeOwnerFrameStack = activeCloseState.closeOwnerFrameStack,
                                         ),
                                     )
                                 } else {
+                                    println("[STASH] No remaining segments, clearing state")
                                     closeContext.setActiveCloseResumeState(null)
                                 }
 
@@ -1367,17 +1360,42 @@ class LuaVmImpl(
                                 // Continue execution - don't return yet
                             } else {
                                 // No remaining segments - all segments completed
-                                // Return the final values to coroutine caller
-                                // Use segmentReturnValues captured from the last completing segment
-                                val finalReturnValues = if (execFrame.isMidReturn && execFrame.capturedReturns != null) {
-                                    execFrame.capturedReturns!!
+                                // Get return values from last segment
+                                val segmentReturnValues = activeCloseState?.pendingReturnValues
+                                    ?: execFrame.capturedReturns
+                                    ?: dispatchResult.values
+                                
+                                // Clear close state
+                                closeContext.setActiveCloseResumeState(null)
+                                
+                                // Check if we're returning to a coroutine frame with TBC
+                                // Look for a frame in callerContext that has TBC
+                                val coroutineFrameWithTBC = (0 until callerContext.size).firstOrNull { i ->
+                                    callerContext.getAt(i)?.toBeClosedVars?.isNotEmpty() == true
+                                }
+                                
+                                if (coroutineFrameWithTBC != null) {
+                                    // TODO: Found a coroutine frame with TBC that needs processing
+                                    // The outer frame (e.g., caller of pcall) has TBC variables that should
+                                    // execute when it eventually returns. But after segments complete, we return
+                                    // directly to the coroutine caller, bypassing the outer frame's RETURN.
+                                    //
+                                    // SOLUTION: Make outer frames with TBC part of the segment chain.
+                                    // After all mid-RETURN segments complete, process outer frames with TBC
+                                    // as continuation segments (not mid-RETURN, just normal execution).
+                                    //
+                                    // For now, return normally (test will fail, documenting the issue)
+                                    debugSink.debug {
+                                        "[Segment Orchestrator] WARNING: Coroutine frame at index $coroutineFrameWithTBC has TBC but won't be processed"
+                                    }
+                                    return segmentReturnValues
                                 } else {
-                                    dispatchResult.values
+                                    // No coroutine frames with TBC - return normally
+                                    debugSink.debug {
+                                        "[Segment Orchestrator] All segments completed, returning (size=${segmentReturnValues.size})"
+                                    }
+                                    return segmentReturnValues
                                 }
-                                debugSink.debug {
-                                    "[Segment Orchestrator] All segments completed, returning (size=${finalReturnValues.size})"
-                                }
-                                return finalReturnValues
                             }
                         }
                     }

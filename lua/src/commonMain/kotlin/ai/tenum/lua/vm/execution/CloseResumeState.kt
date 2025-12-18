@@ -64,4 +64,15 @@ data class CloseResumeState(
      * Error argument to pass to subsequent __close handlers (for error chaining).
      */
     val errorArg: LuaValue<*>,
+    /**
+     * Return values from the just-completed segment, stashed before capturedReturns is cleared.
+     * Used to pass return values to the next segment (either as capturedReturns for mid-RETURN,
+     * or as CALL results for caller frames with TBC).
+     */
+    val pendingReturnValues: List<LuaValue<*>>? = null,
+    /**
+     * Original close owner frame stack snapshot from yield time.
+     * After all segments complete, check for outer frames with TBC that need processing.
+     */
+    val closeOwnerFrameStack: List<OwnerSegment> = emptyList(),
 )

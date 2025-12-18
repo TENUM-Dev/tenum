@@ -173,6 +173,15 @@ class CoroutineResumptionService {
                 closeOwnerFrameStack.size // Start past the end to skip all frames (they'll be filtered below)
             }
 
+        // Build complete list of ALL owner segments (for post-segment processing)
+        // This includes frames with TBC that aren't mid-RETURN
+        val allOwnerSegments = mutableListOf<OwnerSegment>()
+        
+        println("[SEGMENT BUILD] closeOwnerFrameStack.size=${closeOwnerFrameStack.size}")
+        closeOwnerFrameStack.forEachIndexed { idx, frame ->
+            println("[SEGMENT BUILD]   [$idx] proto=${frame.proto.source}:${frame.proto.lineDefined} pc=${frame.pc} captured=${frame.capturedReturns?.size} tbc=${frame.toBeClosedVars.size}")
+        }
+        
         // Outer segments: frames from closeOwnerFrameStack (starting from startIndex)
         // When yielding from RETURN, we start from the RETURN frame (skipping earlier callers)
         // When yielding from CLOSE, startIndex is past the end, so loop from 0 to include outer frames
@@ -192,12 +201,13 @@ class CoroutineResumptionService {
             
             // Include frames that are:
             // 1. Mid-RETURN (owner with capturedReturnValues, or frame.capturedReturns != null)
-            // 2. Have TBC variables (will need to process __close when they eventually RETURN)
+            // 2. Have TBC variables (for allOwnerSegments list only)
             val isOwnerWithCapturedReturns = (i == startIndex && capturedReturnValues != null)
             val hasStoredCapturedReturns = frame.capturedReturns != null
             val hasTBC = frame.toBeClosedVars.isNotEmpty()
+            val isMidReturnSegment = isOwnerWithCapturedReturns || hasStoredCapturedReturns
             
-            if (!isOwnerWithCapturedReturns && !hasStoredCapturedReturns && !hasTBC) {
+            if (!isMidReturnSegment && !hasTBC) {
                 continue
             }
 
@@ -216,22 +226,28 @@ class CoroutineResumptionService {
             // to complete it with isMidReturn=true. For other frames, resume AFTER the CALL instruction.
             val pcToResume = if (segmentCapturedReturns != null) frame.pc else frame.pc + 1
             
-            segments.add(
-                OwnerSegment(
-                    proto = frame.proto,
-                    pcToResume = pcToResume,
-                    registers = frame.registers.toMutableList(),
-                    upvalues = frame.upvalues.toList(),
-                    varargs = frame.varargs.toList(),
-                    toBeClosedVars = frame.toBeClosedVars, // Share, don't copy!
-                    capturedReturns = segmentCapturedReturns,
-                    pendingCloseStartReg = if (i == startIndex && capturedReturnValues != null) startReg else 0,
-                    pendingCloseVar = if (i == startIndex && capturedReturnValues != null) pendingCloseVar else null,
-                    execStack = if (i == startIndex && capturedReturnValues != null) closeContinuationExecStack.toList() else emptyList(),
-                    debugCallStack = debugCallStack.toList(),
-                    isMidReturn = segmentCapturedReturns != null,
-                ),
+            val ownerSegment = OwnerSegment(
+                proto = frame.proto,
+                pcToResume = pcToResume,
+                registers = frame.registers.toMutableList(),
+                upvalues = frame.upvalues.toList(),
+                varargs = frame.varargs.toList(),
+                toBeClosedVars = frame.toBeClosedVars, // Share, don't copy!
+                capturedReturns = segmentCapturedReturns,
+                pendingCloseStartReg = if (i == startIndex && capturedReturnValues != null) startReg else 0,
+                pendingCloseVar = if (i == startIndex && capturedReturnValues != null) pendingCloseVar else null,
+                execStack = if (i == startIndex && capturedReturnValues != null) closeContinuationExecStack.toList() else emptyList(),
+                debugCallStack = debugCallStack.toList(),
+                isMidReturn = segmentCapturedReturns != null,
             )
+            
+            // Add to allOwnerSegments (includes TBC-only frames)
+            allOwnerSegments.add(ownerSegment)
+            
+            // Add to segments only if mid-RETURN
+            if (isMidReturnSegment) {
+                segments.add(ownerSegment)
+            }
         }
 
         val closeState =
@@ -261,6 +277,8 @@ class CoroutineResumptionService {
                     },
                 ownerSegments = segments,
                 errorArg = errorArg,
+                pendingReturnValues = null,
+                closeOwnerFrameStack = allOwnerSegments,  // Store ALL owner segments (including TBC-only)
             )
 
         return buildResumptionState(
