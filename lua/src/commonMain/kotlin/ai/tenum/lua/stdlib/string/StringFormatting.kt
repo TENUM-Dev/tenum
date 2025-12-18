@@ -1,12 +1,10 @@
 package ai.tenum.lua.stdlib.string
 
 import ai.tenum.lua.runtime.LuaValue
-import com.ionspin.kotlin.bignum.decimal.BigDecimal
-import com.ionspin.kotlin.bignum.decimal.RoundingMode
+import ai.tenum.lua.stdlib.string.formatters.NumberFormatterBase
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.log10
-import kotlin.math.round
 
 /**
  * String formatting operations for Lua string.format
@@ -257,16 +255,18 @@ object StringFormatting {
         lowercase: Boolean = true,
         alternateForm: Boolean = false,
     ): String {
-        val shouldUseExp = shouldUseExponentialForG(value, precision)
+        val shouldUseExp = formatterHelper.shouldUseExponentialForG(value, precision)
 
         return if (shouldUseExp) {
             // Use exponential format
+            val formatted = formatterHelper.formatExponentialCore(value, precision - 1, !lowercase, !alternateForm)
             if (!alternateForm) {
                 // For %g, trim trailing zeros from mantissa
-                formatExponentialForG(value, precision - 1, !lowercase)
+                formatted
+                    .replace(Regex("""(\.\d*?)0+([eE])"""), "$1$2")
+                    .replace(Regex("""\.([eE])"""), "$1")
             } else {
-                // For %#g, keep trailing zeros
-                formatExponential(value, precision - 1, !lowercase)
+                formatted
             }
         } else {
             // Use decimal format - need to calculate the right precision
@@ -285,171 +285,45 @@ object StringFormatting {
         }
     }
 
-    /**
-     * Determine if %g/%G should use exponential format
-     * Per C standard: use exponential if exponent < -4 or exponent >= precision
-     */
-    private fun shouldUseExponentialForG(
-        value: Double,
-        precision: Int,
-    ): Boolean {
-        if (value == 0.0 || value.isNaN() || value.isInfinite()) return false
+    // Helper class for accessing NumberFormatterBase utilities
+    private val formatterHelper = FormatterHelper()
 
-        val absValue = abs(value)
-        val exponent = floor(log10(absValue)).toInt()
+    private class FormatterHelper : NumberFormatterBase() {
+        override fun handles(formatChar: Char) = false
 
-        return exponent < -4 || exponent >= precision
+        override fun format(
+            value: LuaValue<*>,
+            spec: FormatSpecifier,
+        ) = ""
+
+        // Expose protected methods as public
+        public override fun shouldUseExponentialForG(
+            value: Double,
+            precision: Int,
+        ) = super.shouldUseExponentialForG(value, precision)
+
+        public override fun formatExponentialCore(
+            value: Double,
+            precision: Int,
+            uppercase: Boolean,
+            includeZeroPrecision: Boolean,
+        ) = super.formatExponentialCore(value, precision, uppercase, includeZeroPrecision)
+
+        public override fun formatFloatWithPrecision(
+            value: Double,
+            precision: Int,
+            alternateForm: Boolean,
+        ) = super.formatFloatWithPrecision(value, precision, alternateForm)
     }
 
     /**
-     * Core exponential formatting logic shared by both %e and %g formats.
-     */
-    private fun formatExponentialCore(
-        value: Double,
-        precision: Int,
-        uppercase: Boolean,
-        trimTrailingZeros: Boolean,
-        includeZeroPrecision: Boolean,
-    ): String {
-        // Handle special values
-        if (value.isNaN()) return if (uppercase) "NAN" else "nan"
-        if (value.isInfinite()) return if (uppercase) (if (value > 0) "INF" else "-INF") else (if (value > 0) "inf" else "-inf")
-
-        val expChar = if (uppercase) 'E' else 'e'
-        if (value == 0.0) {
-            return if (includeZeroPrecision) {
-                val prec = if (precision >= 0) precision else 6
-                if (prec > 0) "0.${'0'.toString().repeat(prec)}$expChar+00" else "0$expChar+00"
-            } else {
-                "0$expChar+00"
-            }
-        }
-
-        // Get sign and absolute value
-        val isNegative = value < 0
-        val absValue = abs(value)
-
-        // Calculate exponent (base 10)
-        val exponent = floor(log10(absValue)).toInt()
-
-        // Calculate mantissa using power of 10
-        val powerOf10 =
-            if (exponent >= 0) {
-                var result = 1.0
-                repeat(exponent) { result *= 10.0 }
-                result
-            } else {
-                var result = 1.0
-                repeat(-exponent) { result /= 10.0 }
-                result
-            }
-        val mantissa = absValue / powerOf10
-
-        // Format mantissa with precision
-        val prec = if (precision >= 0) precision else 6
-        val mantissaStr =
-            if (prec == 0) {
-                round(mantissa)
-                    .toInt()
-                    .toString()
-            } else {
-                val formatted = formatFloatWithPrecision(mantissa, prec, false)
-                if (trimTrailingZeros) formatted.trimEnd('0').trimEnd('.') else formatted
-            }
-
-        // Format exponent with at least 2 digits (Lua 5.4 behavior)
-        val expSign = if (exponent >= 0) "+" else ""
-        val expStr =
-            abs(exponent)
-                .toString()
-                .padStart(2, '0')
-
-        val sign = if (isNegative) "-" else ""
-        return "$sign$mantissaStr$expChar$expSign$expStr"
-    }
-
-    /**
-     * Format a number in exponential notation (e.g., 1.234567e+02)
-     */
-    private fun formatExponential(
-        value: Double,
-        precision: Int,
-        uppercase: Boolean,
-    ): String =
-        formatExponentialCore(
-            value = value,
-            precision = precision,
-            uppercase = uppercase,
-            trimTrailingZeros = false,
-            includeZeroPrecision = true,
-        )
-
-    /**
-     * Format exponential for %g style (with trailing zero trimming).
-     */
-    private fun formatExponentialForG(
-        value: Double,
-        precision: Int,
-        uppercase: Boolean,
-    ): String =
-        formatExponentialCore(
-            value = value,
-            precision = precision,
-            uppercase = uppercase,
-            trimTrailingZeros = true,
-            includeZeroPrecision = false,
-        )
-
-    /**
-     * Format float with precision, always using '.' as decimal separator
-     * Uses BigDecimal to handle very large numbers and high precision formatting
+     * Format float with precision, always using '.' as decimal separator.
+     * Uses BigDecimal to handle very large numbers and high precision formatting.
      * Internal visibility for testing.
      */
     internal fun formatFloatWithPrecision(
         value: Double,
         precision: Int,
         alternateForm: Boolean = false,
-    ): String {
-        // Use BigDecimal for proper handling of large numbers and high precision
-        // Use scale to keep trailing zeros for the requested precision
-        val rounded =
-            BigDecimal
-                .fromDouble(value)
-                .roundToDigitPositionAfterDecimalPoint(
-                    precision.toLong(),
-                    RoundingMode.ROUND_HALF_AWAY_FROM_ZERO,
-                ).scale(precision.toLong())
-
-        // Convert to plain string (not scientific notation)
-        var result = rounded.toPlainString()
-
-        // Special case: precision 0
-        if (precision == 0) {
-            val dotIndex = result.indexOf('.')
-            if (dotIndex >= 0) {
-                result = result.substring(0, dotIndex)
-            }
-            // With alternateForm flag, always show decimal point even for precision 0
-            if (alternateForm) {
-                result += "."
-            }
-            return result
-        }
-
-        // Ensure we have the decimal point
-        if (!result.contains('.')) {
-            result += "."
-        }
-
-        // Ensure we have exactly the requested precision
-        val dotIndex = result.indexOf('.')
-        val currentPrecision = result.length - dotIndex - 1
-
-        when {
-            currentPrecision < precision -> result += "0".repeat(precision - currentPrecision)
-            currentPrecision > precision -> result = result.substring(0, dotIndex + precision + 1)
-        }
-
-        return result
-    }
+    ): String = formatterHelper.formatFloatWithPrecision(value, precision, alternateForm)
 }

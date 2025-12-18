@@ -3,7 +3,6 @@ package ai.tenum.lua.stdlib.string.formatters
 import ai.tenum.lua.runtime.LuaNumber
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.stdlib.string.FormatSpecifier
-import ai.tenum.lua.stdlib.string.ValueFormatter
 
 /**
  * Formats values as hexadecimal floating-point (%a, %A formats).
@@ -11,7 +10,7 @@ import ai.tenum.lua.stdlib.string.ValueFormatter
  * Domain: String formatting
  * Responsibility: Format floats in hexadecimal notation (e.g., 0x1.91eb851eb851fp+1)
  */
-class HexFloatFormatter : ValueFormatter {
+class HexFloatFormatter : NumberFormatterBase() {
     override fun handles(formatChar: Char): Boolean = formatChar in setOf('a', 'A')
 
     override fun format(
@@ -56,17 +55,14 @@ class HexFloatFormatter : ValueFormatter {
             }
         }
 
-        val bits = value.toRawBits()
-        val negative = bits and (1L shl 63) != 0L
-        val exponent = ((bits shr 52) and 0x7FF).toInt() - 1023
-        val mantissa = bits and 0xFFFFFFFFFFFFFL
+        val doubleBits = DoubleUtils.extractBits(value)
 
-        val signStr = if (negative) "-" else ""
+        val signStr = if (doubleBits.negative) "-" else ""
         val hexPrefix = if (uppercase) "0X" else "0x"
         val expChar = if (uppercase) 'P' else 'p'
 
         // The mantissa has 52 bits, which is 13 hex digits
-        val mantissaHex = mantissa.toString(16).padStart(13, '0')
+        val mantissaHex = doubleBits.mantissa.toString(16).padStart(13, '0')
 
         // Apply precision if specified
         val formattedMantissa =
@@ -79,8 +75,8 @@ class HexFloatFormatter : ValueFormatter {
             }
 
         // If mantissa is zero (exact power of 2) and no precision specified
-        if (mantissa == 0L && (precision == null || precision < 0)) {
-            return "${signStr}${hexPrefix}1$expChar${if (exponent >= 0) "+" else ""}$exponent"
+        if (doubleBits.mantissa == 0L && (precision == null || precision < 0)) {
+            return "${signStr}${hexPrefix}1$expChar${if (doubleBits.exponent >= 0) "+" else ""}${doubleBits.exponent}"
         }
 
         // Include decimal point if we have mantissa digits or precision is explicitly set
@@ -91,56 +87,6 @@ class HexFloatFormatter : ValueFormatter {
                 ".${if (uppercase) formattedMantissa.uppercase() else formattedMantissa}"
             }
 
-        return "${signStr}${hexPrefix}1${decimalPart}$expChar${if (exponent >= 0) "+" else ""}$exponent"
-    }
-
-    /**
-     * Apply sign flags (+ or space) to formatted number.
-     */
-    private fun applySign(
-        formatted: String,
-        num: Double,
-        spec: FormatSpecifier,
-    ): String {
-        var result = formatted
-
-        // Apply sign flags: + takes precedence over space
-        if (spec.forceSign && num >= 0.0 && !result.startsWith('+')) {
-            result = "+$result"
-        } else {
-            val shouldAddSpaceSign = !spec.forceSign && spec.spaceForSign && num >= 0.0
-            val hasNoSign = !result.startsWith('+') && !result.startsWith(' ')
-            if (shouldAddSpaceSign && hasNoSign) {
-                result = " $result"
-            }
-        }
-
-        return applyWidth(result, spec)
-    }
-
-    /**
-     * Apply width formatting with proper zero-padding handling.
-     */
-    private fun applyWidth(
-        str: String,
-        spec: FormatSpecifier,
-    ): String {
-        val width = spec.width ?: 0
-        if (width <= 0 || str.length >= width) return str
-
-        val padChar = if (spec.zeroPad && !spec.leftJustify) '0' else ' '
-        val padding = padChar.toString().repeat(width - str.length)
-
-        return if (spec.leftJustify) {
-            str + padding
-        } else {
-            val hasSign = str.startsWith('-') || str.startsWith('+') || str.startsWith(' ')
-            if (spec.zeroPad && hasSign) {
-                // For numbers with sign, put sign first, then zero padding, then digits
-                str[0] + padding + str.substring(1)
-            } else {
-                padding + str
-            }
-        }
+        return "${signStr}${hexPrefix}1${decimalPart}$expChar${if (doubleBits.exponent >= 0) "+" else ""}${doubleBits.exponent}"
     }
 }

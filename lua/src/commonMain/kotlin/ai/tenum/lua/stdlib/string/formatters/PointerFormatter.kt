@@ -5,7 +5,6 @@ import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaNumber
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.stdlib.string.FormatSpecifier
-import ai.tenum.lua.stdlib.string.ValueFormatter
 
 /**
  * Formats values as pointers (%p format).
@@ -13,7 +12,7 @@ import ai.tenum.lua.stdlib.string.ValueFormatter
  * Domain: String formatting
  * Responsibility: Format reference addresses for Lua values
  */
-class PointerFormatter : ValueFormatter {
+class PointerFormatter : StringFormatterBase() {
     override fun handles(formatChar: Char): Boolean = formatChar == 'p'
 
     override fun format(
@@ -38,18 +37,4 @@ class PointerFormatter : ValueFormatter {
                 "0x$address"
             }
         }
-
-    /**
-     * Apply width formatting.
-     */
-    private fun applyWidth(
-        str: String,
-        spec: FormatSpecifier,
-    ): String {
-        val width = spec.width ?: 0
-        if (width <= 0 || str.length >= width) return str
-
-        val padding = " ".repeat(width - str.length)
-        return if (spec.leftJustify) str + padding else padding + str
-    }
 }

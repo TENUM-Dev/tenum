@@ -76,20 +76,21 @@ class QuotedFormatter : ValueFormatter {
             return "${sign}0x0p+0"
         }
 
-        val bits = value.toRawBits()
-        val negative = bits and (1L shl 63) != 0L
-        val exponent = ((bits shr 52) and 0x7FF).toInt() - 1023
-        val mantissa = bits and 0xFFFFFFFFFFFFFL
+        val doubleBits = DoubleUtils.extractBits(value)
 
-        val signStr = if (negative) "-" else ""
-        val mantissaHex = mantissa.toString(16).padStart(13, '0').trimEnd('0')
+        val signStr = if (doubleBits.negative) "-" else ""
+        val mantissaHex =
+            doubleBits.mantissa
+                .toString(16)
+                .padStart(13, '0')
+                .trimEnd('0')
 
         // If mantissa is zero (exact power of 2), omit decimal point
-        if (mantissa == 0L) {
-            return "${signStr}0x1p${if (exponent >= 0) "+" else ""}$exponent"
+        if (doubleBits.mantissa == 0L) {
+            return "${signStr}0x1p${if (doubleBits.exponent >= 0) "+" else ""}${doubleBits.exponent}"
         }
 
-        return "${signStr}0x1.${mantissaHex}p${if (exponent >= 0) "+" else ""}$exponent"
+        return "${signStr}0x1.${mantissaHex}p${if (doubleBits.exponent >= 0) "+" else ""}${doubleBits.exponent}"
     }
 
     /**
