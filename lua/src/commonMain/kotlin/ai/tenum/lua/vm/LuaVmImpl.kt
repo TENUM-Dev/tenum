@@ -28,13 +28,13 @@ import ai.tenum.lua.vm.debug.HookManager
 import ai.tenum.lua.vm.errorhandling.ErrorReporter
 import ai.tenum.lua.vm.errorhandling.LuaException
 import ai.tenum.lua.vm.errorhandling.LuaRuntimeError
-import ai.tenum.lua.vm.errorhandling.LuaStackFrame
 import ai.tenum.lua.vm.errorhandling.NameHintResolver
 import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
 import ai.tenum.lua.vm.execution.ChunkExecutor
 import ai.tenum.lua.vm.execution.CloseResumeState
 import ai.tenum.lua.vm.execution.DispatchResult
 import ai.tenum.lua.vm.execution.DispatchResultProcessor
+import ai.tenum.lua.vm.execution.ErrorHandler
 import ai.tenum.lua.vm.execution.ExecContext
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
@@ -878,6 +878,17 @@ class LuaVmImpl(
                 callStackManager,
             )
 
+        // Create error handler
+        val errorHandler =
+            ErrorHandler(
+                coroutineStateManager,
+                stackTraceBuilder,
+                callStackManager,
+                debugSink,
+                debugEnabled,
+                ::preserveErrorCallStack,
+            )
+
         // Local aliases for frequently accessed frame state (from preparation)
         var registers = preparation.registers
         var constants = preparation.constants
@@ -1568,117 +1579,7 @@ class LuaVmImpl(
             clearYieldResumeContext()
             throw e // Re-throw to be caught by coroutineResume
         } catch (e: LuaRuntimeError) {
-            // Preserve the full call stack from LuaRuntimeError BEFORE converting to LuaException
-            // This ensures __close metamethod frames with isCloseMetamethod=true are preserved
-            // for debug.traceback() even when the simplified LuaException loses them
-            preserveErrorCallStack(e.callStack)
-
-            // If executing in a coroutine, save the call stack for debug.traceback()
-            val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
-            if (currentCoroutine is LuaCoroutine.LuaFunctionCoroutine) {
-                // Save the error stack so debug.traceback() can access it after coroutine dies
-                val callStackBase = currentCoroutine.thread.callStackBase
-
-                // Filter out yield frames from saved call stack for error tracebacks
-                // Yield frames are temporary suspension points and shouldn't appear in error tracebacks
-                // However, keep the 'error' function frame as Lua 5.4 includes it
-                val coroutineCallStack =
-                    e.callStack.drop(callStackBase).filter { frame ->
-                        // Keep all non-native frames
-                        // For native frames, only filter out coroutine.yield (keep error, etc.)
-                        !frame.isNative || (frame.function as? LuaNativeFunction)?.name != "coroutine.yield"
-                    }
-                currentCoroutine.thread.savedCallStack = coroutineCallStack
-            }
-
-            // When level=0 or errorValue is nil, return raw message with no location info
-            if (e.level == 0 || e.errorValue is LuaNil) {
-                throw LuaException(
-                    errorMessageOnly = e.message ?: "",
-                    line = null, // No line info for level=0
-                    source = null, // No source info for level=0
-                    luaStackTrace = emptyList(), // No stack trace for level=0
-                    errorValueOverride = e.errorValue, // Preserve original error value (especially for nil)
-                )
-            }
-
-            // Determine which stack frame to report based on error level
-            // level=1 means error location (where error() was called)
-            // level=2 means caller of the function that called error()
-            // level=3 means caller's caller, etc.
-            // Skip native frames when determining the error location
-            val reversedStack = e.callStack.asReversed()
-            val nonNativeFrames = reversedStack.filter { !it.isNative }
-            val targetFrameIndex = e.level - 1
-
-            val (errorLine, errorSource) =
-                if (targetFrameIndex >= 0 && targetFrameIndex < nonNativeFrames.size) {
-                    val targetFrame = nonNativeFrames[targetFrameIndex]
-                    Pair(targetFrame.getCurrentLine(), targetFrame.proto?.source ?: "?")
-                } else {
-                    // If level is beyond stack depth, use current location
-                    Pair(stackTraceBuilder.getCurrentLine(currentProto, pc), currentProto.source)
-                }
-
-            // Convert LuaRuntimeError to LuaException (LuaRuntimeError already has stack trace)
-            val errorMsg = e.message ?: "runtime error"
-
-            // Build the stack trace (using nonNativeFrames to exclude native functions)
-            val stackTrace =
-                nonNativeFrames.map { frame ->
-                    LuaStackFrame(
-                        functionName = frame.proto?.name?.takeIf { it.isNotEmpty() },
-                        source = frame.proto?.source ?: "?",
-                        line = frame.getCurrentLine(),
-                    )
-                }
-
-            // For non-string errors (tables, nil, etc.), pass errorValueOverride to preserve the original value
-            // For string errors, let LuaException create formatted errorValue automatically
-            val luaEx =
-                if (e.errorValue is ai.tenum.lua.runtime.LuaString) {
-                    LuaException(
-                        errorMessageOnly = errorMsg,
-                        line = errorLine,
-                        source = errorSource,
-                        luaStackTrace = stackTrace,
-                    )
-                } else {
-                    LuaException(
-                        errorMessageOnly = errorMsg,
-                        line = errorLine,
-                        source = errorSource,
-                        luaStackTrace = stackTrace,
-                        errorValueOverride = e.errorValue,
-                    )
-                }
-
-            // When an assertion fails during compat testing, dump nearby proto info to help debugging
-            try {
-                val msg = luaEx.message ?: ""
-                if (msg.contains("assertion failed") || debugEnabled) {
-                    val proto = currentProto
-                    val start = maxOf(0, pc - 8)
-                    val end = minOf(proto.instructions.size - 1, pc + 8)
-                    debugSink.debug { "--- Proto dump for ${proto.name} source=${proto.source} pc=$pc ---" }
-                    for (i in start..end) {
-                        val ins = proto.instructions[i]
-                        debugSink.debug {
-                            "  PC=$i: ${ins.opcode} a=${ins.a} b=${ins.b} c=${ins.c}  # line=${stackTraceBuilder.getCurrentLine(proto, i)}"
-                        }
-                    }
-                    debugSink.debug { "--- Constants (${proto.constants.size}) ---" }
-                    for ((ci, c) in proto.constants.withIndex()) {
-                        if (ci in (0..199)) debugSink.debug { "  K[$ci] = $c" }
-                    }
-                    debugSink.debug { "--- Line events (${proto.lineEvents.size}) ---" }
-                    for (li in proto.lineEvents) debugSink.debug { "  PC=${li.pc} -> line=${li.line} kind=${li.kind}" }
-                    debugSink.debug { "--- End proto dump ---" }
-                }
-            } catch (_: Exception) {
-            }
-
-            // Close to-be-closed variables and handle error chaining
+            val luaEx = errorHandler.handleRuntimeError(e, currentProto, pc)
             handleErrorAndCloseToBeClosedVars(luaEx)
         } catch (e: LuaException) {
             // Already a LuaException - close to-be-closed vars and handle error chaining
@@ -1691,83 +1592,10 @@ class LuaVmImpl(
             }
 
             println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
-
-            // Convert RuntimeException to LuaException, optionally with enhanced diagnostic info
-            val extraInfo =
-                if (debugEnabled) {
-                    try {
-                        val instr = if (pc in instructions.indices) instructions[pc] else null
-                        "pc=$pc, instr=${instr?.opcode ?: "?"} a=${instr?.a ?: -1} b=${instr?.b ?: -1} c=${instr?.c ?: -1}, registers=${registers.size}, constants=${constants.size}, instructions=${instructions.size}"
-                    } catch (inner: Exception) {
-                        "pc=$pc, registers=${registers.size}, constants=${constants.size}, instructions=${instructions.size}"
-                    }
-                } else {
-                    null
-                }
-
-            val composedMessage =
-                when (e) {
-                    is RuntimeException -> {
-                        val base = e.message ?: "runtime error"
-                        if (extraInfo != null) "$base ($extraInfo)" else base
-                    }
-                    else -> {
-                        if (extraInfo != null) {
-                            "${e::class.simpleName}: ${e.message} ($extraInfo)"
-                        } else {
-                            "${e::class.simpleName}: ${e.message}"
-                        }
-                    }
-                }
-
-            val luaEx =
-                if (e is RuntimeException) {
-                    LuaException(
-                        errorMessageOnly = composedMessage,
-                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
-                        source = currentProto.source,
-                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
-                    )
-                } else {
-                    // Wrap non-runtime exceptions as LuaException to preserve context
-                    LuaException(
-                        errorMessageOnly = composedMessage,
-                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
-                        source = currentProto.source,
-                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
-                    )
-                }
-
-            // On error, close all to-be-closed variables in reverse order and handle error chaining
+            val luaEx = errorHandler.handleGenericException(e, currentProto, pc, registers, constants, instructions)
             handleErrorAndCloseToBeClosedVars(luaEx)
         } catch (e: Error) {
-            // Convert platform errors to Lua errors with proper stack trace
-            val errorType = e::class.simpleName ?: "Error"
-
-            when {
-                errorType.contains("StackOverflow") -> {
-                    // Convert platform stack overflow to Lua "C stack overflow" error
-                    // This catches StackOverflowError on JVM and similar errors on other platforms
-                    // This matches Lua 5.4 behavior and lets the platform determine the actual limit
-                    throw LuaException(
-                        errorMessageOnly = "C stack overflow",
-                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
-                        source = currentProto.source,
-                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
-                    )
-                }
-                errorType.contains("OutOfMemory") -> {
-                    // Convert out of memory errors to Lua error with stack trace
-                    // This helps identify where in Lua code the OOM occurred
-                    throw LuaException(
-                        errorMessageOnly = "not enough memory",
-                        line = stackTraceBuilder.getCurrentLine(currentProto, pc),
-                        source = currentProto.source,
-                        luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
-                    )
-                }
-                else -> throw e
-            }
+            throw errorHandler.handlePlatformError(e, currentProto, pc)
         } finally {
             // Restore call depth to entry value (cleans up leaked increments on error paths)
             callDepth = callDepthBase
