@@ -74,32 +74,13 @@ object StringFormatting {
                     '%' -> {
                         // Escape %% -> %
                         val formatReplacement = handleEscapePercent()
-                        result = result.substring(0, i) + formatReplacement.replacement + result.substring(j + 1)
+                        result = replaceInResult(result, i, j, formatReplacement.replacement)
                         i += formatReplacement.offset
                         continue
                     }
                     's', 'q', 'd', 'i', 'u', 'o', 'x', 'X', 'f', 'g', 'G', 'e', 'E', 'c', 'p', 'a', 'A' -> {
-                        if (valueIndex >= values.size) {
-                            throw RuntimeException("bad argument #${valueIndex + 2} to 'string.format' (no value)")
-                        }
-                        val spec =
-                            FormatSpecifier(
-                                flags =
-                                    buildSet {
-                                        if (flags.leftAlign) add('-')
-                                        if (flags.zeroPad) add('0')
-                                        if (flags.forceSign) add('+')
-                                        if (flags.spaceSign) add(' ')
-                                        if (flags.alternateForm) add('#')
-                                    },
-                                width = if (dimensions.width > 0) dimensions.width else null,
-                                precision = if (dimensions.precision >= 0) dimensions.precision else null,
-                                formatChar = formatChar,
-                            )
-                        val replacement =
-                            registry.format(formatChar, values[valueIndex], spec)
-                                ?: throw RuntimeException("invalid conversion")
-                        result = result.substring(0, i) + replacement + result.substring(j + 1)
+                        val replacement = processFormatSpecifier(formatChar, flags, dimensions, values, valueIndex, registry)
+                        result = replaceInResult(result, i, j, replacement)
                         i += replacement.length
                         valueIndex++
                     }
@@ -115,6 +96,57 @@ object StringFormatting {
 
         return result
     }
+
+    /**
+     * Create FormatSpecifier from parsed flags and dimensions.
+     */
+    private fun createFormatSpecifier(
+        flags: ParsedFlags,
+        dimensions: ParsedDimensions,
+        formatChar: Char,
+    ): FormatSpecifier =
+        FormatSpecifier(
+            flags =
+                buildSet {
+                    if (flags.leftAlign) add('-')
+                    if (flags.zeroPad) add('0')
+                    if (flags.forceSign) add('+')
+                    if (flags.spaceSign) add(' ')
+                    if (flags.alternateForm) add('#')
+                },
+            width = if (dimensions.width > 0) dimensions.width else null,
+            precision = if (dimensions.precision >= 0) dimensions.precision else null,
+            formatChar = formatChar,
+        )
+
+    /**
+     * Process a format specifier and return the replacement string.
+     */
+    private fun processFormatSpecifier(
+        formatChar: Char,
+        flags: ParsedFlags,
+        dimensions: ParsedDimensions,
+        values: List<LuaValue<*>>,
+        valueIndex: Int,
+        registry: FormatterRegistry,
+    ): String {
+        if (valueIndex >= values.size) {
+            throw RuntimeException("bad argument #${valueIndex + 2} to 'string.format' (no value)")
+        }
+        val spec = createFormatSpecifier(flags, dimensions, formatChar)
+        return registry.format(formatChar, values[valueIndex], spec)
+            ?: throw RuntimeException("invalid conversion")
+    }
+
+    /**
+     * Replace substring in result with replacement text.
+     */
+    private fun replaceInResult(
+        result: String,
+        startPos: Int,
+        endPos: Int,
+        replacement: String,
+    ): String = result.substring(0, startPos) + replacement + result.substring(endPos + 1)
 
     /**
      * Handle %% escape sequence
@@ -182,6 +214,39 @@ object StringFormatting {
     }
 
     /**
+     * Parse a single dimension (width or precision) from format string.
+     * Returns the parsed value and the new position.
+     */
+    private fun parseSingleDimension(
+        result: String,
+        startPos: Int,
+    ): Pair<Int, Int> {
+        var j = startPos
+        val dimensionStart = j
+
+        while (j < result.length && result[j].isDigit()) {
+            j++
+            if ((j - dimensionStart) > 99) {
+                throw RuntimeException("too long")
+            }
+        }
+
+        val dimensionStr = if (j > dimensionStart) result.substring(dimensionStart, j) else ""
+
+        if (dimensionStr.length > 99) {
+            throw RuntimeException("too long")
+        }
+
+        val value = dimensionStr.toIntOrNull() ?: 0
+
+        if (value > 99) {
+            throw RuntimeException("invalid conversion (width or precision too long)")
+        }
+
+        return Pair(value, j)
+    }
+
+    /**
      * Parse width and precision from format string starting at position j.
      * Returns the parsed dimensions and the new position after dimensions.
      */
@@ -189,50 +254,59 @@ object StringFormatting {
         result: String,
         startPos: Int,
     ): Pair<ParsedDimensions, Int> {
-        var j = startPos
-
         // Parse width
-        val widthStart = j
-        while (j < result.length && result[j].isDigit()) {
-            j++
-            if ((j - widthStart) > 99) {
-                throw RuntimeException("too long")
-            }
-        }
-        val widthStr = if (j > widthStart) result.substring(widthStart, j) else ""
-        val widthInt = widthStr.toIntOrNull()
-
-        if (widthStr.length > 99) {
-            throw RuntimeException("too long")
-        }
-
-        val width = widthInt ?: 0
+        val (width, afterWidth) = parseSingleDimension(result, startPos)
+        var j = afterWidth
 
         // Parse precision (optional: .digits)
-        var precision = -1
-        if (j < result.length && result[j] == '.') {
-            j++
-            val precisionStart = j
-            while (j < result.length && result[j].isDigit()) {
-                j++
+        val precision =
+            if (j < result.length && result[j] == '.') {
+                j++ // Skip dot
+                val (prec, afterPrecision) = parseSingleDimension(result, j)
+                j = afterPrecision
+                prec
+            } else {
+                -1
             }
-            val precisionStr = if (j > precisionStart) result.substring(precisionStart, j) else ""
-            val precisionInt = precisionStr.toIntOrNull()
-
-            if (precisionStr.length > 99) {
-                throw RuntimeException("too long")
-            }
-
-            precision = precisionInt ?: 0
-        }
-
-        // Validate width and precision
-        if (width > 99 || precision > 99) {
-            throw RuntimeException("invalid conversion (width or precision too long)")
-        }
 
         return Pair(ParsedDimensions(width, precision), j)
     }
+
+    /**
+     * Check if any sign-related flags are set.
+     */
+    private fun hasSignFlags(flags: ParsedFlags): Boolean = flags.forceSign || flags.spaceSign
+
+    /**
+     * Check if any numeric formatting flags are invalid.
+     */
+    private fun hasInvalidNumericFlags(
+        flags: ParsedFlags,
+        dimensions: ParsedDimensions,
+    ): Boolean =
+        flags.zeroPad ||
+            dimensions.precision >= 0 ||
+            hasSignFlags(flags) ||
+            flags.alternateForm
+
+    /**
+     * Check if any string formatting flags are invalid.
+     */
+    private fun hasInvalidStringFlags(flags: ParsedFlags): Boolean = flags.zeroPad || hasSignFlags(flags) || flags.alternateForm
+
+    /**
+     * Check if any modifiers are present.
+     */
+    private fun hasAnyModifiers(
+        flags: ParsedFlags,
+        dimensions: ParsedDimensions,
+    ): Boolean =
+        dimensions.width > 0 ||
+            dimensions.precision >= 0 ||
+            flags.leftAlign ||
+            flags.zeroPad ||
+            hasSignFlags(flags) ||
+            flags.alternateForm
 
     /**
      * Validate format-specific modifier restrictions.
@@ -244,44 +318,22 @@ object StringFormatting {
     ) {
         when (formatChar) {
             'c' -> {
-                val hasInvalidModifiers =
-                    flags.zeroPad ||
-                        dimensions.precision >= 0 ||
-                        flags.forceSign ||
-                        flags.spaceSign ||
-                        flags.alternateForm
-                if (hasInvalidModifiers) {
+                if (hasInvalidNumericFlags(flags, dimensions)) {
                     throw RuntimeException("invalid conversion")
                 }
             }
             's' -> {
-                val hasInvalidModifiers =
-                    flags.zeroPad || flags.forceSign || flags.spaceSign || flags.alternateForm
-                if (hasInvalidModifiers) {
+                if (hasInvalidStringFlags(flags)) {
                     throw RuntimeException("invalid conversion")
                 }
             }
             'q' -> {
-                val hasAnyModifiers =
-                    dimensions.width > 0 ||
-                        dimensions.precision >= 0 ||
-                        flags.leftAlign ||
-                        flags.zeroPad ||
-                        flags.forceSign ||
-                        flags.spaceSign ||
-                        flags.alternateForm
-                if (hasAnyModifiers) {
+                if (hasAnyModifiers(flags, dimensions)) {
                     throw RuntimeException("cannot have modifiers")
                 }
             }
             'p' -> {
-                val hasInvalidModifiers =
-                    flags.zeroPad ||
-                        dimensions.precision >= 0 ||
-                        flags.forceSign ||
-                        flags.spaceSign ||
-                        flags.alternateForm
-                if (hasInvalidModifiers) {
+                if (hasInvalidNumericFlags(flags, dimensions)) {
                     throw RuntimeException("invalid conversion")
                 }
             }
