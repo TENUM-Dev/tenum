@@ -18,6 +18,8 @@ sealed class LuaCoroutine : LuaValue<Any> {
 
     override var metatableStore: LuaValue<*>? = null
 
+    override fun toString(): String = "thread: ${Integer.toHexString(System.identityHashCode(this))}"
+
     /**
      * Coroutine created from a Lua function
      */

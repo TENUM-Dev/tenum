@@ -247,6 +247,54 @@ class CoroutineBasicTest : LuaCompatTestBase() {
     }
 
     @Test
+    fun testCoroutineIsYieldableWithThreadArgument() {
+        // Reproduces coroutine.lua behaviour: resume a coroutine that yields,
+        // then check that coroutine.isyieldable(f) returns true when called
+        // from the main thread.
+        assertLuaBoolean(
+            """
+            local f = coroutine.create(function()
+                coroutine.yield()
+                return 1
+            end)
+            coroutine.resume(f)
+            return coroutine.isyieldable(f)
+            """.trimIndent(),
+            true,
+        )
+    }
+
+    @Test
+    fun testComplexYieldResumeSequence() {
+        // Reproduce the sequence from coroutine.lua that previously failed
+        assertLuaTrue(
+            """
+            local _G = _G
+            _G.x = nil
+            _G.f = nil
+
+            local function foo (a, ...)
+                local x, y = coroutine.running()
+                assert(x == f and y == false)
+                assert(coroutine.resume(f) == false)
+                assert(coroutine.status(f) == "running")
+                local arg = {...}
+                assert(coroutine.isyieldable(x))
+                for i=1,#arg do
+                    _G.x = {coroutine.yield(table.unpack(arg[i]))}
+                end
+                return table.unpack(a)
+            end
+
+            f = coroutine.create(foo)
+            local s,a,b,c,d
+            s,a,b,c,d = coroutine.resume(f, {1,2,3}, {}, {1}, {'a','b','c'})
+            return s == true and a == nil and coroutine.status(f) == "suspended"
+            """.trimIndent(),
+        )
+    }
+
+    @Test
     fun testCannotResumeRunningCoroutine() {
         // coroutine.lua lines 38-39: cannot resume running coroutine
         // Outer resume succeeds (returns true), but inner resume fails
@@ -274,6 +322,16 @@ class CoroutineBasicTest : LuaCompatTestBase() {
             return result
             """.trimIndent(),
             false, // Inner resume fails (cannot resume running coroutine)
+        )
+    }
+
+    @Test
+    fun testCoroutineTostringContainsThread() {
+        assertLuaTrue(
+            """
+            local f = coroutine.create(function() end)
+            return string.find(tostring(f), "thread") ~= nil
+            """.trimIndent(),
         )
     }
 

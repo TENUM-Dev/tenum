@@ -69,11 +69,11 @@ class CoroutineLib : LuaLibrary {
                 coroutineRunning(context)
             }
 
-        // coroutine.isyieldable() - Check if current context can yield
+        // coroutine.isyieldable([thread]) - Check if given thread or current context can yield
         lib[LuaString("isyieldable")] =
             LuaNativeFunction { args ->
                 buildList {
-                    add(coroutineIsYieldable(context))
+                    add(coroutineIsYieldable(args, context))
                 }
             }
 
@@ -301,7 +301,27 @@ class CoroutineLib : LuaLibrary {
     /**
      * coroutine.isyieldable() - Check if current context can yield
      */
-    private fun coroutineIsYieldable(context: LuaLibraryContext): LuaValue<*> {
+    private fun coroutineIsYieldable(
+        args: List<LuaValue<*>>,
+        context: LuaLibraryContext,
+    ): LuaValue<*> {
+        // If an argument is provided, check that specific thread
+        val firstArg = args.getOrNull(0)
+        if (firstArg != null) {
+            // Validate argument is a thread
+            validateThreadArgument(firstArg, "coroutine.isyieldable")
+
+            return when (firstArg) {
+                is LuaThread -> LuaBoolean.FALSE // main thread is not yieldable
+                is LuaCoroutine -> {
+                    // A coroutine is yieldable if it is not dead
+                    if (firstArg.status != CoroutineStatus.DEAD) LuaBoolean.TRUE else LuaBoolean.FALSE
+                }
+                else -> LuaBoolean.FALSE
+            }
+        }
+
+        // No argument: check current context (classic behaviour)
         val stateManager = context.getCoroutineStateManager?.invoke() ?: return LuaBoolean.FALSE
         val nativeCallDepth = context.getNativeCallDepth?.invoke() ?: 0
 

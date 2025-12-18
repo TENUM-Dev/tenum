@@ -63,7 +63,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_constructs_lua() = runTest(timeout = 60.seconds) { executeTestFile("constructs.lua") }
 
     @Test
-    @Ignore // TODO: Fix - failing at eqtab check for empty table after coroutine resume
     fun test_coroutine_lua() = runTest(timeout = 60.seconds) { executeTestFile("coroutine.lua") }
 
     @Test
