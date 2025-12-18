@@ -107,17 +107,9 @@ class SegmentContinuationHandler(
             )
         }
 
-        return ExecutionContextUpdate(
-            execFrame = segmentFrame,
-            currentProto = action.nextSegment.proto,
-            registers = segmentFrame.registers,
-            constants = segmentFrame.proto.constants,
-            instructions = segmentFrame.proto.instructions,
-            pc = segmentFrame.pc,
-            openUpvalues = segmentFrame.openUpvalues,
-            toBeClosedVars = segmentFrame.toBeClosedVars,
-            varargs = segmentFrame.varargs,
-            currentUpvalues = segmentFrame.upvalues,
+        return ExecutionContextUpdate.fromFrame(
+            frame = segmentFrame,
+            proto = action.nextSegment.proto,
             env = env,
         )
     }
@@ -159,17 +151,9 @@ class SegmentContinuationHandler(
             }
         }
 
-        return ExecutionContextUpdate(
-            execFrame = outerFrame,
-            currentProto = action.outerFrame.proto,
-            registers = outerFrame.registers,
-            constants = action.outerFrame.proto.constants,
-            instructions = action.outerFrame.proto.instructions,
-            pc = action.outerFrame.pcToResume,
-            openUpvalues = outerFrame.openUpvalues,
-            toBeClosedVars = outerFrame.toBeClosedVars,
-            varargs = action.outerFrame.varargs,
-            currentUpvalues = outerFrame.upvalues,
+        return ExecutionContextUpdate.fromFrame(
+            frame = outerFrame,
+            proto = action.outerFrame.proto,
             env = env,
         )
     }

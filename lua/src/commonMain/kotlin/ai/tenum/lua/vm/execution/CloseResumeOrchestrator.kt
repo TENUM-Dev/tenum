@@ -10,23 +10,6 @@ import ai.tenum.lua.vm.ExecutionFlowState
 import ai.tenum.lua.vm.VmDebugSink
 
 /**
- * Result of CloseResumeState orchestration.
- * Contains the updated execution context after processing close resumption.
- */
-data class CloseResumeResult(
-    val execFrame: ExecutionFrame,
-    val currentProto: Proto,
-    val registers: MutableList<LuaValue<*>>,
-    val constants: List<LuaValue<*>>,
-    val instructions: List<Instruction>,
-    val pc: Int,
-    val openUpvalues: MutableMap<Int, Upvalue>,
-    val toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>,
-    val varargs: List<LuaValue<*>>,
-    val needsEnvRecreation: Boolean,
-)
-
-/**
  * Orchestrator for CloseResumeState processing.
  *
  * This class handles the two-phase resumption logic for multi-frame TBC chains:
@@ -144,17 +127,9 @@ class CloseResumeOrchestrator(
         // Ensure activeExecutionFrame points to the current live frame after any rebuild
         flowState.setActiveExecutionFrame(segmentFrame)
 
-        return ExecutionContextUpdate(
-            execFrame = segmentFrame,
-            currentProto = segmentFrame.proto,
-            registers = segmentFrame.registers,
-            constants = segmentFrame.proto.constants,
-            instructions = segmentFrame.proto.instructions,
-            pc = segmentFrame.pc,
-            openUpvalues = segmentFrame.openUpvalues,
-            toBeClosedVars = segmentFrame.toBeClosedVars,
-            varargs = segmentFrame.varargs,
-            currentUpvalues = segmentFrame.upvalues,
+        return ExecutionContextUpdate.fromFrame(
+            frame = segmentFrame,
+            proto = segmentFrame.proto,
             env = ExecutionEnvironment(segmentFrame, globals, vmCapabilities),
             needsEnvRecreation = true,
         )

@@ -12,6 +12,8 @@ import ai.tenum.lua.runtime.Upvalue
  * SegmentContinuationHandler) to return updated execution context after processing.
  * It eliminates duplication between similar result types.
  */
+// CPD-OFF: Field overlap with ExecutionPreparation is intentional - both represent execution state
+// but serve different purposes (initial setup vs. runtime updates)
 data class ExecutionContextUpdate(
     val execFrame: ExecutionFrame,
     val currentProto: Proto,
@@ -25,4 +27,30 @@ data class ExecutionContextUpdate(
     val currentUpvalues: List<Upvalue>,
     val env: ExecutionEnvironment,
     val needsEnvRecreation: Boolean = false,
-)
+) {
+    companion object {
+        /**
+         * Create ExecutionContextUpdate from an ExecutionFrame.
+         * This factory method eliminates duplication across multiple call sites.
+         */
+        fun fromFrame(
+            frame: ExecutionFrame,
+            proto: Proto,
+            env: ExecutionEnvironment,
+            needsEnvRecreation: Boolean = false,
+        ) = ExecutionContextUpdate(
+            execFrame = frame,
+            currentProto = proto,
+            registers = frame.registers,
+            constants = proto.constants,
+            instructions = proto.instructions,
+            pc = frame.pc,
+            openUpvalues = frame.openUpvalues,
+            toBeClosedVars = frame.toBeClosedVars,
+            varargs = frame.varargs,
+            currentUpvalues = frame.upvalues,
+            env = env,
+            needsEnvRecreation = needsEnvRecreation,
+        )
+    }
+}
