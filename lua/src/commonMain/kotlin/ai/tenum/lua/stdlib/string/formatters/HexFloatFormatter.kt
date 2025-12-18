@@ -46,11 +46,13 @@ class HexFloatFormatter : ValueFormatter {
         if (value == 0.0) {
             // Special case for zero (handle both +0 and -0)
             val sign = if (1.0 / value < 0) "-" else ""
+            val hexPrefix = if (uppercase) "0X" else "0x"
+            val expChar = if (uppercase) 'P' else 'p'
             return if (precision != null && precision >= 0) {
                 // With precision, always show decimal point
-                "${sign}0x0." + "0".repeat(precision) + if (uppercase) "P+0" else "p+0"
+                "${sign}${hexPrefix}0." + "0".repeat(precision) + "$expChar+0"
             } else {
-                "${sign}0x0" + if (uppercase) "P+0" else "p+0"
+                "${sign}${hexPrefix}0$expChar+0"
             }
         }
 
@@ -86,11 +88,10 @@ class HexFloatFormatter : ValueFormatter {
             if (formattedMantissa.isEmpty() && (precision == null || precision < 0)) {
                 ""
             } else {
-                ".$formattedMantissa"
+                ".${if (uppercase) formattedMantissa.uppercase() else formattedMantissa}"
             }
 
-        val result = "${signStr}${hexPrefix}1${decimalPart}$expChar${if (exponent >= 0) "+" else ""}$exponent"
-        return if (uppercase) result.uppercase() else result
+        return "${signStr}${hexPrefix}1${decimalPart}$expChar${if (exponent >= 0) "+" else ""}$exponent"
     }
 
     /**

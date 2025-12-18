@@ -67,6 +67,11 @@ class IntegerFormatter : ValueFormatter {
         num: Long,
         spec: FormatSpecifier,
     ): String {
+        // Special case: precision 0 with value 0 produces empty string
+        if (spec.precision == 0 && num == 0L) {
+            return applyWidth("", spec.width ?: 0, spec.leftJustify, spec.zeroPad)
+        }
+
         // Convert to unsigned representation
         val unsignedStr = num.toULong().toString()
 
@@ -77,6 +82,11 @@ class IntegerFormatter : ValueFormatter {
         num: Long,
         spec: FormatSpecifier,
     ): String {
+        // Special case: precision 0 with value 0 produces empty string
+        if (spec.precision == 0 && num == 0L) {
+            return applyWidth("", spec.width ?: 0, spec.leftJustify, spec.zeroPad)
+        }
+
         val octalStr = num.toULong().toString(8)
 
         // Apply alternate form: prefix with 0
@@ -109,6 +119,11 @@ class IntegerFormatter : ValueFormatter {
         spec: FormatSpecifier,
         uppercase: Boolean,
     ): String {
+        // Special case: precision 0 with value 0 produces empty string
+        if (spec.precision == 0 && num == 0L) {
+            return applyWidth("", spec.width ?: 0, spec.leftJustify, spec.zeroPad)
+        }
+
         val hexStr = num.toULong().toString(16).let { if (uppercase) it.uppercase() else it }
 
         // Apply alternate form: prefix with 0x or 0X

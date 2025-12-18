@@ -46,8 +46,12 @@ class FloatFormatter : ValueFormatter {
         if (num.isNaN()) return "nan"
         if (num.isInfinite()) return if (num > 0) "inf" else "-inf"
 
-        val precision = spec.precision ?: 6
-        return formatFloatWithPrecision(num, precision, spec.alternate)
+        // When precision is not specified, use default toString()
+        if (spec.precision == null) {
+            return num.toString()
+        }
+
+        return formatFloatWithPrecision(num, spec.precision, spec.alternate)
     }
 
     /**
