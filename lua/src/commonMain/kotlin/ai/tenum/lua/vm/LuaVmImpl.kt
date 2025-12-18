@@ -50,6 +50,7 @@ import ai.tenum.lua.vm.execution.ResumptionState
 import ai.tenum.lua.vm.execution.ReturnLoopAction
 import ai.tenum.lua.vm.execution.StackView
 import ai.tenum.lua.vm.execution.VmCapabilities
+import ai.tenum.lua.vm.execution.YieldHandler
 import ai.tenum.lua.vm.execution.opcodes.CallOpcodes
 import ai.tenum.lua.vm.library.LibraryRegistry
 import ai.tenum.lua.vm.library.LuaLibraryContext
@@ -868,6 +869,15 @@ class LuaVmImpl(
         // Create dispatch result processor
         val resultProcessor = DispatchResultProcessor(debugSink)
 
+        // Create yield handler
+        val yieldHandler =
+            YieldHandler(
+                coroutineStateManager,
+                resumptionService,
+                debugSink,
+                callStackManager,
+            )
+
         // Local aliases for frequently accessed frame state (from preparation)
         var registers = preparation.registers
         var constants = preparation.constants
@@ -1534,166 +1544,26 @@ class LuaVmImpl(
             return emptyList()
         } catch (e: LuaYieldException) {
             // Coroutine yielded - save execution state for resumption
-
-            // Only save state once (on the first/innermost catch)
             if (!e.stateSaved) {
-                // The yield was triggered by a CALL instruction, so instructions[pc] has the target register and result count
-                val yieldInstr = if (pc < instructions.size) instructions[pc] else null
-                val yieldTargetReg = yieldContext.pendingYieldTargetReg ?: yieldInstr?.a ?: 0
-                val yieldExpectedResults = yieldContext.pendingYieldEncodedCount ?: yieldInstr?.c ?: 0
-
-                // Filter call stack to only include coroutine's frames (not main thread frames)
-                // Save coroutine state for resume
                 val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
                 val callStackBase = (currentCoroutine as? LuaCoroutine.LuaFunctionCoroutine)?.thread?.callStackBase ?: 0
-                val coroutineCallStack = callStackManager.captureSnapshotFrom(callStackBase)
-                val isCloseYield = closeContext.pendingCloseVar != null
-                val ownerTbc = closeContext.pendingCloseOwnerTbc ?: execFrame.toBeClosedVars
 
-                // Yielding from coroutine
-
-                // CRITICAL: When yielding from __close, capturedReturns are in pendingCloseOwnerFrame
-                // This is set in CallOpcodes.executeReturn before calling __close handlers
-                // Copy them to closeContext so they're saved with the coroutine state
-                val ownerFrame = closeContext.pendingCloseOwnerFrame
-                if (ownerFrame != null && ownerFrame.capturedReturns != null) {
-                    closeContext.setCapturedReturnValues(ownerFrame.capturedReturns!!)
-                }
-
-                // When yielding from __close, create CloseResumeState with owner frame snapshot
-                val closeResumeState: CloseResumeState? =
-                    if (isCloseYield) {
-                        // Capture __close continuation (current execution point)
-                        // This is the __close function's state, NOT the owner's state
-                        val closeContinuation =
-                            ResumptionState(
-                                proto = currentProto,
-                                pc = pc + 1,
-                                registers = registers,
-                                upvalues = execFrame.upvalues,
-                                varargs = varargs,
-                                yieldTargetRegister = yieldTargetReg,
-                                yieldExpectedResults = yieldExpectedResults,
-                                toBeClosedVars = execFrame.toBeClosedVars, // __close function's TBC (should be empty)
-                                pendingCloseStartReg = 0, // Not relevant for continuation
-                                pendingCloseVar = null, // Not relevant for continuation
-                                execStack = execStack.toList(),
-                                pendingCloseYield = false,
-                                capturedReturnValues = closeContext.pendingCloseOwnerFrame?.capturedReturns,
-                                debugCallStack = coroutineCallStack,
-                                closeResumeState = null,
-                                closeOwnerFrameStack = callerContext.snapshot(),
-                            )
-
-                        // Use resumption service to select owner frame and build close resume state
-                        val callerFrame =
-                            if (coroutineCallStack.size >= 2) {
-                                coroutineCallStack[coroutineCallStack.size - 2]
-                            } else {
-                                null
-                            }
-
-                        val ownerContext =
-                            resumptionService.selectOwnerFrameContext(
-                                pendingCloseOwnerFrame = closeContext.pendingCloseOwnerFrame,
-                                callStack = emptyList(),
-                                currentProto = currentProto,
-                                currentPc = pc,
-                                currentRegisters = registers,
-                                currentUpvalues = execFrame.upvalues,
-                                currentVarargs = varargs,
-                                defaultTbc = ownerTbc,
-                            )
-
-                        debugSink.debug {
-                            "[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}"
-                        }
-                        debugSink.debug { "[YIELD CloseState] Selected owner: proto=${ownerContext.proto.name} pc=${ownerContext.pc}" }
-                        debugSink.debug { "[YIELD CloseState] Owner TBC vars: ${ownerContext.tbcVars.size}" }
-                        debugSink.debug { "[YIELD CloseState] pendingCloseVar=${closeContext.pendingCloseVar}" }
-
-                        // Calculate effective owner PC using resumption service
-                        // The owner should resume AFTER the RETURN instruction so we don't re-execute it
-                        val rawOwnerPc = closeContext.pendingCloseOwnerFrame?.pc ?: callerFrame?.pc ?: pc
-                        val effectiveOwnerPc =
-                            resumptionService.calculateResumePc(
-                                currentPc = rawOwnerPc,
-                                incrementPc = true, // Increment to skip past RETURN instruction
-                            )
-
-                        // Build close resume state using resumption service
-                        val closeResumeStateWrapped =
-                            resumptionService.buildCloseResumeState(
-                                closeContinuationProto = currentProto,
-                                closeContinuationPc = pc + 1,
-                                closeContinuationRegisters = registers,
-                                closeContinuationUpvalues = execFrame.upvalues,
-                                closeContinuationVarargs = varargs,
-                                closeContinuationExecStack = execStack.toList(),
-                                ownerProto = ownerContext.proto,
-                                ownerPc = effectiveOwnerPc,
-                                ownerRegisters = ownerContext.registers,
-                                ownerUpvalues = ownerContext.upvalues,
-                                ownerVarargs = ownerContext.varargs,
-                                startReg = closeContext.pendingCloseStartReg,
-                                pendingTbcList = ownerContext.tbcVars,
-                                pendingCloseVar = closeContext.pendingCloseVar,
-                                errorArg = closeContext.pendingCloseErrorArg,
-                                capturedReturnValues = closeContext.pendingCloseOwnerFrame?.capturedReturns,
-                                yieldTargetReg = yieldTargetReg,
-                                yieldExpectedResults = yieldExpectedResults,
-                                debugCallStack = coroutineCallStack,
-                                closeOwnerFrameStack = filterCoroutineFrames(callerContext.snapshot(), callStackBase),
-                            )
-
-                        closeResumeStateWrapped.closeResumeState
-                    } else {
-                        null
-                    }
-
-                val pendingTbc = ownerTbc.toMutableList()
-
-                // State to save: use owner frame if close yield, otherwise current state
-                val stateProto: Proto
-                val statePc: Int
-                val stateRegs: MutableList<LuaValue<*>>
-                val stateUpvalues: List<Upvalue>
-                val stateVarargs: List<LuaValue<*>>
-
-                // Always resume from the current proto/pc; closeResumeState carries owner segments separately
-                stateProto = currentProto
-                statePc = pc
-                stateRegs = registers
-                stateUpvalues = execFrame.upvalues
-                stateVarargs = varargs
-
-                coroutineStateManager.saveCoroutineState(
-                    currentCoroutine,
-                    stateProto,
-                    statePc,
-                    stateRegs,
-                    stateUpvalues,
-                    stateVarargs,
-                    e.yieldedValues,
-                    yieldTargetReg,
-                    yieldExpectedResults,
-                    coroutineCallStack, // Save only coroutine's call stack (without main thread frames)
-                    pendingTbc,
-                    closeContext.pendingCloseStartReg,
-                    closeContext.pendingCloseVar,
-                    execStack.toList(),
-                    pendingCloseYield = isCloseYield || yieldContext.pendingYieldStayOnSamePc,
-                    capturedReturnValues = getCapturedReturnValues(),
-                    pendingCloseContinuation = closeContext.pendingCloseContinuation,
-                    pendingCloseErrorArg = closeContext.pendingCloseErrorArg,
-                    // For close-yield we set stayOnSamePc=true so we must NOT increment the PC here,
-                    // otherwise we skip over the RETURN/CLOSE that needs to finish after resumption.
-                    incrementPc = !yieldContext.pendingYieldStayOnSamePc,
-                    closeResumeState = closeResumeState,
-                    closeOwnerFrameStack = filterCoroutineFrames(callerContext.snapshot(), callStackBase),
+                yieldHandler.handleYield(
+                    exception = e,
+                    currentProto = currentProto,
+                    pc = pc,
+                    registers = registers,
+                    instructions = instructions,
+                    execFrame = execFrame,
+                    varargs = varargs,
+                    execStack = execStack,
+                    yieldContext = yieldContext,
+                    closeContext = closeContext,
+                    callerContext = callerContext,
+                    callStackBase = callStackBase,
+                    filterCoroutineFrames = ::filterCoroutineFrames,
+                    getCapturedReturnValues = ::getCapturedReturnValues,
                 )
-                closeContext.setPendingCloseVar(null, 0)
-                e.stateSaved = true // Mark that state has been saved
             }
             clearYieldResumeContext()
             throw e // Re-throw to be caught by coroutineResume
