@@ -59,7 +59,7 @@ class CloseResumeOrchestrator(
         args: List<LuaValue<*>>,
         function: LuaFunction?,
         currentExecFrame: ExecutionFrame,
-    ): CloseResumeResult {
+    ): ExecutionContextUpdate {
         // Phase 1: Resume the __close continuation if present
         val continuation = closeState.pendingCloseContinuation
         if (continuation != null) {
@@ -80,7 +80,7 @@ class CloseResumeOrchestrator(
             closeContext.setActiveCloseResumeState(null)
 
             // Return current state unchanged
-            return CloseResumeResult(
+            return ExecutionContextUpdate(
                 execFrame = currentExecFrame,
                 currentProto = currentExecFrame.proto,
                 registers = currentExecFrame.registers,
@@ -90,6 +90,8 @@ class CloseResumeOrchestrator(
                 openUpvalues = currentExecFrame.openUpvalues,
                 toBeClosedVars = currentExecFrame.toBeClosedVars,
                 varargs = currentExecFrame.varargs,
+                currentUpvalues = currentExecFrame.upvalues,
+                env = ExecutionEnvironment(currentExecFrame, globals, vmCapabilities),
                 needsEnvRecreation = false,
             )
         }
@@ -101,7 +103,7 @@ class CloseResumeOrchestrator(
     private fun processOwnerSegments(
         closeState: CloseResumeState,
         currentExecFrame: ExecutionFrame,
-    ): CloseResumeResult {
+    ): ExecutionContextUpdate {
         val firstSegment = closeState.ownerSegments.first()
         val isSingleFrame = closeState.ownerSegments.size == 1
         debugSink.debug {
@@ -142,7 +144,7 @@ class CloseResumeOrchestrator(
         // Ensure activeExecutionFrame points to the current live frame after any rebuild
         flowState.setActiveExecutionFrame(segmentFrame)
 
-        return CloseResumeResult(
+        return ExecutionContextUpdate(
             execFrame = segmentFrame,
             currentProto = segmentFrame.proto,
             registers = segmentFrame.registers,
@@ -152,6 +154,8 @@ class CloseResumeOrchestrator(
             openUpvalues = segmentFrame.openUpvalues,
             toBeClosedVars = segmentFrame.toBeClosedVars,
             varargs = segmentFrame.varargs,
+            currentUpvalues = segmentFrame.upvalues,
+            env = ExecutionEnvironment(segmentFrame, globals, vmCapabilities),
             needsEnvRecreation = true,
         )
     }
