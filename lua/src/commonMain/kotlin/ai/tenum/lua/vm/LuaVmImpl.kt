@@ -32,6 +32,7 @@ import ai.tenum.lua.vm.errorhandling.NameHintResolver
 import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
 import ai.tenum.lua.vm.execution.ChunkExecutor
 import ai.tenum.lua.vm.execution.CloseErrorHandler
+import ai.tenum.lua.vm.execution.CloseResumeOrchestrator
 import ai.tenum.lua.vm.execution.CloseResumeState
 import ai.tenum.lua.vm.execution.DispatchResult
 import ai.tenum.lua.vm.execution.DispatchResultProcessor
@@ -899,6 +900,17 @@ class LuaVmImpl(
                 ::closeToBeClosedVars,
             )
 
+        // Create close resume orchestrator
+        val closeResumeOrchestrator =
+            CloseResumeOrchestrator(
+                debugSink,
+                globals,
+                closeContext,
+                flowState,
+                this,
+                ::executeProto,
+            )
+
         // Local aliases for frequently accessed frame state (from preparation)
         var registers = preparation.registers
         var constants = preparation.constants
@@ -916,104 +928,33 @@ class LuaVmImpl(
         // NEW ARCHITECTURE: Two-phase resumption orchestrator for multi-frame TBC chains
         if (mode is ExecutionMode.ResumeContinuation && resumptionState != null && resumptionState.closeResumeState != null) {
             val closeState = resumptionState.closeResumeState
+
+            // Clear yield resume context before processing
             env.clearYieldResumeContext()
 
-            // Phase 1: Resume the __close continuation if present
-            val continuation = closeState.pendingCloseContinuation
-            if (continuation != null) {
-                executeProto(
-                    continuation.proto,
+            val result =
+                closeResumeOrchestrator.processCloseResumeState(
+                    closeState,
                     args,
-                    continuation.upvalues,
                     function,
-                    ExecutionMode.ResumeContinuation(continuation),
+                    execFrame,
                 )
+
+            // Apply the orchestrator's results to update execution context
+            execFrame = result.execFrame
+            currentProto = result.currentProto
+            registers = result.registers
+            constants = result.constants
+            instructions = result.instructions
+            pc = result.pc
+            openUpvalues = result.openUpvalues
+            toBeClosedVars = result.toBeClosedVars
+            varargs = result.varargs
+
+            // Recreate execution environment if frame changed
+            if (result.needsEnvRecreation) {
+                env = ExecutionEnvironment(execFrame, globals, this)
             }
-
-            // Phase 2: Orchestrate through owner segments
-            if (closeState.ownerSegments.isNotEmpty()) {
-                val firstSegment = closeState.ownerSegments.first()
-                val isSingleFrame = closeState.ownerSegments.size == 1
-                debugSink.debug {
-                    "[Segment Orchestrator] Processing first segment: proto=${firstSegment.proto.name}, total segments=${closeState.ownerSegments.size}"
-                }
-
-                // Rebuild first segment's frame
-                val segmentFrame =
-                    ExecutionFrame(
-                        proto = firstSegment.proto,
-                        initialArgs = emptyList(),
-                        upvalues = firstSegment.upvalues,
-                        initialPc = firstSegment.pcToResume,
-                        existingRegisters = firstSegment.registers.toMutableList(),
-                        existingVarargs = firstSegment.varargs,
-                        existingToBeClosedVars = firstSegment.toBeClosedVars,
-                        existingOpenUpvalues = mutableMapOf(),
-                    )
-                // CRITICAL: capturedReturns from segment is the single source of truth for mid-RETURN frames
-                segmentFrame.capturedReturns = firstSegment.capturedReturns
-                segmentFrame.isMidReturn = firstSegment.isMidReturn
-
-                debugSink.debug {
-                    "[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}, isMidReturn=${firstSegment.isMidReturn}"
-                }
-
-                // For single-frame case: clear segments but keep closeOwnerFrameStack for outer frames
-                // For multi-frame case: store remaining segments for processing after this one completes
-                if (isSingleFrame) {
-                    debugSink.debug { "[Segment Orchestrator] Single frame - clearing segments but preserving closeOwnerFrameStack" }
-                    closeContext.setActiveCloseResumeState(
-                        CloseResumeState(
-                            pendingCloseContinuation = null,
-                            ownerSegments = emptyList(),
-                            errorArg = closeState.errorArg,
-                            pendingReturnValues = null,
-                            closeOwnerFrameStack = closeState.closeOwnerFrameStack,
-                        ),
-                    )
-                } else {
-                    val remainingSegments = closeState.ownerSegments.drop(1)
-                    debugSink.debug {
-                        "[Segment Orchestrator] Multi-frame - storing ${remainingSegments.size} remaining segments"
-                    }
-                    closeContext.setActiveCloseResumeState(
-                        CloseResumeState(
-                            pendingCloseContinuation = null,
-                            ownerSegments = remainingSegments,
-                            errorArg = closeState.errorArg,
-                            pendingReturnValues = null,
-                            closeOwnerFrameStack = closeState.closeOwnerFrameStack,
-                        ),
-                    )
-                }
-
-                // Set up execution context for first segment
-                execFrame = segmentFrame
-                flowState.setActiveExecutionFrame(segmentFrame)
-                registers = segmentFrame.registers
-                currentProto = segmentFrame.proto
-                constants = segmentFrame.constants
-                instructions = segmentFrame.instructions
-                pc = segmentFrame.pc
-                openUpvalues = segmentFrame.openUpvalues
-                toBeClosedVars = segmentFrame.toBeClosedVars
-                varargs = segmentFrame.varargs
-                env = ExecutionEnvironment(segmentFrame, globals, this)
-
-                // DON'T clear TBC vars - keep them intact so remaining close handlers can run
-                // The close chain must be preserved across yield/resume boundaries
-
-                // Restore close context state for this segment
-                if (firstSegment.pendingCloseVar != null) {
-                    closeContext.setPendingCloseVar(firstSegment.pendingCloseVar, firstSegment.pendingCloseStartReg)
-                }
-            } else {
-                // No segments - clear activeCloseResumeState
-                closeContext.setActiveCloseResumeState(null)
-            }
-
-            // Ensure activeExecutionFrame points to the current live frame after any rebuild
-            flowState.setActiveExecutionFrame(execFrame)
         }
 
         // Handle coroutine resumption - place resume args as yield return values
