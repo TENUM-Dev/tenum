@@ -34,6 +34,7 @@ import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
 import ai.tenum.lua.vm.execution.ChunkExecutor
 import ai.tenum.lua.vm.execution.CloseResumeState
 import ai.tenum.lua.vm.execution.DispatchResult
+import ai.tenum.lua.vm.execution.DispatchResultProcessor
 import ai.tenum.lua.vm.execution.ExecContext
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
@@ -46,6 +47,7 @@ import ai.tenum.lua.vm.execution.InferredFunctionName
 import ai.tenum.lua.vm.execution.OpcodeDispatcher
 import ai.tenum.lua.vm.execution.ResultStorage
 import ai.tenum.lua.vm.execution.ResumptionState
+import ai.tenum.lua.vm.execution.ReturnLoopAction
 import ai.tenum.lua.vm.execution.StackView
 import ai.tenum.lua.vm.execution.VmCapabilities
 import ai.tenum.lua.vm.execution.opcodes.CallOpcodes
@@ -863,6 +865,9 @@ class LuaVmImpl(
         // Create hook trigger helper
         val hookHelper = HookTriggerHelper(::triggerHook)
 
+        // Create dispatch result processor
+        val resultProcessor = DispatchResultProcessor(debugSink)
+
         // Local aliases for frequently accessed frame state (from preparation)
         var registers = preparation.registers
         var constants = preparation.constants
@@ -1170,105 +1175,83 @@ class LuaVmImpl(
                     is DispatchResult.Return -> {
                         debug { "[REGISTERS after RETURN] ${registers.slice(0..10).mapIndexed { i, v -> "R[$i]=$v" }.joinToString(", ")}" }
 
-                        // Check if there's a caller waiting (trampolined call stack)
-                        if (execStack.isNotEmpty()) {
-                            // Pop caller context and restore
-                            val callerContext = execStack.removeLast()
-                            debug { "  Unwinding from trampolined call, restoring caller" }
+                        // Process RETURN using helper to determine loop action
+                        when (
+                            val action =
+                                resultProcessor.processReturn(
+                                    dispatchResult = dispatchResult,
+                                    execStack = execStack,
+                                    execFrame = execFrame,
+                                    activeCloseState = closeContext.activeCloseResumeState,
+                                )
+                        ) {
+                            is ReturnLoopAction.UnwindToCaller -> {
+                                debug { "  Unwinding from trampolined call, restoring caller" }
 
-                            debugSink.debug {
-                                "[RETURN unwind] Restoring caller, TBC list size=${callerContext.execFrame.toBeClosedVars.size}"
+                                // Pop callee's call frame from debug stack
+                                callStackManager.removeLastFrame()
+
+                                // Restore caller's execution state
+                                currentProto = action.callerContext.proto
+                                execFrame = action.callerContext.execFrame
+                                registers = action.callerContext.registers
+                                constants = action.callerContext.constants
+                                instructions = action.callerContext.instructions
+                                pc = action.callerContext.pc
+                                openUpvalues = execFrame.openUpvalues
+                                toBeClosedVars = execFrame.toBeClosedVars
+                                varargs = action.callerContext.varargs
+                                currentUpvalues = action.callerContext.currentUpvalues
+                                lastLine = action.callerContext.lastLine
+
+                                // Recreate execution environment for caller
+                                env = ExecutionEnvironment(execFrame, globals, this)
+
+                                // Store callee's return values into caller's registers
+                                val callInstr = action.callerContext.callInstruction
+                                val storage = ResultStorage(env)
+                                storage.storeResults(
+                                    targetReg = callInstr.a,
+                                    encodedCount = callInstr.c,
+                                    results = action.returnValues,
+                                    opcodeName = "CALL-RETURN",
+                                )
+
+                                // Decrement call depth (unwinding from callee)
+                                callDepth--
                             }
-
-                            // Pop callee's call frame from debug stack
-                            callStackManager.removeLastFrame()
-
-                            // Restore caller's execution state
-                            currentProto = callerContext.proto
-                            execFrame = callerContext.execFrame
-                            registers = callerContext.registers
-                            constants = callerContext.constants
-                            instructions = callerContext.instructions
-                            pc = callerContext.pc
-                            openUpvalues = execFrame.openUpvalues
-                            toBeClosedVars = execFrame.toBeClosedVars
-                            varargs = callerContext.varargs
-                            currentUpvalues = callerContext.currentUpvalues
-                            lastLine = callerContext.lastLine
-
-                            // Recreate execution environment for caller
-                            env = ExecutionEnvironment(execFrame, globals, this)
-
-                            // Store callee's return values into caller's registers
-                            val callInstr = callerContext.callInstruction
-                            val storage = ResultStorage(env)
-                            storage.storeResults(
-                                targetReg = callInstr.a,
-                                encodedCount = callInstr.c,
-                                results = dispatchResult.values,
-                                opcodeName = "CALL-RETURN",
-                            )
-
-                            // Decrement call depth (unwinding from callee)
-                            callDepth--
-
-                            // Continue execution in caller
-                            // pc will be incremented at end of loop
-                        } else {
-                            // No caller on stack - check if there are remaining segments to process
-                            val activeCloseState = closeContext.activeCloseResumeState
-                            println(
-                                "[NO-CALLER] activeCloseState=${activeCloseState != null} segments=${activeCloseState?.ownerSegments?.size} outerFrames=${activeCloseState?.closeOwnerFrameStack?.size}",
-                            )
-                            if (activeCloseState != null && activeCloseState.ownerSegments.isNotEmpty()) {
-                                // Get return values from the just-completed segment
-                                // Priority: (a) stashed pendingReturnValues, (b) execFrame.capturedReturns, (c) dispatchResult.values
-                                val segmentReturnValues =
-                                    activeCloseState.pendingReturnValues
-                                        ?: execFrame.capturedReturns
-                                        ?: dispatchResult.values
-
+                            is ReturnLoopAction.ContinueSegment -> {
+                                println(
+                                    "[NO-CALLER] activeCloseState=true segments=${closeContext.activeCloseResumeState?.ownerSegments?.size}",
+                                )
                                 debugSink.debug {
-                                    "[SEGMENT VALUES] Got ${segmentReturnValues.size} values from: " +
-                                        "pending=${activeCloseState.pendingReturnValues?.size} " +
-                                        "captured=${execFrame.capturedReturns?.size} " +
-                                        "dispatch=${dispatchResult.values.size}"
-                                }
-
-                                // Process next segment
-                                val nextSegment = activeCloseState.ownerSegments.first()
-                                debugSink.debug {
-                                    "[Segment Orchestrator] First segment completed, processing next segment: proto=${nextSegment.proto.name}"
+                                    "[SEGMENT VALUES] Got ${action.segmentReturnValues.size} values"
                                 }
 
                                 // Rebuild next segment's frame
                                 val segmentFrame =
                                     ExecutionFrame(
-                                        proto = nextSegment.proto,
+                                        proto = action.nextSegment.proto,
                                         initialArgs = emptyList(),
-                                        upvalues = nextSegment.upvalues,
-                                        initialPc = nextSegment.pcToResume,
-                                        existingRegisters = nextSegment.registers.toMutableList(),
-                                        existingVarargs = nextSegment.varargs,
-                                        existingToBeClosedVars = nextSegment.toBeClosedVars,
+                                        upvalues = action.nextSegment.upvalues,
+                                        initialPc = action.nextSegment.pcToResume,
+                                        existingRegisters = action.nextSegment.registers.toMutableList(),
+                                        existingVarargs = action.nextSegment.varargs,
+                                        existingToBeClosedVars = action.nextSegment.toBeClosedVars,
                                         existingOpenUpvalues = mutableMapOf(),
                                     )
                                 // CRITICAL: For mid-RETURN frames, capturedReturns is the single source of truth
-                                // For NOT-mid-RETURN frames (suspended at CALL), store prev segment's return as CALL result
-                                if (nextSegment.isMidReturn) {
-                                    // Mid-RETURN: restore capturedReturns
-                                    segmentFrame.capturedReturns = nextSegment.capturedReturns
+                                if (action.nextSegment.isMidReturn) {
+                                    segmentFrame.capturedReturns = action.nextSegment.capturedReturns
                                     segmentFrame.isMidReturn = true
                                 } else {
-                                    // NOT mid-RETURN: frame was suspended at CALL, store dispatchResult as CALL result
                                     segmentFrame.capturedReturns = null
                                     segmentFrame.isMidReturn = false
 
-                                    // Store previous segment's return values as this segment's CALL result
-                                    // The segment's pc points AFTER the CALL instruction
+                                    // Store previous segment's return values as CALL result
                                     val prevCallInstr =
-                                        if (nextSegment.pcToResume > 0) {
-                                            nextSegment.proto.instructions[nextSegment.pcToResume - 1]
+                                        if (action.nextSegment.pcToResume > 0) {
+                                            action.nextSegment.proto.instructions[action.nextSegment.pcToResume - 1]
                                         } else {
                                             null
                                         }
@@ -1278,28 +1261,27 @@ class LuaVmImpl(
                                         storage.storeResults(
                                             targetReg = prevCallInstr.a,
                                             encodedCount = prevCallInstr.c,
-                                            results = segmentReturnValues,
+                                            results = action.segmentReturnValues,
                                             opcodeName = "SEGMENT-CALL-RESUME",
                                         )
                                         debugSink.debug {
-                                            "[Segment CALL-Resume] Stored ${segmentReturnValues.size} values from prev segment"
+                                            "[Segment CALL-Resume] Stored ${action.segmentReturnValues.size} values"
                                         }
                                     }
                                 }
 
-                                // Update remaining segments and stash return values for next transition
-                                val remainingSegments = activeCloseState.ownerSegments.drop(1)
-                                if (remainingSegments.isNotEmpty()) {
+                                // Update active close state with remaining segments
+                                if (action.remainingSegments.isNotEmpty()) {
                                     debugSink.debug {
-                                        "[Segment Orchestrator] ${remainingSegments.size} segments remaining, stashing ${segmentReturnValues.size} return values"
+                                        "[Segment Orchestrator] ${action.remainingSegments.size} segments remaining"
                                     }
                                     closeContext.setActiveCloseResumeState(
                                         CloseResumeState(
                                             pendingCloseContinuation = null,
-                                            ownerSegments = remainingSegments,
-                                            errorArg = activeCloseState.errorArg,
-                                            pendingReturnValues = segmentReturnValues,
-                                            closeOwnerFrameStack = activeCloseState.closeOwnerFrameStack,
+                                            ownerSegments = action.remainingSegments,
+                                            errorArg = closeContext.activeCloseResumeState!!.errorArg,
+                                            pendingReturnValues = action.segmentReturnValues,
+                                            closeOwnerFrameStack = closeContext.activeCloseResumeState!!.closeOwnerFrameStack,
                                         ),
                                     )
                                 } else {
@@ -1307,7 +1289,7 @@ class LuaVmImpl(
                                 }
 
                                 // Update execution context to next segment
-                                currentProto = nextSegment.proto
+                                currentProto = action.nextSegment.proto
                                 execFrame = segmentFrame
                                 flowState.setActiveExecutionFrame(segmentFrame)
                                 registers = segmentFrame.registers
@@ -1321,86 +1303,64 @@ class LuaVmImpl(
                                 env = ExecutionEnvironment(segmentFrame, globals, this)
 
                                 // Restore close context state for this segment
-                                if (nextSegment.pendingCloseVar != null) {
-                                    closeContext.setPendingCloseVar(nextSegment.pendingCloseVar, nextSegment.pendingCloseStartReg)
+                                if (action.nextSegment.pendingCloseVar != null) {
+                                    closeContext.setPendingCloseVar(
+                                        action.nextSegment.pendingCloseVar,
+                                        action.nextSegment.pendingCloseStartReg,
+                                    )
                                 }
-
-                                // Continue execution - don't return yet
-                            } else {
-                                // No remaining segments - all segments completed
-                                // Use pendingReturnValues (stashed before clear) if available, else captured, else dispatch
-                                val finalReturn =
-                                    activeCloseState?.pendingReturnValues
-                                        ?: execFrame.capturedReturns
-                                        ?: dispatchResult.values
-
-                                // After all segments complete, check if there are outer frames with TBC
-                                // that need to continue execution (e.g., frames suspended at pcall)
-                                val outerFrames = activeCloseState?.closeOwnerFrameStack ?: emptyList()
+                            }
+                            is ReturnLoopAction.ContinueOuterFrame -> {
+                                val outerFrames = closeContext.activeCloseResumeState?.closeOwnerFrameStack ?: emptyList()
                                 println(
                                     "[SEGMENT-COMPLETE] outerFrames.size=${outerFrames.size} frames=${outerFrames.map {
                                         "${it.proto.name}(mid=${it.isMidReturn},tbc=${it.toBeClosedVars.size})"
                                     }}",
                                 )
-                                val nonSegmentFrame = outerFrames.firstOrNull { !it.isMidReturn }
-
                                 closeContext.setActiveCloseResumeState(null)
 
-                                debugSink.debug {
-                                    "[SEGMENT FINAL] All segments done. ${finalReturn.size} values. outerFrames=${outerFrames.size} nonSegment=${nonSegmentFrame != null}"
+                                // Rebuild the outer frame's execution context
+                                val outerFrame =
+                                    ExecutionFrame(
+                                        proto = action.outerFrame.proto,
+                                        initialArgs = emptyList(),
+                                        upvalues = action.outerFrame.upvalues,
+                                        initialPc = action.outerFrame.pcToResume,
+                                        existingRegisters = action.outerFrame.registers,
+                                        existingVarargs = action.outerFrame.varargs,
+                                        existingToBeClosedVars = action.outerFrame.toBeClosedVars,
+                                    )
+
+                                // Restore execution state
+                                execFrame = outerFrame
+                                flowState.setActiveExecutionFrame(outerFrame)
+                                currentProto = action.outerFrame.proto
+                                registers = outerFrame.registers
+                                constants = currentProto.constants
+                                instructions = currentProto.instructions
+                                pc = action.outerFrame.pcToResume
+                                openUpvalues = outerFrame.openUpvalues
+                                toBeClosedVars = outerFrame.toBeClosedVars
+                                varargs = action.outerFrame.varargs
+                                env = ExecutionEnvironment(outerFrame, globals, this)
+
+                                // Store results from previous frame
+                                val callPc = pc - 1
+                                if (callPc >= 0 && callPc < instructions.size) {
+                                    val instr = instructions[callPc]
+                                    if (instr.opcode == OpCode.CALL || instr.opcode == OpCode.TAILCALL) {
+                                        ResultStorage(env).storeResults(instr.a, instr.c, action.finalReturnValues, "SEGMENT-FINAL-RETURN")
+                                    }
                                 }
 
-                                if (nonSegmentFrame != null) {
-                                    // Found an outer frame with TBC that needs to continue
-                                    // This frame was suspended at a CALL (e.g., pcall) waiting for inner code to complete
-                                    debugSink.debug {
-                                        "[SEGMENT FINAL] Continuing outer frame: proto=${nonSegmentFrame.proto.name} pc=${nonSegmentFrame.pcToResume}"
-                                    }
-
-                                    // Rebuild the outer frame's execution context
-                                    val outerFrame =
-                                        ExecutionFrame(
-                                            proto = nonSegmentFrame.proto,
-                                            initialArgs = emptyList(),
-                                            upvalues = nonSegmentFrame.upvalues,
-                                            initialPc = nonSegmentFrame.pcToResume,
-                                            existingRegisters = nonSegmentFrame.registers,
-                                            existingVarargs = nonSegmentFrame.varargs,
-                                            existingToBeClosedVars = nonSegmentFrame.toBeClosedVars,
-                                        )
-
-                                    // Restore execution state
-                                    execFrame = outerFrame
-                                    flowState.setActiveExecutionFrame(outerFrame)
-                                    currentProto = nonSegmentFrame.proto
-                                    registers = outerFrame.registers
-                                    constants = currentProto.constants
-                                    instructions = currentProto.instructions
-                                    pc = nonSegmentFrame.pcToResume
-                                    openUpvalues = outerFrame.openUpvalues
-                                    toBeClosedVars = outerFrame.toBeClosedVars
-                                    varargs = nonSegmentFrame.varargs
-                                    env = ExecutionEnvironment(outerFrame, globals, this)
-
-                                    // The outer frame was suspended AFTER a CALL instruction (pc points after CALL)
-                                    // Find the CALL instruction to store results
-                                    val callPc = pc - 1
-                                    if (callPc >= 0 && callPc < instructions.size) {
-                                        val instr = instructions[callPc]
-                                        if (instr.opcode == OpCode.CALL || instr.opcode == OpCode.TAILCALL) {
-                                            ResultStorage(env).storeResults(instr.a, instr.c, finalReturn, "SEGMENT-FINAL-RETURN")
-                                        }
-                                    }
-
-                                    // Continue execution - outer frame's TBC will process when RETURN executes
-                                    continue
-                                } else {
-                                    // No outer frames with TBC - return to coroutine caller
-                                    debugSink.debug {
-                                        "[SEGMENT FINAL] No outer frame, returning ${finalReturn.size} values to coroutine caller."
-                                    }
-                                    return finalReturn
-                                }
+                                // Continue execution
+                                continue
+                            }
+                            is ReturnLoopAction.ExitProto -> {
+                                println(
+                                    "[NO-CALLER] activeCloseState=${closeContext.activeCloseResumeState != null} segments=${closeContext.activeCloseResumeState?.ownerSegments?.size} outerFrames=${closeContext.activeCloseResumeState?.closeOwnerFrameStack?.size}",
+                                )
+                                return action.returnValues
                             }
                         }
                     }
