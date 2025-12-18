@@ -6,9 +6,7 @@ import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaBoolean
 import ai.tenum.lua.runtime.LuaCompiledFunction
 import ai.tenum.lua.runtime.LuaCoroutine
-import ai.tenum.lua.runtime.LuaDouble
 import ai.tenum.lua.runtime.LuaFunction
-import ai.tenum.lua.runtime.LuaLong
 import ai.tenum.lua.runtime.LuaNativeFunction
 import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaNumber
@@ -217,7 +215,10 @@ class LuaVmImpl(
             } else {
                 null
             }
-        } catch (e: Exception) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            // Debug introspection should never crash - return null on any failure
             null
         }
     }
@@ -234,7 +235,10 @@ class LuaVmImpl(
             } else {
                 null
             }
-        } catch (e: Exception) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            // Debug introspection should never crash - return null on any failure
             null
         }
 
@@ -579,8 +583,10 @@ class LuaVmImpl(
 
         try {
             hookFunc.call(listOf(LuaString(eventName), lineArg))
-        } catch (e: Exception) {
-            // Hook errors shouldn't crash execution
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            // Hook errors shouldn't crash execution - swallow all exceptions
         } finally {
             // Clear the hook context
             pendingInferredName = null
@@ -776,7 +782,10 @@ class LuaVmImpl(
             handleCloseException(closeEx)
         } catch (closeEx: LuaRuntimeError) {
             handleCloseRuntimeError(closeEx)
-        } catch (closeEx: Exception) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught") closeEx: Exception,
+        ) {
+            // Catch all other exceptions from __close metamethod
             handleCloseGenericException(closeEx)
         }
 
@@ -1481,7 +1490,10 @@ class LuaVmImpl(
 
         try {
             return executeMainLoop(state, handlers, execStack, preparation, ::applyContextUpdate)
-        } catch (e: Throwable) {
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Throwable,
+        ) {
+            // Must catch Throwable to handle both LuaExceptions and platform errors (Error subclasses)
             handleExecutionException(e, handlers, state, alreadyClosedRegs, execStack)
         } finally {
             // Restore call depth to entry value (cleans up leaked increments on error paths)
@@ -1658,8 +1670,10 @@ class LuaVmImpl(
                     returnValues = callFunctionInternal(func, args)
                     // If successful, check if __close set an exception anyway (shouldn't happen)
                     closeException = getCloseException()
-                } catch (e: Exception) {
-                    // Exception from __close or function body
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Exception,
+                ) {
+                    // Exception from __close or function body - catch all to preserve return values
                     // Check if we captured return values before __close threw
                     returnValues = getCapturedReturnValues()
                     closeException = e
@@ -1687,12 +1701,6 @@ class LuaVmImpl(
                 }
             }
         }
-
-    /**
-     * Convert a LuaNumber to a Double value.
-     * Helper to eliminate duplication in arithmetic operations.
-     */
-    private fun LuaNumber.toDoubleValue(): Double = if (this is LuaLong) this.value.toDouble() else (this as LuaDouble).value
 
     override fun isTruthy(value: LuaValue<*>): Boolean = typeConversions.isTruthy(value)
 
@@ -1887,7 +1895,10 @@ class LuaVmImpl(
                     // (executeProto's finally clears it, so we must restore before our finally)
                     flowState.setActiveExecutionFrame(savedActiveFrame)
                     result
-                } catch (e: Throwable) {
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Throwable,
+                ) {
+                    // Must catch Throwable to ensure frame cleanup on all error paths
                     // Also restore on exception path
                     flowState.setActiveExecutionFrame(savedActiveFrame)
                     throw e
