@@ -12,6 +12,25 @@ import kotlin.math.log10
  */
 object StringFormatting {
     /**
+     * Flags parsed from format specifier.
+     */
+    private data class ParsedFlags(
+        val leftAlign: Boolean,
+        val zeroPad: Boolean,
+        val forceSign: Boolean,
+        val spaceSign: Boolean,
+        val alternateForm: Boolean,
+    )
+
+    /**
+     * Width and precision parsed from format specifier.
+     */
+    private data class ParsedDimensions(
+        val width: Int,
+        val precision: Int, // -1 means not specified
+    )
+
+    /**
      * Format a string with Lua-style placeholders
      * @param formatString the format string
      * @param values the values to format
@@ -29,95 +48,16 @@ object StringFormatting {
         var i = 0
         while (i < result.length) {
             if (result[i] == '%' && i + 1 < result.length) {
-                // Check for optional flags and width specifier
+                // Parse format specifier components
                 var j = i + 1
 
-                // Parse flags: -, 0, +, #, space
-                var leftAlign = false
-                var zeroPad = false
-                var forceSign = false
-                var spaceSign = false
-                var alternateForm = false
+                // Parse flags
+                val (flags, afterFlags) = parseFlags(result, j, i)
+                j = afterFlags
 
-                // Parse flags: -, 0 (only once), +, #, space
-                // Note: '0' flag can only appear once at the start
-                while (j < result.length) {
-                    when (result[j]) {
-                        '-' -> {
-                            leftAlign = true
-                            j++
-                        }
-                        '0' -> {
-                            if (j == i + 1 || (j > i + 1 && result[j - 1] !in '0'..'9')) {
-                                // Only treat '0' as a flag if it's the first char after % or after other flags
-                                zeroPad = true
-                                j++
-                            } else {
-                                // This '0' is part of the width, stop flag parsing
-                                break
-                            }
-                        }
-                        '+' -> {
-                            forceSign = true
-                            j++
-                        }
-                        ' ' -> {
-                            spaceSign = true
-                            j++
-                        }
-                        '#' -> {
-                            alternateForm = true
-                            j++
-                        }
-                        else -> break
-                    }
-                }
-
-                // Parse width
-                val widthStart = j
-                while (j < result.length && result[j].isDigit()) {
-                    j++
-                    if ((j - widthStart) > 99) {
-                        throw RuntimeException("too long")
-                    }
-                }
-                val widthStr = if (j > widthStart) result.substring(widthStart, j) else ""
-                val widthInt = widthStr.toIntOrNull()
-
-                // Check if width string is too long (causes overflow or parsing failure)
-                // If the string is very long AND doesn't parse to a valid int, it's "too long"
-                // If it parses but is > 99, it's "invalid conversion"
-                if (widthStr.length > 99) {
-                    throw RuntimeException("too long")
-                }
-
-                val width = widthInt ?: 0
-
-                // Parse precision (optional: .digits)
-                var precision = -1 // -1 means no precision specified
-                if (j < result.length && result[j] == '.') {
-                    j++ // Skip the dot
-                    val precisionStart = j
-                    while (j < result.length && result[j].isDigit()) {
-                        j++
-                    }
-                    val precisionStr = if (j > precisionStart) result.substring(precisionStart, j) else ""
-                    val precisionInt = precisionStr.toIntOrNull()
-
-                    // Check if precision string is too long
-                    if (precisionStr.length > 99) {
-                        throw RuntimeException("too long")
-                    }
-
-                    precision = precisionInt ?: 0
-                }
-
-                // Validate width and precision (Lua limits them to 99)
-                // This matches Lua 5.4 behavior: "invalid format (width or precision too long)"
-                // Test files expect "invalid conversion" in the error message
-                if (width > 99 || precision > 99) {
-                    throw RuntimeException("invalid conversion (width or precision too long)")
-                }
+                // Parse width and precision
+                val (dimensions, afterDimensions) = parseDimensions(result, j)
+                j = afterDimensions
 
                 // Now j points to the actual format character
                 if (j >= result.length) {
@@ -128,52 +68,7 @@ object StringFormatting {
                 val formatChar = result[j]
 
                 // Validate format-specific modifier restrictions
-                when (formatChar) {
-                    'c' -> {
-                        // %c: only accepts width and '-' flag
-                        // No zero padding, no precision, no +/space/#
-                        val hasInvalidModifiers = zeroPad || precision >= 0 || forceSign || spaceSign || alternateForm
-                        if (hasInvalidModifiers) {
-                            throw RuntimeException("invalid conversion")
-                        }
-                    }
-                    's' -> {
-                        // %s: accepts width, '-', and precision
-                        // No zero padding, no +/space/#
-                        val hasInvalidModifiers = zeroPad || forceSign || spaceSign || alternateForm
-                        if (hasInvalidModifiers) {
-                            throw RuntimeException("invalid conversion")
-                        }
-                    }
-                    'q' -> {
-                        // %q: no modifiers at all
-                        val hasAnyModifiers =
-                            width > 0 ||
-                                precision >= 0 ||
-                                leftAlign ||
-                                zeroPad ||
-                                forceSign ||
-                                spaceSign ||
-                                alternateForm
-                        if (hasAnyModifiers) {
-                            throw RuntimeException("cannot have modifiers")
-                        }
-                    }
-                    'p' -> {
-                        // %p: accepts width and '-' flag
-                        // No zero padding, no precision, no +/space/#
-                        val hasInvalidModifiers = zeroPad || precision >= 0 || forceSign || spaceSign || alternateForm
-                        if (hasInvalidModifiers) {
-                            throw RuntimeException("invalid conversion")
-                        }
-                    }
-                    'd', 'i', 'u' -> {
-                        // %d/%i/%u: no '#' flag (alternate form)
-                        if (alternateForm) {
-                            throw RuntimeException("invalid conversion")
-                        }
-                    }
-                }
+                validateModifiers(formatChar, flags, dimensions)
 
                 when (formatChar) {
                     '%' -> {
@@ -191,14 +86,14 @@ object StringFormatting {
                             FormatSpecifier(
                                 flags =
                                     buildSet {
-                                        if (leftAlign) add('-')
-                                        if (zeroPad) add('0')
-                                        if (forceSign) add('+')
-                                        if (spaceSign) add(' ')
-                                        if (alternateForm) add('#')
+                                        if (flags.leftAlign) add('-')
+                                        if (flags.zeroPad) add('0')
+                                        if (flags.forceSign) add('+')
+                                        if (flags.spaceSign) add(' ')
+                                        if (flags.alternateForm) add('#')
                                     },
-                                width = if (width > 0) width else null,
-                                precision = if (precision >= 0) precision else null,
+                                width = if (dimensions.width > 0) dimensions.width else null,
+                                precision = if (dimensions.precision >= 0) dimensions.precision else null,
                                 formatChar = formatChar,
                             )
                         val replacement =
@@ -233,6 +128,170 @@ object StringFormatting {
         val replacement: String,
         val offset: Int,
     )
+
+    /**
+     * Parse flags from format string starting at position j.
+     * Returns the parsed flags and the new position after flags.
+     */
+    private fun parseFlags(
+        result: String,
+        startPos: Int,
+        percentPos: Int,
+    ): Pair<ParsedFlags, Int> {
+        var j = startPos
+        var leftAlign = false
+        var zeroPad = false
+        var forceSign = false
+        var spaceSign = false
+        var alternateForm = false
+
+        while (j < result.length) {
+            when (result[j]) {
+                '-' -> {
+                    leftAlign = true
+                    j++
+                }
+                '0' -> {
+                    if (j == percentPos + 1 || (j > percentPos + 1 && result[j - 1] !in '0'..'9')) {
+                        zeroPad = true
+                        j++
+                    } else {
+                        break
+                    }
+                }
+                '+' -> {
+                    forceSign = true
+                    j++
+                }
+                ' ' -> {
+                    spaceSign = true
+                    j++
+                }
+                '#' -> {
+                    alternateForm = true
+                    j++
+                }
+                else -> break
+            }
+        }
+
+        return Pair(
+            ParsedFlags(leftAlign, zeroPad, forceSign, spaceSign, alternateForm),
+            j,
+        )
+    }
+
+    /**
+     * Parse width and precision from format string starting at position j.
+     * Returns the parsed dimensions and the new position after dimensions.
+     */
+    private fun parseDimensions(
+        result: String,
+        startPos: Int,
+    ): Pair<ParsedDimensions, Int> {
+        var j = startPos
+
+        // Parse width
+        val widthStart = j
+        while (j < result.length && result[j].isDigit()) {
+            j++
+            if ((j - widthStart) > 99) {
+                throw RuntimeException("too long")
+            }
+        }
+        val widthStr = if (j > widthStart) result.substring(widthStart, j) else ""
+        val widthInt = widthStr.toIntOrNull()
+
+        if (widthStr.length > 99) {
+            throw RuntimeException("too long")
+        }
+
+        val width = widthInt ?: 0
+
+        // Parse precision (optional: .digits)
+        var precision = -1
+        if (j < result.length && result[j] == '.') {
+            j++
+            val precisionStart = j
+            while (j < result.length && result[j].isDigit()) {
+                j++
+            }
+            val precisionStr = if (j > precisionStart) result.substring(precisionStart, j) else ""
+            val precisionInt = precisionStr.toIntOrNull()
+
+            if (precisionStr.length > 99) {
+                throw RuntimeException("too long")
+            }
+
+            precision = precisionInt ?: 0
+        }
+
+        // Validate width and precision
+        if (width > 99 || precision > 99) {
+            throw RuntimeException("invalid conversion (width or precision too long)")
+        }
+
+        return Pair(ParsedDimensions(width, precision), j)
+    }
+
+    /**
+     * Validate format-specific modifier restrictions.
+     */
+    private fun validateModifiers(
+        formatChar: Char,
+        flags: ParsedFlags,
+        dimensions: ParsedDimensions,
+    ) {
+        when (formatChar) {
+            'c' -> {
+                val hasInvalidModifiers =
+                    flags.zeroPad ||
+                        dimensions.precision >= 0 ||
+                        flags.forceSign ||
+                        flags.spaceSign ||
+                        flags.alternateForm
+                if (hasInvalidModifiers) {
+                    throw RuntimeException("invalid conversion")
+                }
+            }
+            's' -> {
+                val hasInvalidModifiers =
+                    flags.zeroPad || flags.forceSign || flags.spaceSign || flags.alternateForm
+                if (hasInvalidModifiers) {
+                    throw RuntimeException("invalid conversion")
+                }
+            }
+            'q' -> {
+                val hasAnyModifiers =
+                    dimensions.width > 0 ||
+                        dimensions.precision >= 0 ||
+                        flags.leftAlign ||
+                        flags.zeroPad ||
+                        flags.forceSign ||
+                        flags.spaceSign ||
+                        flags.alternateForm
+                if (hasAnyModifiers) {
+                    throw RuntimeException("cannot have modifiers")
+                }
+            }
+            'p' -> {
+                val hasInvalidModifiers =
+                    flags.zeroPad ||
+                        dimensions.precision >= 0 ||
+                        flags.forceSign ||
+                        flags.spaceSign ||
+                        flags.alternateForm
+                if (hasInvalidModifiers) {
+                    throw RuntimeException("invalid conversion")
+                }
+            }
+            'd', 'i', 'u' -> {
+                if (flags.alternateForm) {
+                    throw RuntimeException("invalid conversion")
+                }
+            }
+        }
+    }
 
     // ============================================================================
     // Public Utility Methods (used by other modules)
