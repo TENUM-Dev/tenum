@@ -1,6 +1,5 @@
 package ai.tenum.lua.vm.execution
 
-import ai.tenum.lua.compiler.model.Instruction
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaFunction
 import ai.tenum.lua.runtime.LuaValue

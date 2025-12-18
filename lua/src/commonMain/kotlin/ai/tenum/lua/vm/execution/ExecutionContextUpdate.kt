@@ -5,6 +5,9 @@ import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 
+// CPD-OFF: Field overlap with ExecutionPreparation is intentional - both represent execution state
+// but serve different purposes (initial setup vs. runtime updates)
+
 /**
  * Unified result type for execution context updates.
  *
@@ -12,8 +15,6 @@ import ai.tenum.lua.runtime.Upvalue
  * SegmentContinuationHandler) to return updated execution context after processing.
  * It eliminates duplication between similar result types.
  */
-// CPD-OFF: Field overlap with ExecutionPreparation is intentional - both represent execution state
-// but serve different purposes (initial setup vs. runtime updates)
 data class ExecutionContextUpdate(
     val execFrame: ExecutionFrame,
     val currentProto: Proto,
