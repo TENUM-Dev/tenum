@@ -227,11 +227,13 @@ class Lexer(
      */
     private fun number(startColumn: Int) {
         // Check for hexadecimal number
-        if (current < source.length &&
-            source[start] == '0' &&
-            current + 1 < source.length &&
-            (source[current] == 'x' || source[current] == 'X')
-        ) {
+        val startsWithZero = source[start] == '0'
+        val hasHexPrefix =
+            current < source.length &&
+                current + 1 < source.length &&
+                (source[current] == 'x' || source[current] == 'X')
+
+        if (startsWithZero && hasHexPrefix) {
             advance() // consume 'x' or 'X'
             hexNumber(startColumn)
             return
@@ -247,7 +249,8 @@ class Lexer(
         } else if (peek() == '.') {
             // Check if next is exponent marker or end of number
             val next = peekNext()
-            if (next == 'e' || next == 'E' || !isAlpha(next) && next != '.') {
+            val isValidTrailingDecimal = next == 'e' || next == 'E' || (!isAlpha(next) && next != '.')
+            if (isValidTrailingDecimal) {
                 // Trailing decimal point like "5." or "5.e2"
                 advance() // consume the '.'
             }

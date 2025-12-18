@@ -133,14 +133,15 @@ class StatementCompiler {
             statement is Assignment &&
                 statement.expressions.any { hasMultiLineBinaryOp(it) }
 
-        if (statement !is IfStatement &&
-            statement !is WhileStatement &&
-            statement !is RepeatStatement &&
-            statement !is ForStatement &&
-            statement !is ForInStatement &&
-            statement !is DoStatement &&
-            !skipInitialLineEvent
-        ) {
+        val isControlFlowStatement =
+            statement is IfStatement ||
+                statement is WhileStatement ||
+                statement is RepeatStatement ||
+                statement is ForStatement ||
+                statement is ForInStatement ||
+                statement is DoStatement
+
+        if (!isControlFlowStatement && !skipInitialLineEvent) {
             // Only add LineEvent if the line has changed
             if (statement.line != ctx.currentLine) {
                 ctx.currentLine = statement.line
@@ -505,7 +506,10 @@ class StatementCompiler {
                 val expr = statement.expressions[i]
                 val targetReg = rhsRegs[i]
                 // Handle multi-return for the last expression
-                if (i == rhsCount - 1 && (expr is FunctionCall || expr is VarargExpression) && lhsCount > rhsCount) {
+                val isLastExpression = i == rhsCount - 1
+                val canProduceMultipleValues = expr is FunctionCall || expr is VarargExpression
+                val needsMultiReturn = lhsCount > rhsCount
+                if (isLastExpression && canProduceMultipleValues && needsMultiReturn) {
                     val numResults = lhsCount - (rhsCount - 1)
                     hasMultiReturn = true
                     if (expr is FunctionCall) {

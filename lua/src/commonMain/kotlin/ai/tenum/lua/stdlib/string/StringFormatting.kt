@@ -141,27 +141,38 @@ object StringFormatting {
                     'c' -> {
                         // %c: only accepts width and '-' flag
                         // No zero padding, no precision, no +/space/#
-                        if (zeroPad || precision >= 0 || forceSign || spaceSign || alternateForm) {
+                        val hasInvalidModifiers = zeroPad || precision >= 0 || forceSign || spaceSign || alternateForm
+                        if (hasInvalidModifiers) {
                             throw RuntimeException("invalid conversion")
                         }
                     }
                     's' -> {
                         // %s: accepts width, '-', and precision
                         // No zero padding, no +/space/#
-                        if (zeroPad || forceSign || spaceSign || alternateForm) {
+                        val hasInvalidModifiers = zeroPad || forceSign || spaceSign || alternateForm
+                        if (hasInvalidModifiers) {
                             throw RuntimeException("invalid conversion")
                         }
                     }
                     'q' -> {
                         // %q: no modifiers at all
-                        if (width > 0 || precision >= 0 || leftAlign || zeroPad || forceSign || spaceSign || alternateForm) {
+                        val hasAnyModifiers =
+                            width > 0 ||
+                                precision >= 0 ||
+                                leftAlign ||
+                                zeroPad ||
+                                forceSign ||
+                                spaceSign ||
+                                alternateForm
+                        if (hasAnyModifiers) {
                             throw RuntimeException("cannot have modifiers")
                         }
                     }
                     'p' -> {
                         // %p: accepts width and '-' flag
                         // No zero padding, no precision, no +/space/#
-                        if (zeroPad || precision >= 0 || forceSign || spaceSign || alternateForm) {
+                        val hasInvalidModifiers = zeroPad || precision >= 0 || forceSign || spaceSign || alternateForm
+                        if (hasInvalidModifiers) {
                             throw RuntimeException("invalid conversion")
                         }
                     }
@@ -696,8 +707,12 @@ object StringFormatting {
         // Apply sign flags: + takes precedence over space
         if (forceSign && num >= 0.0 && !result.startsWith('+')) {
             result = "+$result"
-        } else if (!forceSign && spaceSign && num >= 0.0 && !result.startsWith('+') && !result.startsWith(' ')) {
-            result = " $result"
+        } else {
+            val shouldAddSpaceSign = !forceSign && spaceSign && num >= 0.0
+            val hasNoSign = !result.startsWith('+') && !result.startsWith(' ')
+            if (shouldAddSpaceSign && hasNoSign) {
+                result = " $result"
+            }
         }
 
         return applyWidth(result, width, leftAlign, zeroPad)
@@ -719,11 +734,14 @@ object StringFormatting {
 
         return if (leftAlign) {
             str + padding // Left align: string first, then padding
-        } else if (zeroPad && (str.startsWith('-') || str.startsWith('+') || str.startsWith(' '))) {
-            // For numbers with sign, put sign first, then zero padding, then digits
-            str[0] + padding + str.substring(1)
         } else {
-            padding + str // Right align (default): padding first, then string
+            val hasSign = str.startsWith('-') || str.startsWith('+') || str.startsWith(' ')
+            if (zeroPad && hasSign) {
+                // For numbers with sign, put sign first, then zero padding, then digits
+                str[0] + padding + str.substring(1)
+            } else {
+                padding + str // Right align (default): padding first, then string
+            }
         }
     }
 

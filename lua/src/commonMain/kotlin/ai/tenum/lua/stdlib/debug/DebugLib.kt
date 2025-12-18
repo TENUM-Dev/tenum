@@ -240,7 +240,12 @@ class DebugLib : LuaLibrary {
     private fun getProtoName(func: LuaValue<*>): InferredFunctionName {
         if (func is LuaCompiledFunction) {
             val protoName = func.proto.name
-            if (protoName.isNotEmpty() && protoName != "main" && protoName != "?" && protoName != "<function>") {
+            val isValidProtoName =
+                protoName.isNotEmpty() &&
+                    protoName != "main" &&
+                    protoName != "?" &&
+                    protoName != "<function>"
+            if (isValidProtoName) {
                 return InferredFunctionName(protoName, FunctionNameSource.Unknown)
             }
         }

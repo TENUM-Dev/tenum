@@ -870,11 +870,9 @@ class LuaVmImpl(
             // Only restore TBC vars if the current frame's TBC list is EMPTY and we have a snapshot
             // This handles the case where nested calls cleared the list, but avoids double-closing
             val topFrame = callerContext.peek()
-            if (topFrame != null &&
-                topFrame.proto == execFrame.proto &&
-                execFrame.toBeClosedVars.isEmpty() &&
-                topFrame.toBeClosedVars.isNotEmpty()
-            ) {
+            val isSameProto = topFrame != null && topFrame.proto == execFrame.proto
+            val shouldRestoreTbc = execFrame.toBeClosedVars.isEmpty() && topFrame?.toBeClosedVars?.isNotEmpty() == true
+            if (isSameProto && shouldRestoreTbc) {
                 debugSink.debug { "[RESUME] Restoring TBC list from stack: ${topFrame.toBeClosedVars.size} vars" }
                 execFrame.toBeClosedVars.addAll(topFrame.toBeClosedVars)
             }
@@ -2150,7 +2148,9 @@ class LuaVmImpl(
             // Match by proto reference since we pushed a snapshot, not the exact frame
             // IMPORTANT: If the popped frame has TBC vars, transfer them to activeExecutionFrame
             // This ensures outer __close handlers (like x in pcall test) are processed by RETURN
-            if (!didYield && callerFrame != null && callerContext.size > 0 && callerContext.peek()?.proto == callerFrame.proto) {
+            val shouldPopCallerFrame = !didYield && callerFrame != null && callerContext.size > 0
+            val matchesCallerProto = callerContext.peek()?.proto == callerFrame?.proto
+            if (shouldPopCallerFrame && matchesCallerProto) {
                 val frameToPop = callerContext.peek()
                 val activeFrame = flowState.activeExecutionFrame
                 debugSink.debug {

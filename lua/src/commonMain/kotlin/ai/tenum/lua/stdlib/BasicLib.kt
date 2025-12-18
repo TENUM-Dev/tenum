@@ -334,14 +334,18 @@ class BasicLib(
                 // Lua does not accept "inf", "infinity", "nan", etc. as valid number strings
                 // but Kotlin's toDouble() does, so we need to reject them explicitly
                 val lowerTrimmed = trimmed.lowercase()
-                if (lowerTrimmed == "inf" ||
-                    lowerTrimmed == "infinity" ||
-                    lowerTrimmed == "nan" ||
-                    lowerTrimmed == "-inf" ||
-                    lowerTrimmed == "-infinity" ||
-                    lowerTrimmed == "+inf" ||
-                    lowerTrimmed == "+infinity"
-                ) {
+                val isInvalidNumberString =
+                    lowerTrimmed in
+                        setOf(
+                            "inf",
+                            "infinity",
+                            "nan",
+                            "-inf",
+                            "-infinity",
+                            "+inf",
+                            "+infinity",
+                        )
+                if (isInvalidNumberString) {
                     return LuaNil
                 }
 

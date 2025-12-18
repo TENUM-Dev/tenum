@@ -209,8 +209,9 @@ object ArgumentHelpers {
 
         // For method calls, adjust index to not count self (args[0])
         // For function calls, use actual index
+        val shouldAdjustForMethodSelf = !isSelfError && isMethodCall && allowSelf && argIndex > 1
         val reportedIndex =
-            if (!isSelfError && isMethodCall && allowSelf && argIndex > 1) {
+            if (shouldAdjustForMethodSelf) {
                 argIndex - 1
             } else {
                 argIndex
