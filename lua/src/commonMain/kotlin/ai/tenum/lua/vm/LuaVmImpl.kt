@@ -739,66 +739,95 @@ class LuaVmImpl(
 
         for ((reg, capturedValue) in toBeClosedVars.reversed()) {
             if (reg in alreadyClosedRegs) continue
-            if (capturedValue !is LuaNil && capturedValue != LuaBoolean.FALSE) {
-                val metatable = capturedValue.metatable as? LuaTable
-                val closeMethod = metatable?.get(LuaString("__close"))
-                if (closeMethod is LuaFunction) {
-                    try {
-                        // Pass the current error to the __close metamethod
-                        // Mark this as a __close metamethod call so debug.getinfo can skip it
-                        setMetamethodCallContext("__close")
-                        flowState.setNextCallIsCloseMetamethod(true)
-                        setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
-                        callFunctionInternal(closeMethod, listOf(capturedValue, currentError), isCloseMetamethod = true)
-                        clearYieldResumeContext()
-                    } catch (closeEx: LuaException) {
-                        // If __close throws, that becomes the new error
-                        // The errorValue from LuaException already has location info for strings
-                        currentError = closeEx.errorValue ?: (closeEx.message?.let { LuaString(it) } ?: LuaNil)
-                        // Capture the call stack for debug.traceback (converted from LuaStackFrame)
-                        // Note: We'll rely on LuaRuntimeError path for proper CallFrame capture
-                    } catch (closeEx: LuaRuntimeError) {
-                        // For LuaRuntimeError, preserve its call stack which includes the __close frame
-                        // This allows debug.traceback to show "in metamethod 'close'" when used as xpcall message handler
-                        lastErrorCallStack = closeEx.callStack
+            if (!shouldCloseVariable(capturedValue)) continue
 
-                        // For string errors, add location info
-                        // This matches Lua 5.4 behavior where error("msg") adds location to the message
-                        val rawError = closeEx.errorValue
-                        currentError =
-                            if (rawError is LuaString) {
-                                // Add location info to string errors
-                                val currentProto = callStackManager.lastFrame()?.proto
-                                val currentPc = callStackManager.lastFrame()?.pc ?: 0
-                                val line = currentProto?.let { stackTraceBuilder.getCurrentLine(it, currentPc) }
-                                val source = currentProto?.source
-                                LuaString(
-                                    buildString {
-                                        if (source != null || line != null) {
-                                            val displaySource = source?.removePrefix("=") ?: "(load)"
-                                            append(displaySource)
-                                            if (line != null) {
-                                                append(":").append(line)
-                                            }
-                                            append(": ")
-                                        }
-                                        append(rawError.value)
-                                    },
-                                )
-                            } else {
-                                // Non-string errors are passed through unchanged
-                                rawError
-                            }
-                    } catch (closeEx: Exception) {
-                        // For other exceptions, convert to string
-                        currentError = closeEx.message?.let { LuaString(it) } ?: LuaString("error in __close")
-                        lastErrorCallStack = null
-                    }
-                }
+            val closeMethod = getCloseMethod(capturedValue)
+            if (closeMethod != null) {
+                currentError = executeCloseMethod(closeMethod, capturedValue, currentError)
             }
         }
 
         return currentError
+    }
+
+    private fun shouldCloseVariable(value: LuaValue<*>): Boolean = value !is LuaNil && value != LuaBoolean.FALSE
+
+    private fun getCloseMethod(value: LuaValue<*>): LuaFunction? {
+        val metatable = value.metatable as? LuaTable ?: return null
+        val closeMethod = metatable.get(LuaString("__close"))
+        return closeMethod as? LuaFunction
+    }
+
+    private fun executeCloseMethod(
+        closeMethod: LuaFunction,
+        capturedValue: LuaValue<*>,
+        currentError: LuaValue<*>,
+    ): LuaValue<*> =
+        try {
+            // Pass the current error to the __close metamethod
+            // Mark this as a __close metamethod call so debug.getinfo can skip it
+            setMetamethodCallContext("__close")
+            flowState.setNextCallIsCloseMetamethod(true)
+            setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+            callFunctionInternal(closeMethod, listOf(capturedValue, currentError))
+            clearYieldResumeContext()
+            currentError
+        } catch (closeEx: LuaException) {
+            handleCloseException(closeEx)
+        } catch (closeEx: LuaRuntimeError) {
+            handleCloseRuntimeError(closeEx)
+        } catch (closeEx: Exception) {
+            handleCloseGenericException(closeEx)
+        }
+
+    private fun handleCloseException(closeEx: LuaException): LuaValue<*> {
+        // If __close throws, that becomes the new error
+        // The errorValue from LuaException already has location info for strings
+        return closeEx.errorValue ?: (closeEx.message?.let { LuaString(it) } ?: LuaNil)
+        // Capture the call stack for debug.traceback (converted from LuaStackFrame)
+        // Note: We'll rely on LuaRuntimeError path for proper CallFrame capture
+    }
+
+    private fun handleCloseRuntimeError(closeEx: LuaRuntimeError): LuaValue<*> {
+        // For LuaRuntimeError, preserve its call stack which includes the __close frame
+        // This allows debug.traceback to show "in metamethod 'close'" when used as xpcall message handler
+        lastErrorCallStack = closeEx.callStack
+
+        // For string errors, add location info
+        // This matches Lua 5.4 behavior where error("msg") adds location to the message
+        val rawError = closeEx.errorValue
+        return if (rawError is LuaString) {
+            addLocationToError(rawError)
+        } else {
+            // Non-string errors are passed through unchanged
+            rawError
+        }
+    }
+
+    private fun addLocationToError(rawError: LuaString): LuaString {
+        val currentProto = callStackManager.lastFrame()?.proto
+        val currentPc = callStackManager.lastFrame()?.pc ?: 0
+        val line = currentProto?.let { stackTraceBuilder.getCurrentLine(it, currentPc) }
+        val source = currentProto?.source
+        return LuaString(
+            buildString {
+                if (source != null || line != null) {
+                    val displaySource = source?.removePrefix("=") ?: "(load)"
+                    append(displaySource)
+                    if (line != null) {
+                        append(":").append(line)
+                    }
+                    append(": ")
+                }
+                append(rawError.value)
+            },
+        )
+    }
+
+    private fun handleCloseGenericException(closeEx: Exception): LuaValue<*> {
+        // For other exceptions, convert to string
+        lastErrorCallStack = null
+        return closeEx.message?.let { LuaString(it) } ?: LuaString("error in __close")
     }
 
     /**
@@ -977,28 +1006,36 @@ class LuaVmImpl(
     )
 
     /**
+     * Context for resumption state handling
+     */
+    private data class ResumptionContext(
+        val mode: ExecutionMode,
+        val resumptionState: ResumptionState?,
+        val args: List<LuaValue<*>>,
+        val function: LuaFunction?,
+        val execFrame: ExecutionFrame,
+        val env: ExecutionEnvironment,
+        val handlers: ExecutionHandlers,
+    )
+
+    /**
      * Handle resumption state for both close resume and yield resume
      */
-    private fun handleResumptionState(
-        mode: ExecutionMode,
-        resumptionState: ResumptionState?,
-        args: List<LuaValue<*>>,
-        function: LuaFunction?,
-        execFrame: ExecutionFrame,
-        env: ExecutionEnvironment,
-        handlers: ExecutionHandlers,
-    ): ResumptionHandlingResult {
+    private fun handleResumptionState(context: ResumptionContext): ResumptionHandlingResult {
         // Handle close resume state
-        if (mode is ExecutionMode.ResumeContinuation && resumptionState != null && resumptionState.closeResumeState != null) {
-            val closeState = resumptionState.closeResumeState
-            env.clearYieldResumeContext()
+        if (context.mode is ExecutionMode.ResumeContinuation &&
+            context.resumptionState != null &&
+            context.resumptionState.closeResumeState != null
+        ) {
+            val closeState = context.resumptionState.closeResumeState
+            context.env.clearYieldResumeContext()
 
             val result =
-                handlers.closeResumeOrchestrator.processCloseResumeState(
+                context.handlers.closeResumeOrchestrator.processCloseResumeState(
                     closeState,
-                    args,
-                    function,
-                    execFrame,
+                    context.args,
+                    context.function,
+                    context.execFrame,
                 )
 
             return ResumptionHandlingResult(
@@ -1010,17 +1047,22 @@ class LuaVmImpl(
 
         // Handle yield resume
         val justFinishedCloseHandling =
-            mode is ExecutionMode.ResumeContinuation &&
-                mode.state.pendingCloseYield &&
-                mode.state.toBeClosedVars.isEmpty() &&
-                mode.state.capturedReturnValues?.isEmpty() != false
+            context.mode is ExecutionMode.ResumeContinuation &&
+                context.mode.state.pendingCloseYield &&
+                context.mode.state.toBeClosedVars
+                    .isEmpty() &&
+                context.mode.state.capturedReturnValues
+                    ?.isEmpty() != false
 
-        if (mode is ExecutionMode.ResumeContinuation && !justFinishedCloseHandling && resumptionState?.closeResumeState == null) {
-            val storage = ResultStorage(env)
+        if (context.mode is ExecutionMode.ResumeContinuation &&
+            !justFinishedCloseHandling &&
+            context.resumptionState?.closeResumeState == null
+        ) {
+            val storage = ResultStorage(context.env)
             storage.storeResults(
-                targetReg = mode.state.yieldTargetRegister,
-                encodedCount = mode.state.yieldExpectedResults,
-                results = args,
+                targetReg = context.mode.state.yieldTargetRegister,
+                encodedCount = context.mode.state.yieldExpectedResults,
+                results = context.args,
                 opcodeName = "RESUME",
             )
         }
@@ -1039,6 +1081,22 @@ class LuaVmImpl(
         val lastLine: Int,
         val previousEnv: Upvalue?,
         val execStack: ArrayDeque<ExecContext>,
+    )
+
+    /**
+     * Parameters for function entry setup
+     */
+    private data class FunctionEntrySetup(
+        val mode: ExecutionMode,
+        val currentProto: Proto,
+        val function: LuaFunction?,
+        val registers: MutableList<LuaValue<*>>,
+        val varargs: List<LuaValue<*>>,
+        val args: List<LuaValue<*>>,
+        val pc: Int,
+        val currentUpvalues: List<Upvalue>,
+        val handlers: ExecutionHandlers,
+        val isCoroutineContext: Boolean,
     )
 
     /**
@@ -1265,28 +1323,17 @@ class LuaVmImpl(
     /**
      * Setup function entry including call frame, hooks, and environment
      */
-    private fun setupFunctionEntry(
-        mode: ExecutionMode,
-        currentProto: Proto,
-        function: LuaFunction?,
-        registers: MutableList<LuaValue<*>>,
-        varargs: List<LuaValue<*>>,
-        args: List<LuaValue<*>>,
-        pc: Int,
-        currentUpvalues: List<Upvalue>,
-        handlers: ExecutionHandlers,
-        isCoroutineContext: Boolean,
-    ): FunctionEntryState {
+    private fun setupFunctionEntry(setup: FunctionEntrySetup): FunctionEntryState {
         // Create call frame for debugging/error handling
-        if (mode is ExecutionMode.FreshCall) {
+        if (setup.mode is ExecutionMode.FreshCall) {
             callStackManager.beginFunctionCall(
-                proto = currentProto,
-                function = function,
-                registers = registers,
-                varargs = varargs,
-                args = args,
+                proto = setup.currentProto,
+                function = setup.function,
+                registers = setup.registers,
+                varargs = setup.varargs,
+                args = setup.args,
                 inferredName = pendingInferredName,
-                pc = pc,
+                pc = setup.pc,
                 isCloseMetamethod = flowState.nextCallIsCloseMetamethod,
             )
         }
@@ -1296,17 +1343,17 @@ class LuaVmImpl(
         flowState.setNextCallIsCloseMetamethod(false)
 
         // Trigger CALL and LINE hooks for function entry
-        val lastLine = handlers.hookHelper.triggerEntryHooks(currentProto, isCoroutineContext)
+        val lastLine = setup.handlers.hookHelper.triggerEntryHooks(setup.currentProto, setup.isCoroutineContext)
 
         // Track current upvalues for this execution context and _ENV
         val previousEnv = flowState.currentEnvUpvalue
-        val envIndex = currentProto.upvalueInfo.indexOfFirst { it.name == "_ENV" }
-        flowState.setCurrentEnvUpvalue(if (envIndex >= 0) currentUpvalues.getOrNull(envIndex) else null)
+        val envIndex = setup.currentProto.upvalueInfo.indexOfFirst { it.name == "_ENV" }
+        flowState.setCurrentEnvUpvalue(if (envIndex >= 0) setup.currentUpvalues.getOrNull(envIndex) else null)
 
         // Execution stack for trampolined calls
         val execStack =
             ArrayDeque(
-                (mode as? ExecutionMode.ResumeContinuation)?.state?.execStack ?: emptyList(),
+                (setup.mode as? ExecutionMode.ResumeContinuation)?.state?.execStack ?: emptyList(),
             )
 
         return FunctionEntryState(lastLine, previousEnv, execStack)
@@ -1378,13 +1425,15 @@ class LuaVmImpl(
         // Handle resumption state (close resume and yield resume)
         val resumeResult =
             handleResumptionState(
-                mode = mode,
-                resumptionState = resumptionState,
-                args = args,
-                function = function,
-                execFrame = execFrame,
-                env = env,
-                handlers = handlers,
+                ResumptionContext(
+                    mode = mode,
+                    resumptionState = resumptionState,
+                    args = args,
+                    function = function,
+                    execFrame = execFrame,
+                    env = env,
+                    handlers = handlers,
+                ),
             )
         if (resumeResult.needsContextUpdate) {
             applyContextUpdate(resumeResult.contextUpdate!!)
@@ -1396,16 +1445,18 @@ class LuaVmImpl(
         // Setup function entry (call frame, hooks, environment)
         val entryState =
             setupFunctionEntry(
-                mode = mode,
-                currentProto = currentProto,
-                function = function,
-                registers = registers,
-                varargs = varargs,
-                args = args,
-                pc = pc,
-                currentUpvalues = currentUpvalues,
-                handlers = handlers,
-                isCoroutineContext = preparation.isCoroutineContext,
+                FunctionEntrySetup(
+                    mode = mode,
+                    currentProto = currentProto,
+                    function = function,
+                    registers = registers,
+                    varargs = varargs,
+                    args = args,
+                    pc = pc,
+                    currentUpvalues = currentUpvalues,
+                    handlers = handlers,
+                    isCoroutineContext = preparation.isCoroutineContext,
+                ),
             )
         val previousEnv = entryState.previousEnv
         val execStack = entryState.execStack
@@ -1454,6 +1505,23 @@ class LuaVmImpl(
         args: List<LuaValue<*>>,
         callerFrame: ExecutionFrame? = null,
     ): List<LuaValue<*>> {
+        pushCallerFrameIfNeeded(callerFrame)
+
+        var didYield = false
+
+        try {
+            return executeFunctionCall(func, args, callerFrame)
+        } catch (e: LuaYieldException) {
+            // Don't pop the stack on yield - the owner frame must persist for resume
+            // The stack will be saved with coroutine state and restored on resume
+            didYield = true
+            throw e
+        } finally {
+            popCallerFrameIfNeeded(didYield, callerFrame)
+        }
+    }
+
+    private fun pushCallerFrameIfNeeded(callerFrame: ExecutionFrame?) {
         // Push caller frame onto close owner stack to preserve context across native boundaries
         // IMPORTANT: Share the TBC list reference (don't copy) so that changes made by CLOSE
         // instructions after this call are visible when building CloseResumeState during yields
@@ -1479,69 +1547,82 @@ class LuaVmImpl(
                 )
             callerContext.push(snapshotFrame)
         }
+    }
 
-        var didYield = false
-
-        try {
-            return when (func) {
-                is LuaFunction -> {
-                    // Call through private callFunction to ensure hooks are triggered
-                    callFunctionInternal(func, args)
-                }
-                else -> {
-                    // Check for __call metamethod in the value's metatable
-                    val callMeta = metamethodResolver.getMetamethod(func, "__call")
-                    if (callMeta != null) {
-                        setMetamethodCallContext("__call")
-                        // Recursively call through callFunction to support chained __call metamethods
-                        callFunction(callMeta, listOf(func) + args, callerFrame)
-                    } else {
-                        throw RuntimeException("attempt to call a ${func.type().name.lowercase()} value")
-                    }
-                }
+    private fun executeFunctionCall(
+        func: LuaValue<*>,
+        args: List<LuaValue<*>>,
+        callerFrame: ExecutionFrame?,
+    ): List<LuaValue<*>> =
+        when (func) {
+            is LuaFunction -> {
+                // Call through private callFunction to ensure hooks are triggered
+                callFunctionInternal(func, args)
             }
-        } catch (e: LuaYieldException) {
-            // Don't pop the stack on yield - the owner frame must persist for resume
-            // The stack will be saved with coroutine state and restored on resume
-            didYield = true
-            throw e
-        } finally {
-            // Pop caller frame only on normal return or non-yield exception
-            // Match by proto reference since we pushed a snapshot, not the exact frame
-            // IMPORTANT: If the popped frame has TBC vars, transfer them to activeExecutionFrame
-            // This ensures outer __close handlers (like x in pcall test) are processed by RETURN
-            val shouldPopCallerFrame = !didYield && callerFrame != null && callerContext.size > 0
-            val matchesCallerProto = callerContext.peek()?.proto == callerFrame?.proto
-            if (shouldPopCallerFrame && matchesCallerProto) {
-                val frameToPop = callerContext.peek()
-                val activeFrame = flowState.activeExecutionFrame
-                debugSink.debug {
-                    "[callFunction finally] Popping frame: proto=${frameToPop?.proto?.name} TBC.size=${frameToPop?.toBeClosedVars?.size}"
-                }
-                debugSink.debug { "[callFunction finally] activeFrame=${activeFrame != null} activeProto=${activeFrame?.proto?.name}" }
-
-                // Transfer TBC vars to active frame so RETURN instruction can process them
-                // BUT only if they're different lists (we share the TBC reference when pushing, so check identity)
-                if (frameToPop != null && frameToPop.toBeClosedVars.isNotEmpty() && activeFrame != null) {
-                    debugSink.debug { "[callFunction finally] Transferring ${frameToPop.toBeClosedVars.size} TBC vars to active frame" }
-                    debugSink.debug { "[callFunction finally] Active frame proto: ${activeFrame.proto.name}" }
-                    debugSink.debug { "[callFunction finally] Active frame TBC before: ${activeFrame.toBeClosedVars}" }
-                    debugSink.debug { "[callFunction finally] Same list? ${frameToPop.toBeClosedVars === activeFrame.toBeClosedVars}" }
-
-                    // Only transfer if they're different list instances
-                    // When we push, we share the TBC list reference, so they'll be identical
-                    if (frameToPop.toBeClosedVars !== activeFrame.toBeClosedVars) {
-                        debugSink.debug { "[callFunction finally] Lists are different, transferring" }
-                        activeFrame.toBeClosedVars.addAll(frameToPop.toBeClosedVars)
-                    } else {
-                        debugSink.debug { "[callFunction finally] Lists are same (shared), no transfer needed" }
-                    }
-                    debugSink.debug { "[callFunction finally] Active frame TBC after: ${activeFrame.toBeClosedVars}" }
-                }
-
-                callerContext.pop()
+            else -> {
+                executeMetamethodCall(func, args, callerFrame)
             }
         }
+
+    private fun executeMetamethodCall(
+        func: LuaValue<*>,
+        args: List<LuaValue<*>>,
+        callerFrame: ExecutionFrame?,
+    ): List<LuaValue<*>> {
+        // Check for __call metamethod in the value's metatable
+        val callMeta = metamethodResolver.getMetamethod(func, "__call")
+        if (callMeta != null) {
+            setMetamethodCallContext("__call")
+            // Recursively call through callFunction to support chained __call metamethods
+            return callFunction(callMeta, listOf(func) + args, callerFrame)
+        } else {
+            throw RuntimeException("attempt to call a ${func.type().name.lowercase()} value")
+        }
+    }
+
+    private fun popCallerFrameIfNeeded(
+        didYield: Boolean,
+        callerFrame: ExecutionFrame?,
+    ) {
+        // Pop caller frame only on normal return or non-yield exception
+        // Match by proto reference since we pushed a snapshot, not the exact frame
+        // IMPORTANT: If the popped frame has TBC vars, transfer them to activeExecutionFrame
+        // This ensures outer __close handlers (like x in pcall test) are processed by RETURN
+        val shouldPopCallerFrame = !didYield && callerFrame != null && callerContext.size > 0
+        val matchesCallerProto = callerContext.peek()?.proto == callerFrame?.proto
+        if (shouldPopCallerFrame && matchesCallerProto) {
+            transferTbcVarsAndPop()
+        }
+    }
+
+    private fun transferTbcVarsAndPop() {
+        val frameToPop = callerContext.peek()
+        val activeFrame = flowState.activeExecutionFrame
+        debugSink.debug {
+            "[callFunction finally] Popping frame: proto=${frameToPop?.proto?.name} TBC.size=${frameToPop?.toBeClosedVars?.size}"
+        }
+        debugSink.debug { "[callFunction finally] activeFrame=${activeFrame != null} activeProto=${activeFrame?.proto?.name}" }
+
+        // Transfer TBC vars to active frame so RETURN instruction can process them
+        // BUT only if they're different lists (we share the TBC reference when pushing, so check identity)
+        if (frameToPop != null && frameToPop.toBeClosedVars.isNotEmpty() && activeFrame != null) {
+            debugSink.debug { "[callFunction finally] Transferring ${frameToPop.toBeClosedVars.size} TBC vars to active frame" }
+            debugSink.debug { "[callFunction finally] Active frame proto: ${activeFrame.proto.name}" }
+            debugSink.debug { "[callFunction finally] Active frame TBC before: ${activeFrame.toBeClosedVars}" }
+            debugSink.debug { "[callFunction finally] Same list? ${frameToPop.toBeClosedVars === activeFrame.toBeClosedVars}" }
+
+            // Only transfer if they're different list instances
+            // When we push, we share the TBC list reference, so they'll be identical
+            if (frameToPop.toBeClosedVars !== activeFrame.toBeClosedVars) {
+                debugSink.debug { "[callFunction finally] Lists are different, transferring" }
+                activeFrame.toBeClosedVars.addAll(frameToPop.toBeClosedVars)
+            } else {
+                debugSink.debug { "[callFunction finally] Lists are same (shared), no transfer needed" }
+            }
+            debugSink.debug { "[callFunction finally] Active frame TBC after: ${activeFrame.toBeClosedVars}" }
+        }
+
+        callerContext.pop()
     }
 
     override fun callFunction(
@@ -1612,92 +1693,6 @@ class LuaVmImpl(
      * Helper to eliminate duplication in arithmetic operations.
      */
     private fun LuaNumber.toDoubleValue(): Double = if (this is LuaLong) this.value.toDouble() else (this as LuaDouble).value
-
-    private fun binaryOp(
-        left: LuaValue<*>,
-        right: LuaValue<*>,
-        op: (Double, Double) -> Double,
-    ): LuaValue<*> =
-        when {
-            left is LuaLong && right is LuaLong -> {
-                val result = op(left.value.toDouble(), right.value.toDouble())
-                // Use LuaNumber.of which handles platform-specific safe integer checks
-                LuaNumber.of(result)
-            }
-            left is LuaNumber && right is LuaNumber -> {
-                val leftVal = left.toDoubleValue()
-                val rightVal = right.toDoubleValue()
-                LuaDouble(op(leftVal, rightVal))
-            }
-            else -> {
-                val leftType = left.type().name.lowercase()
-                val rightType = right.type().name.lowercase()
-                throw RuntimeException("attempt to perform arithmetic on a $leftType value")
-            }
-        }
-
-    private fun bitwiseOp(
-        left: LuaValue<*>,
-        right: LuaValue<*>,
-        op: (Long, Long) -> Long,
-    ): LuaValue<*> {
-        val leftVal =
-            when (left) {
-                is LuaLong -> left.value
-                is LuaDouble -> left.value.toLong()
-                else -> return LuaNil
-            }
-        val rightVal =
-            when (right) {
-                is LuaLong -> right.value
-                is LuaDouble -> right.value.toLong()
-                else -> return LuaNil
-            }
-        return LuaLong(op(leftVal, rightVal))
-    }
-
-    private fun divOp(
-        left: LuaValue<*>,
-        right: LuaValue<*>,
-    ): LuaValue<*> {
-        // Division (/) always returns float in Lua 5.4
-        return when {
-            left is LuaNumber && right is LuaNumber -> {
-                val leftVal = left.toDoubleValue()
-                val rightVal = right.toDoubleValue()
-                LuaDouble(leftVal / rightVal)
-            }
-            else -> LuaNil
-        }
-    }
-
-    private fun floorDiv(
-        left: LuaValue<*>,
-        right: LuaValue<*>,
-    ): LuaValue<*> =
-        when {
-            left is LuaLong && right is LuaLong -> {
-                // Integer // Integer -> Integer (Lua 5.4 semantics)
-                // Use integer division directly to avoid precision loss
-                val a = left.value
-                val b = right.value
-                // Lua floor division: floor(a/b)
-                // For integers, this is: a // b with floor semantics (toward negative infinity)
-                val q = a / b // Kotlin integer division truncates toward zero
-                val r = a % b
-                // Adjust if remainder is non-zero and signs differ
-                val result = if (r != 0L && (a xor b) < 0) q - 1 else q
-                LuaNumber.of(result)
-            }
-            left is LuaNumber && right is LuaNumber -> {
-                // At least one operand is float -> Float result
-                val leftVal = left.toDoubleValue()
-                val rightVal = right.toDoubleValue()
-                val result = kotlin.math.floor(leftVal / rightVal)
-                LuaDouble(result)
-            }
-            else -> LuaNil
-        }
 
     override fun isTruthy(value: LuaValue<*>): Boolean = typeConversions.isTruthy(value)
 
@@ -1806,7 +1801,6 @@ class LuaVmImpl(
     private fun callFunctionInternal(
         func: LuaFunction,
         args: List<LuaValue<*>>,
-        isCloseMetamethod: Boolean = false,
     ): List<LuaValue<*>> =
         when (func) {
             is LuaNativeFunction -> {
