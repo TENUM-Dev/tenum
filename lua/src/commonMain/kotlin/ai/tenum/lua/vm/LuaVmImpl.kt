@@ -2,7 +2,6 @@
 
 package ai.tenum.lua.vm
 
-import ai.tenum.lua.compiler.model.LineEventKind
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaBoolean
 import ai.tenum.lua.runtime.LuaCompiledFunction
@@ -39,8 +38,10 @@ import ai.tenum.lua.vm.execution.ExecContext
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
 import ai.tenum.lua.vm.execution.ExecutionMode
+import ai.tenum.lua.vm.execution.ExecutionPreparation
 import ai.tenum.lua.vm.execution.ExecutionSnapshot
 import ai.tenum.lua.vm.execution.FunctionNameSource
+import ai.tenum.lua.vm.execution.HookTriggerHelper
 import ai.tenum.lua.vm.execution.InferredFunctionName
 import ai.tenum.lua.vm.execution.OpcodeDispatcher
 import ai.tenum.lua.vm.execution.ResultStorage
@@ -822,45 +823,23 @@ class LuaVmImpl(
             }
         }
 
-        // Handle execution mode - fresh call vs resume continuation
-        val initialCallStackSize =
-            when (mode) {
-                is ExecutionMode.FreshCall -> {
-                    // Fresh call: will add new frame below
-                    callStackManager.size
-                }
-                is ExecutionMode.ResumeContinuation -> {
-                    // Resume: restore debug frames WITHOUT duplicating current execution frame
-                    // Filter out coroutine.yield frame - it's a temporary suspension point
-                    val framesToRestore =
-                        mode.state.debugCallStack.filter { frame ->
-                            // Keep all non-native frames
-                            // For native frames, filter out coroutine.yield
-                            !frame.isNative || (frame.function as? ai.tenum.lua.runtime.LuaNativeFunction)?.name != "coroutine.yield"
-                        }
-                    callStackManager.resumeWithDebugFrames(framesToRestore)
-                }
-            }
-
-        // Create execution frame with state from mode
-        val resumptionState = (mode as? ExecutionMode.ResumeContinuation)?.state
-        var currentProto = resumptionState?.proto ?: proto
-        var execFrame =
-            ExecutionFrame(
-                proto = currentProto,
-                initialArgs = args,
-                upvalues = resumptionState?.upvalues ?: upvalues,
-                initialPc = resumptionState?.pc ?: 0,
-                existingRegisters = resumptionState?.registers,
-                existingVarargs = resumptionState?.varargs,
-                existingToBeClosedVars = resumptionState?.toBeClosedVars,
+        // Prepare execution state using helper
+        val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
+        val isCoroutineContext = currentCoroutine != null
+        val preparation =
+            ExecutionPreparation.prepare(
+                mode = mode,
+                proto = proto,
+                args = args,
+                upvalues = upvalues,
+                callStackManager = callStackManager,
+                isCoroutine = isCoroutineContext,
             )
 
-        // CRITICAL: Restore capturedReturns from resumption state (single source of truth for mid-RETURN frames)
-        if (resumptionState != null && resumptionState.capturedReturnValues != null) {
-            execFrame.capturedReturns = resumptionState.capturedReturnValues
-            execFrame.isMidReturn = true
-        }
+        val resumptionState = (mode as? ExecutionMode.ResumeContinuation)?.state
+        var currentProto = preparation.currentProto
+        var execFrame = preparation.execFrame
+        val initialCallStackSize = preparation.initialCallStackSize
 
         // Restore close owner frame stack on resume
         if (resumptionState != null && resumptionState.closeOwnerFrameStack.isNotEmpty()) {
@@ -881,14 +860,18 @@ class LuaVmImpl(
         // Track active execution frame for native function calls
         flowState.setActiveExecutionFrame(execFrame)
 
-        // Local aliases for frequently accessed frame state
-        var registers = execFrame.registers
-        var constants = execFrame.constants
-        var instructions = execFrame.instructions
-        var pc = execFrame.pc
-        var openUpvalues = execFrame.openUpvalues
-        var toBeClosedVars = execFrame.toBeClosedVars
-        var varargs = execFrame.varargs
+        // Create hook trigger helper
+        val hookHelper = HookTriggerHelper(::triggerHook)
+
+        // Local aliases for frequently accessed frame state (from preparation)
+        var registers = preparation.registers
+        var constants = preparation.constants
+        var instructions = preparation.instructions
+        var pc = preparation.pc
+        var openUpvalues = preparation.openUpvalues
+        var toBeClosedVars = preparation.toBeClosedVars
+        var varargs = preparation.varargs
+        var currentUpvalues = preparation.currentUpvalues
         val alreadyClosedRegs = mutableSetOf<Int>() // Track which have been closed in normal flow
         // Create execution environment for opcode handlers
         var env = ExecutionEnvironment(execFrame, globals, this)
@@ -1036,27 +1019,10 @@ class LuaVmImpl(
         pendingInferredName = null
         flowState.setNextCallIsCloseMetamethod(false)
 
-        // Trigger CALL hook (Phase 6.4)
-        triggerHook(HookEvent.CALL, currentProto.lineDefined)
-
-        // Trigger LINE hook for function definition line (Lua 5.4 semantics)
-        // For regular function calls: LINE hook fires at lineDefined when entering function
-        // For coroutines: LINE hook does NOT fire at lineDefined on entry/resume
-        // This is verified by: db.lua:134 (regular function) vs db.lua:786 (coroutine)
-        //
-        // Detection: Check if we're in a coroutine context (currentCoroutine != null)
-        // - Regular functions: currentCoroutine is null → fire LINE hook at lineDefined
-        // - Coroutines: currentCoroutine is set → skip LINE hook at lineDefined
-        val isCoroutineContext = coroutineStateManager.getCurrentCoroutine() != null
-        if (currentProto.lineDefined > 0 && !isCoroutineContext) {
-            // For stripped functions (no lineEvents), pass -1 to indicate no debug info
-            // This will cause the hook to receive nil for the line parameter
-            val lineForHook = if (currentProto.lineEvents.isEmpty()) -1 else currentProto.lineDefined
-            triggerHook(HookEvent.LINE, lineForHook)
-        }
+        // Trigger CALL and LINE hooks for function entry
+        var lastLine = hookHelper.triggerEntryHooks(currentProto, preparation.isCoroutineContext)
 
         // Track current upvalues for this execution context and _ENV
-        var currentUpvalues = upvalues
         val previousEnv = flowState.currentEnvUpvalue
         // Find _ENV by name, not position (_ENV is not always at index 0!)
         val envIndex = currentProto.upvalueInfo.indexOfFirst { it.name == "_ENV" }
@@ -1150,8 +1116,6 @@ class LuaVmImpl(
             debug { "Max stack size: ${currentProto.maxStackSize}" }
             debug { "Varargs: ${varargs.size} values" }
 
-            var lastLine = -1 // Track line changes for LINE hooks
-
             whileLoop@ while (pc < instructions.size) {
                 // Keep activeExecutionFrame in sync with the frame currently executing bytecode
                 flowState.setActiveExecutionFrame(execFrame)
@@ -1160,23 +1124,8 @@ class LuaVmImpl(
                 callStackManager.updateLastFramePc(pc)
                 execFrame.pc = pc
 
-                // Trigger LINE hooks for LineEvents at current PC (BEFORE executing instruction)
-                // Domain: PUC Lua fires hooks for:
-                // - EXECUTION: real bytecode execution
-                // - CONTROL_FLOW: keywords like 'then', 'else' that mark decision points
-                // - MARKER: block boundaries like 'end'
-                // - ITERATION: loop headers that fire on every iteration
-                // SYNTHETIC events are compiler-generated and don't fire hooks.
-                val currentEvents = currentProto.lineEvents.filter { it.pc == pc }
-                for (event in currentEvents) {
-                    // Skip SYNTHETIC events - they're for internal tracking only
-                    if (event.kind != LineEventKind.SYNTHETIC) {
-                        if (event.kind == LineEventKind.ITERATION || event.line != lastLine) {
-                            lastLine = event.line
-                            triggerHook(HookEvent.LINE, event.line)
-                        }
-                    }
-                }
+                // Trigger LINE hooks using helper
+                lastLine = hookHelper.triggerLineHooksAt(currentProto, pc, lastLine)
 
                 val instr = instructions[pc]
 
@@ -1541,13 +1490,8 @@ class LuaVmImpl(
                         )
                         pendingInferredName = null
 
-                        // Trigger CALL hook for the new function
-                        triggerHook(HookEvent.CALL, currentProto.lineDefined)
-                        if (currentProto.lineDefined > 0 && !isCoroutineContext) {
-                            // For stripped functions (no lineEvents), pass -1 to indicate no debug info
-                            val lineForHook = if (currentProto.lineEvents.isEmpty()) -1 else currentProto.lineDefined
-                            triggerHook(HookEvent.LINE, lineForHook)
-                        }
+                        // Trigger CALL and LINE hooks for trampolined function (resets lastLine)
+                        lastLine = hookHelper.triggerEntryHooks(currentProto, preparation.isCoroutineContext)
 
                         // Continue execution in callee (pc will be incremented to 0)
                     }
@@ -1681,9 +1625,10 @@ class LuaVmImpl(
                         // Clear call context after using it
                         pendingInferredName = null
 
-                        // Trigger TAILCALL hook for tail calls (Lua 5.4 semantics)
-                        // Tail calls trigger "tail call" event, not "call" event
+                        // Trigger TAILCALL hook (lastLine reset not needed - tail calls don't fire LINE hooks at entry)
                         triggerHook(HookEvent.TAILCALL, currentProto.lineDefined)
+                        // Reset lastLine for new proto
+                        lastLine = -1
 
                         // Continue executing the callee in this loop (tail-call optimized)
                         // pc will be incremented to 0 at end of loop

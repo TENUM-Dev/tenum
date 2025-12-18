@@ -44,7 +44,6 @@ class PrefixedStringHandler : UnpackHandler {
             ) {
                 is LuaLong -> lengthVal.value
                 is LuaDouble -> lengthVal.value.toLong()
-                else -> 0L
             }
         if (length < 0 || length > Int.MAX_VALUE) {
             throw RuntimeException("unfinished string")

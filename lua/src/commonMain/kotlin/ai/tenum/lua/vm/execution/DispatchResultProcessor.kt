@@ -39,7 +39,9 @@ sealed class ReturnLoopAction {
     /**
      * Exit executeProto with return values.
      */
-    data class ExitProto(val returnValues: List<LuaValue<*>>) : ReturnLoopAction()
+    data class ExitProto(
+        val returnValues: List<LuaValue<*>>,
+    ) : ReturnLoopAction()
 }
 
 /**
@@ -74,7 +76,7 @@ class DispatchResultProcessor(
 ) {
     /**
      * Process a RETURN result to determine loop action.
-     * 
+     *
      * @param dispatchResult The return result from opcode dispatch
      * @param execStack The trampoline execution stack
      * @param execFrame Current execution frame

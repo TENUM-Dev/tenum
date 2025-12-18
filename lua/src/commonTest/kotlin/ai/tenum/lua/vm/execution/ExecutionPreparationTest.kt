@@ -5,7 +5,6 @@ import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaNumber
 import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.runtime.Upvalue
-import ai.tenum.lua.vm.CallFrame
 import ai.tenum.lua.vm.callstack.CallStackManager
 import kotlin.test.Test
 import kotlin.test.assertEquals

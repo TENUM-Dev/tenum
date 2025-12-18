@@ -1,10 +1,8 @@
 package ai.tenum.lua.vm.execution
 
 import ai.tenum.lua.compiler.model.Proto
-import ai.tenum.lua.runtime.LuaFunction
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
-import ai.tenum.lua.vm.CallFrame
 import ai.tenum.lua.vm.callstack.CallStackManager
 
 /**
@@ -28,7 +26,7 @@ data class ExecutionPreparation(
     companion object {
         /**
          * Prepare execution state for a Proto based on execution mode.
-         * 
+         *
          * @param mode Fresh call or resumption
          * @param proto The proto to execute
          * @param args Arguments for the function

@@ -13,30 +13,35 @@ class HookTriggerHelper(
 ) {
     /**
      * Trigger function entry hooks (CALL and optional LINE at lineDefined).
-     * 
+     *
      * @param proto The proto being entered
      * @param isCoroutineContext Whether in coroutine context (affects LINE hook)
+     * @return The line number that was fired (for lastLine tracking), or -1 if no LINE hook fired
      */
     fun triggerEntryHooks(
         proto: Proto,
         isCoroutineContext: Boolean,
-    ) {
+    ): Int {
         // Trigger CALL hook
         triggerHook(HookEvent.CALL, proto.lineDefined)
 
         // Trigger LINE hook for function definition line (Lua 5.4 semantics)
         // For regular function calls: LINE hook fires at lineDefined when entering function
         // For coroutines: LINE hook does NOT fire at lineDefined on entry/resume
-        if (proto.lineDefined > 0 && !isCoroutineContext) {
+        return if (proto.lineDefined > 0 && !isCoroutineContext) {
             // For stripped functions (no lineEvents), pass -1 to indicate no debug info
             val lineForHook = if (proto.lineEvents.isEmpty()) -1 else proto.lineDefined
             triggerHook(HookEvent.LINE, lineForHook)
+            // Return the line we fired for lastLine tracking
+            if (lineForHook >= 0) proto.lineDefined else -1
+        } else {
+            -1 // No LINE hook fired
         }
     }
 
     /**
      * Trigger LINE hooks for line events at current PC.
-     * 
+     *
      * @param proto The proto being executed
      * @param pc The current program counter
      * @param lastLine The last line number for which a hook was triggered
@@ -60,7 +65,9 @@ class HookTriggerHelper(
         for (event in currentEvents) {
             // Skip SYNTHETIC events - they're for internal tracking only
             if (event.kind != LineEventKind.SYNTHETIC) {
-                if (event.kind == LineEventKind.ITERATION || event.line != lastLine) {
+                // CRITICAL: Compare against newLastLine (not lastLine parameter) so multiple events
+                // at the same PC properly update the lastLine state between events
+                if (event.kind == LineEventKind.ITERATION || event.line != newLastLine) {
                     newLastLine = event.line
                     triggerHook(HookEvent.LINE, event.line)
                 }
