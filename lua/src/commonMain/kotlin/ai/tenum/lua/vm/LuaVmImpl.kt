@@ -33,10 +33,10 @@ import ai.tenum.lua.vm.errorhandling.StackTraceBuilder
 import ai.tenum.lua.vm.execution.ChunkExecutor
 import ai.tenum.lua.vm.execution.CloseErrorHandler
 import ai.tenum.lua.vm.execution.CloseResumeOrchestrator
-import ai.tenum.lua.vm.execution.DispatchResult
+import ai.tenum.lua.vm.execution.DispatchHandlerState
+import ai.tenum.lua.vm.execution.DispatchResultHandler
 import ai.tenum.lua.vm.execution.DispatchResultProcessor
 import ai.tenum.lua.vm.execution.ErrorHandler
-import ai.tenum.lua.vm.execution.ExecContext
 import ai.tenum.lua.vm.execution.ExecutionContextUpdate
 import ai.tenum.lua.vm.execution.ExecutionEnvironment
 import ai.tenum.lua.vm.execution.ExecutionFrame
@@ -46,12 +46,13 @@ import ai.tenum.lua.vm.execution.ExecutionSnapshot
 import ai.tenum.lua.vm.execution.FunctionNameSource
 import ai.tenum.lua.vm.execution.HookTriggerHelper
 import ai.tenum.lua.vm.execution.InferredFunctionName
+import ai.tenum.lua.vm.execution.LoopControl
 import ai.tenum.lua.vm.execution.OpcodeDispatcher
 import ai.tenum.lua.vm.execution.ResultStorage
 import ai.tenum.lua.vm.execution.ResumptionState
-import ai.tenum.lua.vm.execution.ReturnLoopAction
 import ai.tenum.lua.vm.execution.SegmentContinuationHandler
 import ai.tenum.lua.vm.execution.StackView
+import ai.tenum.lua.vm.execution.TrampolineHandler
 import ai.tenum.lua.vm.execution.VmCapabilities
 import ai.tenum.lua.vm.execution.YieldHandler
 import ai.tenum.lua.vm.execution.opcodes.CallOpcodes
@@ -922,6 +923,25 @@ class LuaVmImpl(
                 this,
             )
 
+        // Create trampoline handler (buildLuaStackTrace returns List<LuaStackFrame>, not String)
+        val trampolineHandler = TrampolineHandler(stackTraceBuilder::buildLuaStackTrace, maxCallDepth)
+
+        // Create dispatch result handler
+        val dispatchResultHandler =
+            DispatchResultHandler(
+                debugSink,
+                resultProcessor,
+                segmentContinuationHandler,
+                trampolineHandler,
+                callStackManager,
+                hookHelper,
+                flowState,
+                closeContext,
+                globals,
+                this,
+                ::triggerHook,
+            )
+
         // Local aliases for frequently accessed frame state (from preparation)
         var registers = preparation.registers
         var constants = preparation.constants
@@ -1056,252 +1076,95 @@ class LuaVmImpl(
                 val currentFrame = callStackManager.lastFrame()!!
 
                 // Dispatch opcode to handler
+                val dispatchResult =
+                    opcodeDispatcher.dispatch(
+                        instr = instr,
+                        env = env,
+                        registers = registers,
+                        execFrame = execFrame,
+                        openUpvalues = openUpvalues,
+                        varargs = varargs,
+                        pc = pc,
+                        frame = currentFrame,
+                        executeProto = { proto, args, upvalues, func -> executeProto(proto, args, upvalues, func) },
+                        callFunction = { func, args -> callFunction(func, args, execFrame) },
+                        traceRegisterWrite = { regIndex, value, ctx -> traceRegisterWrite(regIndex, value, ctx) },
+                        triggerHook = { event, line -> triggerHook(event, line) },
+                        setCallContext = { inferred ->
+                            pendingInferredName = inferred
+                        },
+                    )
+
+                // Create dispatch handler state
+                val handlerState =
+                    DispatchHandlerState(
+                        currentProto = currentProto,
+                        execFrame = execFrame,
+                        registers = registers,
+                        constants = constants,
+                        instructions = instructions,
+                        pc = pc,
+                        openUpvalues = openUpvalues,
+                        toBeClosedVars = toBeClosedVars,
+                        varargs = varargs,
+                        currentUpvalues = currentUpvalues,
+                        env = env,
+                        lastLine = lastLine,
+                        pendingInferredName = pendingInferredName,
+                    )
+
+                // Process dispatch result using handler
+                // Note: callDepth modifications in callbacks are visible to outer scope
+                var localCallDepth = callDepth
                 when (
-                    val dispatchResult =
-                        opcodeDispatcher.dispatch(
-                            instr = instr,
-                            env = env,
-                            registers = registers,
-                            execFrame = execFrame,
-                            openUpvalues = openUpvalues,
-                            varargs = varargs,
-                            pc = pc,
-                            frame = currentFrame,
-                            executeProto = { proto, args, upvalues, func -> executeProto(proto, args, upvalues, func) },
-                            callFunction = { func, args -> callFunction(func, args, execFrame) },
-                            traceRegisterWrite = { regIndex, value, ctx -> traceRegisterWrite(regIndex, value, ctx) },
-                            triggerHook = { event, line -> triggerHook(event, line) },
-                            setCallContext = { inferred ->
-                                pendingInferredName = inferred
+                    val loopControl =
+                        dispatchResultHandler.handle(
+                            dispatchResult = dispatchResult,
+                            state = handlerState,
+                            execStack = execStack,
+                            callDepth = localCallDepth,
+                            isCoroutineContext = preparation.isCoroutineContext,
+                            onCallDepthIncrement = {
+                                localCallDepth++
+                                callDepth = localCallDepth
+                            },
+                            onCallDepthDecrement = {
+                                localCallDepth--
+                                callDepth = localCallDepth
                             },
                         )
                 ) {
-                    is DispatchResult.Continue -> {
-                        // Normal execution continues
+                    is LoopControl.Continue -> {
+                        // Sync state back from handler
+                        currentProto = handlerState.currentProto
+                        execFrame = handlerState.execFrame
+                        registers = handlerState.registers
+                        constants = handlerState.constants
+                        instructions = handlerState.instructions
+                        pc = handlerState.pc
+                        openUpvalues = handlerState.openUpvalues
+                        toBeClosedVars = handlerState.toBeClosedVars
+                        varargs = handlerState.varargs
+                        currentUpvalues = handlerState.currentUpvalues
+                        env = handlerState.env
+                        lastLine = handlerState.lastLine
+                        pendingInferredName = handlerState.pendingInferredName
                     }
-                    is DispatchResult.SkipNext -> {
+                    is LoopControl.SkipNext -> {
                         pc++ // Skip next instruction (LOADBOOL with skip)
                     }
-                    is DispatchResult.Jump -> {
-                        // Loop opcodes return PC-1 (expecting pc++ at end of loop to reach target)
-                        pc = dispatchResult.newPc
+                    is LoopControl.Jump -> {
+                        pc = loopControl.newPc
                     }
-                    is DispatchResult.Return -> {
-                        debug { "[REGISTERS after RETURN] ${registers.slice(0..10).mapIndexed { i, v -> "R[$i]=$v" }.joinToString(", ")}" }
-
-                        // Process RETURN using helper to determine loop action
-                        when (
-                            val action =
-                                resultProcessor.processReturn(
-                                    dispatchResult = dispatchResult,
-                                    execStack = execStack,
-                                    execFrame = execFrame,
-                                    activeCloseState = closeContext.activeCloseResumeState,
-                                )
-                        ) {
-                            is ReturnLoopAction.UnwindToCaller -> {
-                                debug { "  Unwinding from trampolined call, restoring caller" }
-
-                                // Pop callee's call frame from debug stack
-                                callStackManager.removeLastFrame()
-
-                                // Restore caller's execution state
-                                currentProto = action.callerContext.proto
-                                execFrame = action.callerContext.execFrame
-                                registers = action.callerContext.registers
-                                constants = action.callerContext.constants
-                                instructions = action.callerContext.instructions
-                                pc = action.callerContext.pc
-                                openUpvalues = execFrame.openUpvalues
-                                toBeClosedVars = execFrame.toBeClosedVars
-                                varargs = action.callerContext.varargs
-                                currentUpvalues = action.callerContext.currentUpvalues
-                                lastLine = action.callerContext.lastLine
-
-                                // Recreate execution environment for caller
-                                env = ExecutionEnvironment(execFrame, globals, this)
-
-                                // Store callee's return values into caller's registers
-                                val callInstr = action.callerContext.callInstruction
-                                val storage = ResultStorage(env)
-                                storage.storeResults(
-                                    targetReg = callInstr.a,
-                                    encodedCount = callInstr.c,
-                                    results = action.returnValues,
-                                    opcodeName = "CALL-RETURN",
-                                )
-
-                                // Decrement call depth (unwinding from callee)
-                                callDepth--
-                            }
-                            is ReturnLoopAction.ContinueSegment -> {
-                                val result = segmentContinuationHandler.processContinueSegment(action)
-                                applyContextUpdate(result)
-                            }
-                            is ReturnLoopAction.ContinueOuterFrame -> {
-                                val result = segmentContinuationHandler.processContinueOuterFrame(action)
-                                applyContextUpdate(result)
-                                continue
-                            }
-                            is ReturnLoopAction.ExitProto -> {
-                                println(
-                                    "[NO-CALLER] activeCloseState=${closeContext.activeCloseResumeState != null} segments=${closeContext.activeCloseResumeState?.ownerSegments?.size} outerFrames=${closeContext.activeCloseResumeState?.closeOwnerFrameStack?.size}",
-                                )
-                                return action.returnValues
-                            }
-                        }
+                    is LoopControl.Return -> {
+                        // Continue to next iteration (used for unwinding)
                     }
-                    is DispatchResult.CallTrampoline -> {
-                        debug { "  Trampolining into regular call" }
-
-                        // Save current (caller) execution context
-                        val callerContext =
-                            ExecContext(
-                                proto = currentProto,
-                                execFrame = execFrame,
-                                registers = registers,
-                                constants = constants,
-                                instructions = instructions,
-                                pc = pc,
-                                varargs = varargs,
-                                currentUpvalues = currentUpvalues,
-                                callInstruction = dispatchResult.callInstruction,
-                                lastLine = lastLine,
-                            )
-                        execStack.addLast(callerContext)
-
-                        // Increment call depth (entering new function)
-                        callDepth++
-                        if (callDepth > maxCallDepth) {
-                            callDepth--
-                            execStack.removeLast()
-                            throw LuaException(
-                                errorMessageOnly = "C stack overflow",
-                                line = null,
-                                source = currentProto.source,
-                                luaStackTrace = stackTraceBuilder.buildLuaStackTrace(callStackManager.captureSnapshot()),
-                            )
-                        }
-
-                        // Process trampoline using helper
-                        val action = resultProcessor.processCallTrampoline(dispatchResult)
-
-                        // Apply state changes
-                        currentProto = action.newProto
-                        constants = currentProto.constants
-                        instructions = currentProto.instructions
-                        pc = -1
-                        execFrame = action.newFrame
-                        registers = execFrame.registers
-                        openUpvalues = execFrame.openUpvalues
-                        toBeClosedVars = execFrame.toBeClosedVars
-                        varargs = execFrame.varargs
-                        currentUpvalues = action.newUpvalues
-                        env = ExecutionEnvironment(execFrame, globals, this)
-
-                        // Push callee's call frame onto debug stack
-                        callStackManager.addFrame(
-                            CallFrame(
-                                function = action.luaFunc,
-                                proto = currentProto,
-                                pc = 0,
-                                base = 0,
-                                registers = registers,
-                                isNative = false,
-                                isTailCall = false,
-                                inferredFunctionName = pendingInferredName,
-                                varargs = varargs,
-                                ftransfer = if (dispatchResult.newArgs.isEmpty()) 0 else 1,
-                                ntransfer = dispatchResult.newArgs.size,
-                            ),
-                        )
-                        pendingInferredName = null
-
-                        // Trigger CALL and LINE hooks for trampolined function
-                        lastLine = hookHelper.triggerEntryHooks(currentProto, preparation.isCoroutineContext)
+                    is LoopControl.ExitProto -> {
+                        return loopControl.returnValues
                     }
-                    is DispatchResult.TailCallTrampoline -> {
-                        debug { "  TCO: Before trampoline, registers.hashCode=${registers.hashCode()}" }
-
-                        // Log closure identity and upvalue wiring for diagnosis
-                        if (debugEnabled) {
-                            val cid = dispatchResult.newProto.hashCode()
-                            debug { "  TCO: trampoline into closure id=$cid" }
-                            dispatchResult.newUpvalues.forEachIndexed { i, uv ->
-                                try {
-                                    val regsHash = uv.registers?.hashCode() ?: 0
-                                    val regIdx =
-                                        try {
-                                            uv.registerIndex
-                                        } catch (_: Exception) {
-                                            -1
-                                        }
-                                    debug { "    upval[$i] regIdx=$regIdx regsHash=$regsHash closed=${uv.isClosed}" }
-                                } catch (_: Exception) {
-                                }
-                            }
-                        }
-
-                        // Clear previous frame resources
-                        for ((regIdx, upvalue) in openUpvalues) {
-                            if (!upvalue.isClosed) {
-                                debug { "  TCO: Closing upvalue at R[$regIdx] before trampoline" }
-                                upvalue.close()
-                            }
-                        }
-                        openUpvalues.clear()
-                        toBeClosedVars.clear()
-                        alreadyClosedRegs.clear()
-
-                        // Calculate tail call depth
-                        val previousFrame = callStackManager.lastFrame()
-                        val currentTailDepth =
-                            if (previousFrame?.isTailCall == true) {
-                                previousFrame.tailCallDepth
-                            } else {
-                                0
-                            }
-
-                        // Process tail call using helper (reuses registers for TCO)
-                        debug { "  TCO: About to fill registers with nil, registers.hashCode=${registers.hashCode()}" }
-                        val action = resultProcessor.processTailCallTrampoline(dispatchResult, registers, currentTailDepth)
-                        debug { "  TCO: After fill, registers[0]=${registers[0]}, registers.hashCode=${registers.hashCode()}" }
-
-                        // Apply state changes
-                        currentProto = action.newProto
-                        constants = currentProto.constants
-                        instructions = currentProto.instructions
-                        pc = -1
-                        execFrame = action.newFrame
-                        execFrame.top = 0
-                        varargs = action.newFrame.varargs
-                        currentUpvalues = action.newUpvalues
-                        flowState.setActiveExecutionFrame(execFrame)
-                        env = ExecutionEnvironment(execFrame, globals, this)
-
-                        // Remove previous frame and push new tail call frame
-                        callStackManager.removeLastFrame()
-                        val tailFrame =
-                            CallFrame(
-                                function = action.luaFunc,
-                                proto = currentProto,
-                                pc = pc,
-                                base = 0,
-                                registers = registers,
-                                isNative = false,
-                                isTailCall = true,
-                                tailCallDepth = action.newTailCallDepth,
-                                inferredFunctionName = pendingInferredName,
-                                varargs = varargs,
-                                ftransfer = if (dispatchResult.newArgs.isEmpty()) 0 else 1,
-                                ntransfer = dispatchResult.newArgs.size,
-                            )
-                        callStackManager.addFrame(tailFrame)
-                        pendingInferredName = null
-
-                        // Trigger TAILCALL hook and reset lastLine
-                        triggerHook(HookEvent.TAILCALL, currentProto.lineDefined)
-                        lastLine = -1
+                    is LoopControl.ContinueWithContext -> {
+                        applyContextUpdate(loopControl.update)
+                        continue@whileLoop
                     }
                 }
                 pc++
