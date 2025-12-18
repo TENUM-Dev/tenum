@@ -1,6 +1,5 @@
 package ai.tenum.lua.vm
 
-import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.runtime.LuaValue
@@ -15,22 +14,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CloseContextTest {
-    private fun createDummyProto(name: String = "test") =
-        Proto(
-            name = name,
-            source = "@$name.lua",
-            lineDefined = 0,
-            lastLineDefined = 0,
-            parameters = emptyList(),
-            hasVararg = false,
-            maxStackSize = 10,
-            instructions = emptyList(),
-            constants = emptyList(),
-            upvalueInfo = emptyList(),
-            localVars = emptyList(),
-            lineEvents = emptyList(),
-        )
-
     @Test
     fun testInitialStateIsEmpty() {
         val context = CloseContext()

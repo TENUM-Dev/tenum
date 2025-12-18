@@ -8,22 +8,6 @@ import kotlin.test.assertFails
 import kotlin.test.assertNull
 
 class CallerContextTest {
-    private fun createDummyProto(name: String = "test") =
-        Proto(
-            name = name,
-            source = "@$name.lua",
-            lineDefined = 0,
-            lastLineDefined = 0,
-            parameters = emptyList(),
-            hasVararg = false,
-            maxStackSize = 10,
-            instructions = emptyList(),
-            constants = emptyList(),
-            upvalueInfo = emptyList(),
-            localVars = emptyList(),
-            lineEvents = emptyList(),
-        )
-
     private fun createDummyFrame(
         proto: Proto,
         pc: Int = 0,

@@ -1,6 +1,5 @@
 package ai.tenum.lua.vm
 
-import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 import ai.tenum.lua.vm.execution.ExecutionFrame
@@ -17,22 +16,6 @@ import kotlin.test.assertTrue
  * - nextCallIsCloseMetamethod: Flag for close metamethod calls
  */
 class ExecutionFlowStateTest {
-    private fun createDummyProto() =
-        Proto(
-            name = "test",
-            source = "@test.lua",
-            lineDefined = 0,
-            lastLineDefined = 0,
-            parameters = emptyList(),
-            hasVararg = false,
-            maxStackSize = 10,
-            instructions = emptyList(),
-            constants = emptyList(),
-            upvalueInfo = emptyList(),
-            localVars = emptyList(),
-            lineEvents = emptyList(),
-        )
-
     private fun createDummyFrame(): ExecutionFrame =
         ExecutionFrame(
             proto = createDummyProto(),

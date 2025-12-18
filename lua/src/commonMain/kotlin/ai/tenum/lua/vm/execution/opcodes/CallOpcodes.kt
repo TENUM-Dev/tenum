@@ -285,7 +285,7 @@ object CallOpcodes {
         // Step 0: Determine whether to use captured returns or collect from registers
         // Use capturedReturns if available (either from isMidReturn restoration or previous setting)
         val useCapturedReturns = frame.capturedReturns != null
-        // Determine if this is a resume after yield (should skip close handlers)  
+        // Determine if this is a resume after yield (should skip close handlers)
         val isResumeAfterYield = frame.isMidReturn
         val results =
             if (useCapturedReturns) {
@@ -393,9 +393,11 @@ object CallOpcodes {
         triggerHookFn(HookEvent.RETURN, currentLine)
 
         // Clear capturedReturns after successful return to prevent leakage to other operations
-        // This is safe because:  
+        // This is safe because:
         // 1. If we yielded during close handlers, we'll restore from segments with capturedReturns
         // 2. If we didn't yield, we already used the results and don't need them anymore
+        // NOTE: capturedReturns must be stashed BEFORE this point if in segment pipeline
+        // [RETURN CLEAR] Clearing capturedReturns (had ${frame.capturedReturns?.size} values) Frame: ${frame.proto.name}
         frame.capturedReturns = null
 
         return results

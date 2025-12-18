@@ -3,6 +3,7 @@ import java.util.concurrent.ConcurrentHashMap
 plugins {
     id("tenum.conventions.mpplib")
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 group = "ai.tenum.lua"
@@ -106,4 +107,10 @@ tasks.withType<Test>().configureEach {
             ) {}
         },
     )
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = true
+    autoCorrect = true
 }
