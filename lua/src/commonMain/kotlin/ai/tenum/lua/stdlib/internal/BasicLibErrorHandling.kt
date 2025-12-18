@@ -17,6 +17,45 @@ import ai.tenum.lua.vm.library.RegisterGlobalCallback
  * Implements: assert, error, pcall, xpcall
  */
 internal object BasicLibErrorHandling {
+    // CPD-OFF
+    private fun callAndWrapSuccess(
+        func: LuaValue<*>,
+        funcArgs: List<LuaValue<*>>,
+        callFunction: (LuaValue<*>, List<LuaValue<*>>) -> List<LuaValue<*>>,
+    ): List<LuaValue<*>> {
+        // CPD-ON
+        val results = callFunction(func, funcArgs)
+        return buildList {
+            add(LuaBoolean.TRUE)
+            addAll(results)
+        }
+    }
+
+    private fun handleProtectedCall(
+        func: LuaValue<*>,
+        funcArgs: List<LuaValue<*>>,
+        callFunction: (LuaValue<*>, List<LuaValue<*>>) -> List<LuaValue<*>>,
+    ): List<LuaValue<*>> =
+        try {
+            callAndWrapSuccess(func, funcArgs, callFunction)
+        } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
+            throw e
+        } catch (e: Exception) {
+            val errorResult =
+                when (e) {
+                    is ai.tenum.lua.vm.errorhandling.LuaException -> e.errorValue
+                    is LuaRuntimeError -> e.errorValue
+                    else -> {
+                        val errorMsg = e.message
+                        if (errorMsg.isNullOrEmpty()) LuaNil else LuaString(errorMsg)
+                    }
+                }
+            buildList {
+                add(LuaBoolean.FALSE)
+                add(errorResult)
+            }
+        }
+
     fun registerFunctions(
         registerGlobal: RegisterGlobalCallback,
         callFunction: CallFunctionCallback,
@@ -124,34 +163,7 @@ internal object BasicLibErrorHandling {
             }
 
             val funcArgs = args.drop(1)
-
-            try {
-                val results = callFunction(func, funcArgs)
-                buildList {
-                    add(LuaBoolean.TRUE)
-                    addAll(results)
-                }
-            } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
-                // Yields must propagate through pcall transparently
-                throw e
-            } catch (e: Exception) {
-                // For LuaException or LuaRuntimeError, return the original errorValue (preserves tables, nil, etc.)
-                // This matches Lua 5.4 behavior where error() can pass any value through pcall
-                val errorResult =
-                    when (e) {
-                        is ai.tenum.lua.vm.errorhandling.LuaException -> e.errorValue
-                        is LuaRuntimeError -> e.errorValue
-                        else -> {
-                            // For other exceptions, convert to string with location info
-                            val errorMsg = e.message
-                            if (errorMsg.isNullOrEmpty()) LuaNil else LuaString(errorMsg)
-                        }
-                    }
-                buildList {
-                    add(LuaBoolean.FALSE)
-                    add(errorResult)
-                }
-            }
+            handleProtectedCall(func, funcArgs) { f, fArgs -> callFunction(f as LuaFunction, fArgs) }
         }
 
     private fun xpcallImpl(
@@ -173,17 +185,10 @@ internal object BasicLibErrorHandling {
             val funcArgs = args.drop(2)
 
             try {
-                val results = callFunction(func, funcArgs)
-                buildList {
-                    add(LuaBoolean.TRUE)
-                    addAll(results)
-                }
+                callAndWrapSuccess(func, funcArgs) { f, fArgs -> callFunction(f as LuaFunction, fArgs) }
             } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
-                // Yields must propagate through xpcall transparently
                 throw e
             } catch (e: Exception) {
-                // For LuaException or LuaRuntimeError, use errorValue to preserve non-string error objects
-                // The message handler should receive the original error value (table, string, etc.)
                 val errorValue =
                     when (e) {
                         is ai.tenum.lua.vm.errorhandling.LuaException -> e.errorValue

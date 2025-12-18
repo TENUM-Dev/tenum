@@ -14,6 +14,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CloseContextTest {
+    private fun setupCloseContextWithVar(): Triple<CloseContext, Pair<Int, LuaValue<*>>, ExecutionFrame> {
+        val context = CloseContext()
+        val closeVar = 5 to LuaString("resource")
+        val proto = createDummyProto()
+        val frame = createDummyFrame(proto, 10)
+        return Triple(context, closeVar, frame)
+    }
+
     @Test
     fun testInitialStateIsEmpty() {
         val context = CloseContext()
@@ -115,16 +123,7 @@ class CloseContextTest {
 
     @Test
     fun testClearAll() {
-        val context = CloseContext()
-        val closeVar = 5 to LuaString("resource")
-        val proto = createDummyProto()
-        val frame =
-            ExecutionFrame(
-                proto = proto,
-                initialArgs = emptyList(),
-                upvalues = emptyList(),
-                initialPc = 10,
-            )
+        val (context, closeVar, frame) = setupCloseContextWithVar()
 
         context.setPendingCloseVar(closeVar, startReg = 3)
         context.setOwnerFrame(frame, mutableListOf<Pair<Int, LuaValue<*>>>())
@@ -150,16 +149,7 @@ class CloseContextTest {
 
     @Test
     fun testSnapshotAndRestore() {
-        val context = CloseContext()
-        val closeVar = 5 to LuaString("resource")
-        val proto = createDummyProto()
-        val frame =
-            ExecutionFrame(
-                proto = proto,
-                initialArgs = emptyList(),
-                upvalues = emptyList(),
-                initialPc = 10,
-            )
+        val (context, closeVar, frame) = setupCloseContextWithVar()
 
         context.setPendingCloseVar(closeVar, startReg = 3)
         context.setOwnerFrame(frame, mutableListOf<Pair<Int, LuaValue<*>>>(closeVar))

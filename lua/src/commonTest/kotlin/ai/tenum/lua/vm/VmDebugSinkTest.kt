@@ -23,16 +23,7 @@ class VmDebugSinkTest {
     @Test
     fun testConsoleSinkAcceptsMessages() {
         val messages = mutableListOf<String>()
-        val sink =
-            object : VmDebugSink {
-                override fun debug(message: String) {
-                    messages.add(message)
-                }
-
-                override fun debug(message: () -> String) {
-                    messages.add(message())
-                }
-            }
+        val sink = createTestSink(messages)
 
         sink.debug("direct message")
         sink.debug { "lazy message" }
@@ -75,16 +66,7 @@ class VmDebugSinkTest {
     @Test
     fun testMultipleMessagesPreserveOrder() {
         val messages = mutableListOf<String>()
-        val sink =
-            object : VmDebugSink {
-                override fun debug(message: String) {
-                    messages.add(message)
-                }
-
-                override fun debug(message: () -> String) {
-                    messages.add(message())
-                }
-            }
+        val sink = createTestSink(messages)
 
         sink.debug("first")
         sink.debug { "second" }
@@ -96,16 +78,7 @@ class VmDebugSinkTest {
     @Test
     fun testEmptyMessageHandling() {
         val messages = mutableListOf<String>()
-        val sink =
-            object : VmDebugSink {
-                override fun debug(message: String) {
-                    messages.add(message)
-                }
-
-                override fun debug(message: () -> String) {
-                    messages.add(message())
-                }
-            }
+        val sink = createTestSink(messages)
 
         sink.debug("")
         sink.debug { "" }

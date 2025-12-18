@@ -1,6 +1,5 @@
 package ai.tenum.lua.vm
 
-import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.vm.execution.ExecutionFrame
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,15 +7,16 @@ import kotlin.test.assertFails
 import kotlin.test.assertNull
 
 class CallerContextTest {
-    private fun createDummyFrame(
-        proto: Proto,
-        pc: Int = 0,
-    ) = ExecutionFrame(
-        proto = proto,
-        initialArgs = emptyList(),
-        upvalues = emptyList(),
-        initialPc = pc,
-    )
+    private fun setupTwoFrameContext(): Triple<CallerContext, ExecutionFrame, ExecutionFrame> {
+        val context = CallerContext()
+        val proto1 = createDummyProto("outer")
+        val proto2 = createDummyProto("inner")
+        val frame1 = createDummyFrame(proto1, 10)
+        val frame2 = createDummyFrame(proto2, 20)
+        context.push(frame1)
+        context.push(frame2)
+        return Triple(context, frame1, frame2)
+    }
 
     @Test
     fun testPushAndPop() {
@@ -113,15 +113,7 @@ class CallerContextTest {
 
     @Test
     fun testSnapshotForYield() {
-        val context = CallerContext()
-        val proto1 = createDummyProto("outer")
-        val proto2 = createDummyProto("inner")
-
-        val frame1 = createDummyFrame(proto1, 10)
-        val frame2 = createDummyFrame(proto2, 20)
-
-        context.push(frame1)
-        context.push(frame2)
+        val (context, frame1, frame2) = setupTwoFrameContext()
 
         // Simulate yielding - capture snapshot
         val snapshot = context.snapshot()
@@ -135,15 +127,7 @@ class CallerContextTest {
 
     @Test
     fun testRestoreFromSnapshot() {
-        val context = CallerContext()
-        val proto1 = createDummyProto("outer")
-        val proto2 = createDummyProto("inner")
-
-        val frame1 = createDummyFrame(proto1, 10)
-        val frame2 = createDummyFrame(proto2, 20)
-
-        context.push(frame1)
-        context.push(frame2)
+        val (context, frame1, frame2) = setupTwoFrameContext()
 
         val snapshot = context.snapshot()
 

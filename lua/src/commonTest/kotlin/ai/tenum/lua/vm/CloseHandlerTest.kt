@@ -43,10 +43,7 @@ class CloseHandlerTest {
     fun testSkipNilAndFalse() {
         val closedVars = mutableListOf<Int>()
         val handler = CloseHandler()
-
-        val closeCallback: (Int, LuaValue<*>, LuaValue<*>) -> Unit = { reg, _, _ ->
-            closedVars.add(reg)
-        }
+        val closeCallback = createTestCloseCallback(closedVars)
 
         val tbcList =
             listOf(
@@ -73,10 +70,7 @@ class CloseHandlerTest {
     fun testFilterByStartReg() {
         val closedVars = mutableListOf<Int>()
         val handler = CloseHandler()
-
-        val closeCallback: (Int, LuaValue<*>, LuaValue<*>) -> Unit = { reg, _, _ ->
-            closedVars.add(reg)
-        }
+        val closeCallback = createTestCloseCallback(closedVars)
 
         val tbcList =
             listOf(
@@ -178,10 +172,7 @@ class CloseHandlerTest {
     fun testRestoreFromSnapshot() {
         val closedVars = mutableListOf<Int>()
         val handler = CloseHandler()
-
-        val closeCallback: (Int, LuaValue<*>, LuaValue<*>) -> Unit = { reg, _, _ ->
-            closedVars.add(reg)
-        }
+        val closeCallback = createTestCloseCallback(closedVars)
 
         // Create snapshot as if we already closed reg 5
         val snapshot =
@@ -212,10 +203,7 @@ class CloseHandlerTest {
     fun testAlreadyClosedRegisters() {
         val closedVars = mutableListOf<Int>()
         val handler = CloseHandler()
-
-        val closeCallback: (Int, LuaValue<*>, LuaValue<*>) -> Unit = { reg, _, _ ->
-            closedVars.add(reg)
-        }
+        val closeCallback = createTestCloseCallback(closedVars)
 
         val tbcList =
             listOf(

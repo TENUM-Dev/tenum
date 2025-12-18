@@ -1,10 +1,7 @@
 package ai.tenum.lua.vm
 
-import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaString
-import ai.tenum.lua.runtime.LuaValue
-import ai.tenum.lua.runtime.Upvalue
 import ai.tenum.lua.vm.execution.ExecutionFrame
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -164,15 +161,3 @@ class CoroutineResumptionServiceTest {
         assertEquals(10, service.calculateResumePc(10, incrementPc = false))
     }
 }
-
-/**
- * Result of selecting owner frame context for close resume
- */
-data class OwnerFrameContext(
-    val proto: Proto,
-    val pc: Int,
-    val registers: MutableList<LuaValue<*>>,
-    val upvalues: List<Upvalue>,
-    val varargs: List<LuaValue<*>>,
-    val tbcVars: List<Pair<Int, LuaValue<*>>>,
-)
