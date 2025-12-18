@@ -1042,6 +1042,227 @@ class LuaVmImpl(
     )
 
     /**
+     * Execute the main bytecode loop
+     */
+    private fun executeMainLoop(
+        state: DispatchHandlerState,
+        handlers: ExecutionHandlers,
+        execStack: ArrayDeque<ExecContext>,
+        preparation: ExecutionPreparation,
+        applyContextUpdate: (ExecutionContextUpdate) -> Unit,
+    ): List<LuaValue<*>> {
+        debug { "--- Starting execution ---" }
+        debug { "Max stack size: ${state.currentProto.maxStackSize}" }
+        debug { "Varargs: ${state.varargs.size} values" }
+
+        whileLoop@ while (state.pc < state.instructions.size) {
+            // Keep activeExecutionFrame in sync with the frame currently executing bytecode
+            flowState.setActiveExecutionFrame(state.execFrame)
+
+            // Update current frame PC (for both debug stack and execution frame)
+            callStackManager.updateLastFramePc(state.pc)
+            state.execFrame.pc = state.pc
+
+            // Trigger LINE hooks using helper
+            state.lastLine = handlers.hookHelper.triggerLineHooksAt(state.currentProto, state.pc, state.lastLine)
+
+            val instr = state.instructions[state.pc]
+
+            if (debugEnabled) {
+                debug { "PC=${state.pc}: ${instr.opcode} a=${instr.a} b=${instr.b} c=${instr.c}" }
+            }
+
+            // Get current frame for dispatch
+            val currentFrame = callStackManager.lastFrame()!!
+
+            // Dispatch opcode to handler
+            val dispatchResult =
+                opcodeDispatcher.dispatch(
+                    instr = instr,
+                    env = state.env,
+                    registers = state.registers,
+                    execFrame = state.execFrame,
+                    openUpvalues = state.openUpvalues,
+                    varargs = state.varargs,
+                    pc = state.pc,
+                    frame = currentFrame,
+                    executeProto = { proto, args, upvalues, func -> executeProto(proto, args, upvalues, func) },
+                    callFunction = { func, args -> callFunction(func, args, state.execFrame) },
+                    traceRegisterWrite = { regIndex, value, ctx -> traceRegisterWrite(regIndex, value, ctx) },
+                    triggerHook = { event, line -> triggerHook(event, line) },
+                    setCallContext = { inferred ->
+                        pendingInferredName = inferred
+                    },
+                )
+
+            // Create dispatch handler state
+            val handlerState =
+                DispatchHandlerState(
+                    currentProto = state.currentProto,
+                    execFrame = state.execFrame,
+                    registers = state.registers,
+                    constants = state.constants,
+                    instructions = state.instructions,
+                    pc = state.pc,
+                    openUpvalues = state.openUpvalues,
+                    toBeClosedVars = state.toBeClosedVars,
+                    varargs = state.varargs,
+                    currentUpvalues = state.currentUpvalues,
+                    env = state.env,
+                    lastLine = state.lastLine,
+                    pendingInferredName = pendingInferredName,
+                )
+
+            // Process dispatch result using handler
+            var localCallDepth = callDepth
+            when (
+                val loopControl =
+                    handlers.dispatchResultHandler.handle(
+                        dispatchResult = dispatchResult,
+                        state = handlerState,
+                        execStack = execStack,
+                        callDepth = localCallDepth,
+                        isCoroutineContext = preparation.isCoroutineContext,
+                        onCallDepthIncrement = {
+                            localCallDepth++
+                            callDepth = localCallDepth
+                        },
+                        onCallDepthDecrement = {
+                            localCallDepth--
+                            callDepth = localCallDepth
+                        },
+                    )
+            ) {
+                is LoopControl.Continue -> {
+                    // Sync state back from handler
+                    state.currentProto = handlerState.currentProto
+                    state.execFrame = handlerState.execFrame
+                    state.registers = handlerState.registers
+                    state.constants = handlerState.constants
+                    state.instructions = handlerState.instructions
+                    state.pc = handlerState.pc
+                    state.openUpvalues = handlerState.openUpvalues
+                    state.toBeClosedVars = handlerState.toBeClosedVars
+                    state.varargs = handlerState.varargs
+                    state.currentUpvalues = handlerState.currentUpvalues
+                    state.env = handlerState.env
+                    state.lastLine = handlerState.lastLine
+                    pendingInferredName = handlerState.pendingInferredName
+                }
+                is LoopControl.SkipNext -> {
+                    state.pc++ // Skip next instruction (LOADBOOL with skip)
+                }
+                is LoopControl.Jump -> {
+                    state.pc = loopControl.newPc
+                }
+                is LoopControl.Return -> {
+                    // Continue to next iteration (used for unwinding)
+                }
+                is LoopControl.ExitProto -> {
+                    return loopControl.returnValues
+                }
+                is LoopControl.ContinueWithContext -> {
+                    applyContextUpdate(loopControl.update)
+                    continue@whileLoop
+                }
+            }
+            state.pc++
+
+            // Trigger COUNT hook
+            val currentLineForHook = callStackManager.lastFrame()?.getCurrentLine() ?: -1
+            hookManager.checkCountHook(currentLineForHook)
+        }
+
+        // If we reach here without a return, check for captured returns first
+        if (state.execFrame.capturedReturns != null) {
+            return state.execFrame.capturedReturns!!
+        }
+
+        return emptyList()
+    }
+
+    /**
+     * Handle exceptions during execution
+     */
+    private fun handleExecutionException(
+        e: Throwable,
+        handlers: ExecutionHandlers,
+        state: DispatchHandlerState,
+        alreadyClosedRegs: MutableSet<Int>,
+        execStack: ArrayDeque<ExecContext>,
+    ): Nothing {
+        when (e) {
+            is LuaYieldException -> {
+                // Coroutine yielded - save execution state for resumption
+                if (!e.stateSaved) {
+                    val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
+                    val callStackBase = (currentCoroutine as? LuaCoroutine.LuaFunctionCoroutine)?.thread?.callStackBase ?: 0
+
+                    handlers.yieldHandler.handleYield(
+                        exception = e,
+                        currentProto = state.currentProto,
+                        pc = state.pc,
+                        registers = state.registers,
+                        instructions = state.instructions,
+                        execFrame = state.execFrame,
+                        varargs = state.varargs,
+                        execStack = execStack,
+                        yieldContext = yieldContext,
+                        closeContext = closeContext,
+                        callerContext = callerContext,
+                        callStackBase = callStackBase,
+                        filterCoroutineFrames = ::filterCoroutineFrames,
+                        getCapturedReturnValues = ::getCapturedReturnValues,
+                    )
+                }
+                clearYieldResumeContext()
+                throw e
+            }
+            is LuaRuntimeError -> {
+                val luaEx = handlers.errorHandler.handleRuntimeError(e, state.currentProto, state.pc)
+                handlers.closeErrorHandler.handleErrorAndCloseToBeClosedVars(
+                    luaEx,
+                    state.toBeClosedVars,
+                    alreadyClosedRegs,
+                    state.currentProto,
+                    state.pc,
+                )
+            }
+            is LuaException -> {
+                handlers.closeErrorHandler.handleErrorAndCloseToBeClosedVars(
+                    e,
+                    state.toBeClosedVars,
+                    alreadyClosedRegs,
+                    state.currentProto,
+                    state.pc,
+                )
+            }
+            is Error -> {
+                throw handlers.errorHandler.handlePlatformError(e, state.currentProto, state.pc)
+            }
+            else -> {
+                println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
+                val luaEx =
+                    handlers.errorHandler.handleGenericException(
+                        e as Exception,
+                        state.currentProto,
+                        state.pc,
+                        state.registers,
+                        state.constants,
+                        state.instructions,
+                    )
+                handlers.closeErrorHandler.handleErrorAndCloseToBeClosedVars(
+                    luaEx,
+                    state.toBeClosedVars,
+                    alreadyClosedRegs,
+                    state.currentProto,
+                    state.pc,
+                )
+            }
+        }
+    }
+
+    /**
      * Setup function entry including call frame, hooks, and environment
      */
     private fun setupFunctionEntry(
@@ -1186,185 +1407,31 @@ class LuaVmImpl(
                 handlers = handlers,
                 isCoroutineContext = preparation.isCoroutineContext,
             )
-        var lastLine = entryState.lastLine
         val previousEnv = entryState.previousEnv
         val execStack = entryState.execStack
 
+        // Create mutable execution state
+        val state =
+            DispatchHandlerState(
+                currentProto = currentProto,
+                execFrame = execFrame,
+                registers = registers,
+                constants = constants,
+                instructions = instructions,
+                pc = pc,
+                openUpvalues = openUpvalues,
+                toBeClosedVars = toBeClosedVars,
+                varargs = varargs,
+                currentUpvalues = currentUpvalues,
+                env = env,
+                lastLine = entryState.lastLine,
+                pendingInferredName = pendingInferredName,
+            )
+
         try {
-            debug { "--- Starting execution ---" }
-            debug { "Max stack size: ${currentProto.maxStackSize}" }
-            debug { "Varargs: ${varargs.size} values" }
-
-            whileLoop@ while (pc < instructions.size) {
-                // Keep activeExecutionFrame in sync with the frame currently executing bytecode
-                flowState.setActiveExecutionFrame(execFrame)
-
-                // Update current frame PC (for both debug stack and execution frame)
-                callStackManager.updateLastFramePc(pc)
-                execFrame.pc = pc
-
-                // Trigger LINE hooks using helper
-                lastLine = handlers.hookHelper.triggerLineHooksAt(currentProto, pc, lastLine)
-
-                val instr = instructions[pc]
-
-                if (debugEnabled) {
-                    debug { "PC=$pc: ${instr.opcode} a=${instr.a} b=${instr.b} c=${instr.c}" }
-                }
-
-                // Get current frame for dispatch
-                val currentFrame = callStackManager.lastFrame()!!
-
-                // Dispatch opcode to handler
-                val dispatchResult =
-                    opcodeDispatcher.dispatch(
-                        instr = instr,
-                        env = env,
-                        registers = registers,
-                        execFrame = execFrame,
-                        openUpvalues = openUpvalues,
-                        varargs = varargs,
-                        pc = pc,
-                        frame = currentFrame,
-                        executeProto = { proto, args, upvalues, func -> executeProto(proto, args, upvalues, func) },
-                        callFunction = { func, args -> callFunction(func, args, execFrame) },
-                        traceRegisterWrite = { regIndex, value, ctx -> traceRegisterWrite(regIndex, value, ctx) },
-                        triggerHook = { event, line -> triggerHook(event, line) },
-                        setCallContext = { inferred ->
-                            pendingInferredName = inferred
-                        },
-                    )
-
-                // Create dispatch handler state
-                val handlerState =
-                    DispatchHandlerState(
-                        currentProto = currentProto,
-                        execFrame = execFrame,
-                        registers = registers,
-                        constants = constants,
-                        instructions = instructions,
-                        pc = pc,
-                        openUpvalues = openUpvalues,
-                        toBeClosedVars = toBeClosedVars,
-                        varargs = varargs,
-                        currentUpvalues = currentUpvalues,
-                        env = env,
-                        lastLine = lastLine,
-                        pendingInferredName = pendingInferredName,
-                    )
-
-                // Process dispatch result using handler
-                // Note: callDepth modifications in callbacks are visible to outer scope
-                var localCallDepth = callDepth
-                when (
-                    val loopControl =
-                        handlers.dispatchResultHandler.handle(
-                            dispatchResult = dispatchResult,
-                            state = handlerState,
-                            execStack = execStack,
-                            callDepth = localCallDepth,
-                            isCoroutineContext = preparation.isCoroutineContext,
-                            onCallDepthIncrement = {
-                                localCallDepth++
-                                callDepth = localCallDepth
-                            },
-                            onCallDepthDecrement = {
-                                localCallDepth--
-                                callDepth = localCallDepth
-                            },
-                        )
-                ) {
-                    is LoopControl.Continue -> {
-                        // Sync state back from handler
-                        currentProto = handlerState.currentProto
-                        execFrame = handlerState.execFrame
-                        registers = handlerState.registers
-                        constants = handlerState.constants
-                        instructions = handlerState.instructions
-                        pc = handlerState.pc
-                        openUpvalues = handlerState.openUpvalues
-                        toBeClosedVars = handlerState.toBeClosedVars
-                        varargs = handlerState.varargs
-                        currentUpvalues = handlerState.currentUpvalues
-                        env = handlerState.env
-                        lastLine = handlerState.lastLine
-                        pendingInferredName = handlerState.pendingInferredName
-                    }
-                    is LoopControl.SkipNext -> {
-                        pc++ // Skip next instruction (LOADBOOL with skip)
-                    }
-                    is LoopControl.Jump -> {
-                        pc = loopControl.newPc
-                    }
-                    is LoopControl.Return -> {
-                        // Continue to next iteration (used for unwinding)
-                    }
-                    is LoopControl.ExitProto -> {
-                        return loopControl.returnValues
-                    }
-                    is LoopControl.ContinueWithContext -> {
-                        applyContextUpdate(loopControl.update)
-                        continue@whileLoop
-                    }
-                }
-                pc++
-
-                // Trigger COUNT hook
-                val currentLineForHook = callStackManager.lastFrame()?.getCurrentLine() ?: -1
-                hookManager.checkCountHook(currentLineForHook)
-            }
-
-            // If we reach here without a return, check for captured returns first
-            // Captured returns are set by RETURN opcode when yielding from __close
-            if (execFrame.capturedReturns != null) {
-                return execFrame.capturedReturns!!
-            }
-
-            // Otherwise return no values
-            return emptyList()
-        } catch (e: LuaYieldException) {
-            // Coroutine yielded - save execution state for resumption
-            if (!e.stateSaved) {
-                val currentCoroutine = coroutineStateManager.getCurrentCoroutine()
-                val callStackBase = (currentCoroutine as? LuaCoroutine.LuaFunctionCoroutine)?.thread?.callStackBase ?: 0
-
-                handlers.yieldHandler.handleYield(
-                    exception = e,
-                    currentProto = currentProto,
-                    pc = pc,
-                    registers = registers,
-                    instructions = instructions,
-                    execFrame = execFrame,
-                    varargs = varargs,
-                    execStack = execStack,
-                    yieldContext = yieldContext,
-                    closeContext = closeContext,
-                    callerContext = callerContext,
-                    callStackBase = callStackBase,
-                    filterCoroutineFrames = ::filterCoroutineFrames,
-                    getCapturedReturnValues = ::getCapturedReturnValues,
-                )
-            }
-            clearYieldResumeContext()
-            throw e // Re-throw to be caught by coroutineResume
-        } catch (e: LuaRuntimeError) {
-            val luaEx = handlers.errorHandler.handleRuntimeError(e, currentProto, pc)
-            handlers.closeErrorHandler.handleErrorAndCloseToBeClosedVars(luaEx, toBeClosedVars, alreadyClosedRegs, currentProto, pc)
-        } catch (e: LuaException) {
-            // Already a LuaException - close to-be-closed vars and handle error chaining
-            handlers.closeErrorHandler.handleErrorAndCloseToBeClosedVars(e, toBeClosedVars, alreadyClosedRegs, currentProto, pc)
-        } catch (e: Exception) {
-            // Don't catch LuaYieldException - it should propagate to coroutineResume
-            if (e is LuaYieldException) {
-                println("[EXCEPTION HANDLER] Rethrowing LuaYieldException")
-                throw e
-            }
-
-            println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
-            val luaEx = handlers.errorHandler.handleGenericException(e, currentProto, pc, registers, constants, instructions)
-            handlers.closeErrorHandler.handleErrorAndCloseToBeClosedVars(luaEx, toBeClosedVars, alreadyClosedRegs, currentProto, pc)
-        } catch (e: Error) {
-            throw handlers.errorHandler.handlePlatformError(e, currentProto, pc)
+            return executeMainLoop(state, handlers, execStack, preparation, ::applyContextUpdate)
+        } catch (e: Throwable) {
+            handleExecutionException(e, handlers, state, alreadyClosedRegs, execStack)
         } finally {
             // Restore call depth to entry value (cleans up leaked increments on error paths)
             callDepth = callDepthBase
