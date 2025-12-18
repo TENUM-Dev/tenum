@@ -17,20 +17,20 @@ import kotlin.math.log10
  * Responsibility: Handle float format specifiers with precision and %g/%G smart formatting
  */
 class FloatFormatter : ValueFormatter {
-    override fun handles(formatChar: Char): Boolean =
-        formatChar in setOf('f', 'g', 'G')
+    override fun handles(formatChar: Char): Boolean = formatChar in setOf('f', 'g', 'G')
 
     override fun format(
         value: LuaValue<*>,
         spec: FormatSpecifier,
     ): String {
         val num = (value as? LuaNumber)?.toDouble() ?: 0.0
-        
-        val formatted = when (spec.formatChar) {
-            'f' -> formatFixed(num, spec)
-            'g', 'G' -> formatGeneral(num, spec)
-            else -> throw IllegalArgumentException("Unsupported format: ${spec.formatChar}")
-        }
+
+        val formatted =
+            when (spec.formatChar) {
+                'f' -> formatFixed(num, spec)
+                'g', 'G' -> formatGeneral(num, spec)
+                else -> throw IllegalArgumentException("Unsupported format: ${spec.formatChar}")
+            }
 
         return applySign(formatted, num, spec)
     }
@@ -45,7 +45,7 @@ class FloatFormatter : ValueFormatter {
         // Handle special values early
         if (num.isNaN()) return "nan"
         if (num.isInfinite()) return if (num > 0) "inf" else "-inf"
-        
+
         val precision = spec.precision ?: 6
         return formatFloatWithPrecision(num, precision, spec.alternate)
     }
@@ -64,7 +64,7 @@ class FloatFormatter : ValueFormatter {
             val infStr = if (num > 0) "INF" else "-INF"
             return if (spec.formatChar == 'G') infStr else infStr.lowercase()
         }
-        
+
         // Default precision for %g is 6 if not specified
         val precision = spec.precision ?: 6
         val shouldUseExp = shouldUseExponentialForG(num, precision)
@@ -175,24 +175,26 @@ class FloatFormatter : ValueFormatter {
         val exponent = floor(log10(absValue)).toInt()
 
         // Calculate mantissa using power of 10
-        val powerOf10 = if (exponent >= 0) {
-            var result = 1.0
-            repeat(exponent) { result *= 10.0 }
-            result
-        } else {
-            var result = 1.0
-            repeat(-exponent) { result /= 10.0 }
-            result
-        }
+        val powerOf10 =
+            if (exponent >= 0) {
+                var result = 1.0
+                repeat(exponent) { result *= 10.0 }
+                result
+            } else {
+                var result = 1.0
+                repeat(-exponent) { result /= 10.0 }
+                result
+            }
         val mantissa = absValue / powerOf10
 
         // Format mantissa with precision
         val prec = if (precision >= 0) precision else 6
-        val mantissaStr = if (prec == 0) {
-            mantissa.toInt().toString()
-        } else {
-            formatFloatWithPrecision(mantissa, prec, false).trimEnd('0').trimEnd('.')
-        }
+        val mantissaStr =
+            if (prec == 0) {
+                mantissa.toInt().toString()
+            } else {
+                formatFloatWithPrecision(mantissa, prec, false).trimEnd('0').trimEnd('.')
+            }
 
         // Format exponent with at least 2 digits (Lua 5.4 behavior)
         val expSign = if (exponent >= 0) "+" else "-"
@@ -212,11 +214,13 @@ class FloatFormatter : ValueFormatter {
         alternateForm: Boolean = false,
     ): String {
         // Use BigDecimal for proper handling of large numbers and high precision
-        val rounded = BigDecimal.fromDouble(value)
-            .roundToDigitPositionAfterDecimalPoint(
-                precision.toLong(),
-                RoundingMode.ROUND_HALF_AWAY_FROM_ZERO,
-            ).scale(precision.toLong())
+        val rounded =
+            BigDecimal
+                .fromDouble(value)
+                .roundToDigitPositionAfterDecimalPoint(
+                    precision.toLong(),
+                    RoundingMode.ROUND_HALF_AWAY_FROM_ZERO,
+                ).scale(precision.toLong())
 
         // Convert to plain string (not scientific notation)
         var result = rounded.toPlainString()

@@ -12,8 +12,7 @@ import ai.tenum.lua.stdlib.string.ValueFormatter
  * Responsibility: Handle integer format specifiers
  */
 class IntegerFormatter : ValueFormatter {
-    override fun handles(formatChar: Char): Boolean =
-        formatChar in setOf('d', 'i', 'u', 'o', 'x', 'X')
+    override fun handles(formatChar: Char): Boolean = formatChar in setOf('d', 'i', 'u', 'o', 'x', 'X')
 
     override fun format(
         value: LuaValue<*>,
@@ -96,7 +95,7 @@ class IntegerFormatter : ValueFormatter {
         spec: FormatSpecifier,
     ): String {
         var result = formatted
-        
+
         // Apply precision: minimum number of digits (zero-pad on the left)
         if (spec.precision != null && spec.precision > 0 && result.length < spec.precision) {
             result = "0".repeat(spec.precision - result.length) + result

@@ -17,8 +17,7 @@ import kotlin.math.log10
  * Responsibility: Handle exponential format specifiers (e.g., 1.234567e+02)
  */
 class ExponentialFormatter : ValueFormatter {
-    override fun handles(formatChar: Char): Boolean =
-        formatChar in setOf('e', 'E')
+    override fun handles(formatChar: Char): Boolean = formatChar in setOf('e', 'E')
 
     override fun format(
         value: LuaValue<*>,
@@ -66,25 +65,27 @@ class ExponentialFormatter : ValueFormatter {
         val exponent = floor(log10(absValue)).toInt()
 
         // Calculate mantissa using power of 10
-        val powerOf10 = if (exponent >= 0) {
-            var result = 1.0
-            repeat(exponent) { result *= 10.0 }
-            result
-        } else {
-            var result = 1.0
-            repeat(-exponent) { result /= 10.0 }
-            result
-        }
+        val powerOf10 =
+            if (exponent >= 0) {
+                var result = 1.0
+                repeat(exponent) { result *= 10.0 }
+                result
+            } else {
+                var result = 1.0
+                repeat(-exponent) { result /= 10.0 }
+                result
+            }
         val mantissa = absValue / powerOf10
 
         // Format mantissa with precision
-        val mantissaStr = if (precision == 0) {
-            val intStr = mantissa.toInt().toString()
-            // With alternate form, always show decimal point even for precision 0
-            if (spec.alternate) "$intStr." else intStr
-        } else {
-            formatFloatWithPrecision(mantissa, precision, spec.alternate)
-        }
+        val mantissaStr =
+            if (precision == 0) {
+                val intStr = mantissa.toInt().toString()
+                // With alternate form, always show decimal point even for precision 0
+                if (spec.alternate) "$intStr." else intStr
+            } else {
+                formatFloatWithPrecision(mantissa, precision, spec.alternate)
+            }
 
         // Format exponent with at least 2 digits (Lua 5.4 behavior)
         val expSign = if (exponent >= 0) "+" else "-"
@@ -152,11 +153,13 @@ class ExponentialFormatter : ValueFormatter {
         precision: Int,
         alternateForm: Boolean,
     ): String {
-        val rounded = BigDecimal.fromDouble(value)
-            .roundToDigitPositionAfterDecimalPoint(
-                precision.toLong(),
-                RoundingMode.ROUND_HALF_AWAY_FROM_ZERO,
-            ).scale(precision.toLong())
+        val rounded =
+            BigDecimal
+                .fromDouble(value)
+                .roundToDigitPositionAfterDecimalPoint(
+                    precision.toLong(),
+                    RoundingMode.ROUND_HALF_AWAY_FROM_ZERO,
+                ).scale(precision.toLong())
 
         var result = rounded.toPlainString()
 
