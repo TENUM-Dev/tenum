@@ -1,3 +1,9 @@
+## <small>1.3.1 (2025-12-15)</small>
+
+* Fix: locals tests (#51) ([a11ba8d](https://github.com/TENUM-Dev/tenum/commit/a11ba8d)), closes [#51](https://github.com/TENUM-Dev/tenum/issues/51)
+* Merge pull request #53 from TENUM-Dev/release ([5517bbc](https://github.com/TENUM-Dev/tenum/commit/5517bbc)), closes [#53](https://github.com/TENUM-Dev/tenum/issues/53)
+* Merge pull request #54 from TENUM-Dev/main ([d1df980](https://github.com/TENUM-Dev/tenum/commit/d1df980)), closes [#54](https://github.com/TENUM-Dev/tenum/issues/54)
+
 ## 1.3.0 (2025-12-15)
 
 * bump: (deps-dev): Bump @types/node from 24.10.2 to 25.0.0 in /clinpm (#48) ([d8b72db](https://github.com/TENUM-Dev/tenum/commit/d8b72db)), closes [#48](https://github.com/TENUM-Dev/tenum/issues/48)

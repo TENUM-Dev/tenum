@@ -9,7 +9,7 @@ This Agreement sets forth the terms and conditions on which the Licensor makes a
 - **Agreement**: this TENUM Source Available License 1.0 Agreement.
 - **Control**: ownership, directly or indirectly, of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise.
 - **License**: the License as described in the License paragraph below.
-- **Licensor**: the entity offering these terms, which includes Redis Ltd. on behalf of itself and its subsidiaries and affiliates worldwide.
+- **Licensor**: the entity offering these terms, which includes Plentitude AI GmbH on behalf of itself and its subsidiaries and affiliates worldwide.
 - **Modify, Modified, or Modification**: copy from or adapt all or part of the work in a fashion requiring copyright permission other than making an exact copy. The resulting work is called a Modified version of the earlier work.
 - **TENUM**: the TENUM software as described in tenum.ai.
 - **Software**: certain Software components designed to work with TENUM and provided to You under this Agreement.

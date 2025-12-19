@@ -7,7 +7,7 @@ pluginManagement {
     }
     plugins {
         // Needed so precompiled script plugins in this included build can resolve Kotlin plugins without hardcoding versions in each script
-        val kotlinVersion = "2.2.21"
+        val kotlinVersion = "2.3.0"
         id("org.jetbrains.kotlin.jvm") version kotlinVersion
         id("org.jetbrains.kotlin.multiplatform") version kotlinVersion
         id("org.jetbrains.kotlin.plugin.serialization") version kotlinVersion
