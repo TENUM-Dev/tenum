@@ -363,6 +363,7 @@ object CallOpcodes {
         }
 
         env.debug("  Return ${results.size} values (after __close): $results")
+
         // Uenv.debug("eturn transfer info before triggering RETURN hook
         // This allows debug.getinfo('r') in the hook to access ftransfer and ntransfer
         val callStack = env.getCallStack()

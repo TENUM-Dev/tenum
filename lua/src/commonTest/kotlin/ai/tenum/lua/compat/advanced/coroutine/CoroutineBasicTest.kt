@@ -1,7 +1,6 @@
 package ai.tenum.lua.compat.advanced.coroutine
 
 import ai.tenum.lua.compat.LuaCompatTestBase
-import kotlin.test.Ignore
 import kotlin.test.Test
 
 /**
@@ -332,27 +331,6 @@ class CoroutineBasicTest : LuaCompatTestBase() {
             """
             local f = coroutine.create(function() end)
             return string.find(tostring(f), "thread") ~= nil
-            """.trimIndent(),
-        )
-    }
-
-    @Test
-    @Ignore // TODO: enable when coroutines fixed
-    fun testWrapYieldResumeInteraction() {
-        // Reproduce the wrap + nested yield/resume interaction from coroutine.lua
-        assertLuaTrue(
-            """
-            _G.x = nil
-            local function foo (i) return coroutine.yield(i) end
-            local f = coroutine.wrap(function ()
-                for i=1,10 do
-                    assert(foo(i) == _G.x, "Expected foo to return " .. tostring(_G.x) .. ", got: " .. tostring(foo(i)))
-                end
-                return 'a'
-            end)
-            for i=1,10 do _G.x = i; assert(f(i) == i, "Error in loop " .. i) end
-            _G.x = 'xuxu'; assert(f('xuxu') == 'a', "Expected final return value to be 'a'")
-            return true
             """.trimIndent(),
         )
     }

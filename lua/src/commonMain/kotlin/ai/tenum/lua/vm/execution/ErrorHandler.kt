@@ -136,18 +136,20 @@ class ErrorHandler(
                 null
             }
 
-        // Compose a detailed message that includes exception type and optional debug context.
-        val excClass = exception::class.simpleName ?: "Exception"
-        val baseMessage = exception.message ?: "runtime error"
-        val messageWithClass = "$excClass: $baseMessage"
-        val composedMessage = if (extraInfo != null) "$messageWithClass ($extraInfo)" else messageWithClass
-
-        // Emit debug information for easier diagnosis when debugEnabled
-        debugSink.debug { "[EXCEPTION HANDLER] Converting $excClass to LuaException: ${exception.message}" }
-        if (debugEnabled) {
-            val traceSummary = "${exception::class.simpleName}:${exception.message}"
-            debugSink.debug { "[EXCEPTION HANDLER] Exception summary: $traceSummary" }
-        }
+        val composedMessage =
+            when (exception) {
+                is RuntimeException -> {
+                    val base = exception.message ?: "runtime error"
+                    if (extraInfo != null) "$base ($extraInfo)" else base
+                }
+                else -> {
+                    if (extraInfo != null) {
+                        "${exception::class.simpleName}: ${exception.message} ($extraInfo)"
+                    } else {
+                        "${exception::class.simpleName}: ${exception.message}"
+                    }
+                }
+            }
 
         return LuaException(
             errorMessageOnly = composedMessage,

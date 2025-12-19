@@ -136,46 +136,6 @@ internal class DispatchResultHandler(
 
                 // Store callee's return values into caller's registers
                 val callInstr = action.callerContext.callInstruction
-                try {
-                    val callerRegs =
-                        action.callerContext.registers
-                            .take(8)
-                            .mapIndexed { i, v -> "R[$i]=$v" }
-                    debugSink.debug {
-                        "[CALL-RETURN DEBUG] callerProto=${action.callerContext.proto.name} callA=${callInstr.a} callC=${callInstr.c} callerRegs=$callerRegs returnValues=${action.returnValues}"
-                    }
-                } catch (_: Exception) {
-                }
-                try {
-                    val live =
-                        action.callerContext.proto.localVars
-                            .filter {
-                                it.isAliveAt(
-                                    action.callerContext.pc,
-                                )
-                            }.map { "${it.name}:R[${it.register}]" }
-                    debugSink.debug { "[CALL-RETURN DEBUG] caller live locals at pc=${action.callerContext.pc} = $live" }
-                } catch (_: Exception) {
-                }
-                try {
-                    val all =
-                        action.callerContext.proto.localVars
-                            .map { "${it.name}:R[${it.register}] start=${it.startPc} end=${it.endPc}" }
-                    debugSink.debug { "[CALL-RETURN DEBUG] caller all locals = $all" }
-                } catch (_: Exception) {
-                }
-                try {
-                    val callInstrSaved = action.callerContext.callInstruction
-                    debugSink.debug {
-                        "[CALL-RETURN DEBUG] saved callInstruction = opcode=${callInstrSaved.opcode} a=${callInstrSaved.a} b=${callInstrSaved.b} c=${callInstrSaved.c}"
-                    }
-                } catch (_: Exception) {
-                }
-                try {
-                    val atPcInstr = action.callerContext.instructions.getOrNull(action.callerContext.pc)
-                    debugSink.debug { "[CALL-RETURN DEBUG] instruction at saved pc=${action.callerContext.pc} = $atPcInstr" }
-                } catch (_: Exception) {
-                }
                 val storage = ResultStorage(state.env)
                 storage.storeResults(
                     targetReg = callInstr.a,
@@ -197,7 +157,7 @@ internal class DispatchResultHandler(
                 LoopControl.ContinueWithContext(result)
             }
             is ReturnLoopAction.ExitProto -> {
-                debugSink.debug(
+                println(
                     "[NO-CALLER] activeCloseState=${closeContext.activeCloseResumeState != null} segments=${closeContext.activeCloseResumeState?.ownerSegments?.size} outerFrames=${closeContext.activeCloseResumeState?.closeOwnerFrameStack?.size}",
                 )
                 LoopControl.ExitProto(action.returnValues)
