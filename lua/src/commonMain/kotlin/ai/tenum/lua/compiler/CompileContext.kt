@@ -580,10 +580,11 @@ data class CompileContext(
 
         // Emit lineEvent for lastLineDefined (the 'end' line) before RETURN
         // This matches Lua 5.4.8 behavior where lastLineDefined is always in activelines
+        // Use SYNTHETIC kind - this is for tracking but doesn't fire LINE hooks in PUC Lua
         val actualEndLine = if (endLine > 0) endLine else childCtx.currentLine
         if (actualEndLine > 0 && actualEndLine != childCtx.currentLine) {
             childCtx.currentLine = actualEndLine
-            childCtx.lineInfo.add(LineEvent(childCtx.instructions.size, actualEndLine, LineEventKind.EXECUTION))
+            childCtx.lineInfo.add(LineEvent(childCtx.instructions.size, actualEndLine, LineEventKind.SYNTHETIC))
         }
 
         childCtx.emit(OpCode.RETURN, 0, 1, 0)

@@ -63,7 +63,7 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_constructs_lua() = runTest(timeout = 60.seconds) { executeTestFile("constructs.lua") }
 
     @Test
-    @Ignore // TODO: Fix - failing at eqtab check for empty table after coroutine resume
+    @Ignore // Coroutines not yet fully supported
     fun test_coroutine_lua() = runTest(timeout = 60.seconds) { executeTestFile("coroutine.lua") }
 
     @Test
@@ -71,7 +71,6 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
     fun test_cstack_lua() = runTest(timeout = 60.seconds) { executeTestFile("cstack.lua") }
 
     @Test
-    @Ignore
     fun test_db_lua() =
         runTest(timeout = 60.seconds) {
             executeTestFile(
@@ -127,11 +126,10 @@ class OfficialTestSuiteCompatTest : LuaCompatTestBase() {
         }
 
     @Test
-    @Ignore
     fun test_locals_lua() = runTest(timeout = 60.seconds) {
         executeTestFile(
             "locals.lua",
-            //528..1179
+            528..1179 // skip to-be-closed variable tests for now
         )
     }
 

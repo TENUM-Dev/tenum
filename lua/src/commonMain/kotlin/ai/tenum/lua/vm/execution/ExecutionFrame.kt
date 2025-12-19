@@ -5,6 +5,7 @@ import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaTable
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
+import ai.tenum.lua.vm.CloseHandler
 
 /**
  * Encapsulates the execution state for a single Lua function call frame.
@@ -35,7 +36,27 @@ class ExecutionFrame(
     existingRegisters: MutableList<LuaValue<*>>? = null,
     /** Existing varargs (for resumption) */
     existingVarargs: List<LuaValue<*>>? = null,
+    /** Existing to-be-closed variables (for resumption) */
+    existingToBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>? = null,
+    /** Existing open upvalues map (for resumption) */
+    existingOpenUpvalues: MutableMap<Int, Upvalue>? = null,
+    /** Existing already-closed registers (for resumption of RETURN) */
+    val existingAlreadyClosed: MutableSet<Int>? = null,
 ) {
+    /**
+     * Captured return values for this frame (set by RETURN opcode).
+     * These persist across nested executeProto calls, preventing loss during __close yields.
+     * Non-null only when this frame has executed RETURN and captured its return values.
+     */
+    var capturedReturns: List<LuaValue<*>>? = null
+
+    /**
+     * True if this frame is resuming after a yield that occurred during THIS frame's RETURN
+     * instruction's __close handler execution (Phase 2 of two-phase return).
+     * This distinguishes "resuming after my own close handler yielded" from "inherited capturedReturns".
+     */
+    var isMidReturn: Boolean = false
+
     /** Register array (local variables and temporaries) - uses MutableList for dynamic growth */
     val registers: MutableList<LuaValue<*>> =
         if (existingRegisters != null) {
@@ -92,14 +113,17 @@ class ExecutionFrame(
      * Key: register index, Value: Upvalue object.
      * Must be closed when frame exits or when CLOSE instruction executes.
      */
-    val openUpvalues = mutableMapOf<Int, Upvalue>()
+    val openUpvalues: MutableMap<Int, Upvalue> = existingOpenUpvalues ?: mutableMapOf()
 
     /**
      * To-be-closed variables - tracks <close> variables for proper __close metamethod invocation.
      * Stores (register index, value) pairs in declaration order.
      * __close called in reverse order on scope exit.
      */
-    val toBeClosedVars = mutableListOf<Pair<Int, LuaValue<*>>>()
+    val toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>> = existingToBeClosedVars ?: mutableListOf()
+
+    /** Registers that were already closed (used when resuming RETURN with yields) */
+    val alreadyClosedRegs: MutableSet<Int> = existingAlreadyClosed ?: mutableSetOf()
 
     init {
         // Load initial arguments into parameter registers (if not resuming)
@@ -190,68 +214,42 @@ class ExecutionFrame(
      */
     fun executeCloseMetamethods(
         registerIndex: Int,
-        callCloseFn: (Upvalue, LuaValue<*>, LuaValue<*>) -> Unit,
+        initialError: LuaValue<*> = ai.tenum.lua.runtime.LuaNil,
+        callCloseFn: (Int, Upvalue, LuaValue<*>, LuaValue<*>) -> Unit,
     ) {
-        val snapshot = toBeClosedVars.toList()
-        var chainedError: LuaValue<*> = ai.tenum.lua.runtime.LuaNil
-        var lastException: Throwable? = null
+        val snapshot = toBeClosedVars.toList() // iterate over a stable view
 
-        for ((reg, capturedValue) in snapshot.asReversed()) {
-            if (reg < registerIndex) continue
-            // Use structural equality instead of reference equality
-            // This ensures the value is removed even if the object identity changed
-            // (which can happen due to platform-specific optimizations or copying)
-            toBeClosedVars.removeAll { it.first == reg && it.second == capturedValue }
+        // Clear only the vars that will be closed (reg >= registerIndex)
+        // This prevents double-closing while preserving outer-scope TBC vars
+        toBeClosedVars.removeAll { it.first >= registerIndex }
 
-            // Get current value from register (may have changed since declaration)
-            val currentValue = registers.getOrNull(reg) ?: capturedValue
-
-            // nil and false don't need closing
-            if (currentValue is ai.tenum.lua.runtime.LuaNil ||
-                (currentValue is ai.tenum.lua.runtime.LuaBoolean && !currentValue.value)
-            ) {
-                continue
-            }
-
-            // Get __close metamethod - must exist and be callable at close time
-            val closeMethod = getCloseMetamethodRaw(currentValue)
-            try {
-                when {
-                    closeMethod == null || closeMethod is ai.tenum.lua.runtime.LuaNil -> {
-                        // __close doesn't exist - create error
-                        throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
-                            "attempt to call a nil value (metamethod 'close')",
-                        )
-                    }
-                    closeMethod is ai.tenum.lua.runtime.LuaFunction -> {
-                        // Valid function - call it with current error (if any)
-                        callCloseFn(Upvalue(closedValue = closeMethod), currentValue, chainedError)
-                        // If no error was thrown, the chained error continues to next handler
-                        // (Don't clear it - only a new error replaces the old one)
-                    }
-                    else -> {
-                        // __close exists but is not a function
-                        val typeName = closeMethod.type().name.lowercase()
-                        throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
-                            "attempt to call a $typeName value (metamethod 'close')",
-                        )
-                    }
+        // Use CloseHandler for execution logic
+        val closeHandler = CloseHandler()
+        closeHandler.executeClose(
+            startReg = registerIndex,
+            tbcVars = snapshot,
+            initialError = initialError,
+        ) { reg, value, errorArg ->
+            // Validate __close metamethod exists and is callable
+            val closeMethod = getCloseMetamethodRaw(value)
+            when {
+                closeMethod == null || closeMethod is ai.tenum.lua.runtime.LuaNil -> {
+                    throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                        "attempt to call a nil value (metamethod 'close')",
+                    )
                 }
-            } catch (e: ai.tenum.lua.vm.errorhandling.LuaException) {
-                // Capture the original error value and exception
-                chainedError = e.errorValue
-                lastException = e
-            } catch (e: ai.tenum.lua.vm.errorhandling.LuaRuntimeError) {
-                // For runtime errors (from validation), create a formatted error message
-                chainedError =
-                    ai.tenum.lua.runtime
-                        .LuaString(e.message ?: "error in close")
-                lastException = e
+                closeMethod is ai.tenum.lua.runtime.LuaFunction -> {
+                    // Call the close function via callback
+                    callCloseFn(reg, Upvalue(closedValue = closeMethod), value, errorArg)
+                }
+                else -> {
+                    val typeName = closeMethod.type().name.lowercase()
+                    throw ai.tenum.lua.vm.errorhandling.LuaRuntimeError(
+                        "attempt to call a $typeName value (metamethod 'close')",
+                    )
+                }
             }
         }
-
-        // If there's a final error, re-throw the last exception
-        lastException?.let { throw it }
     }
 
     /**
@@ -264,6 +262,8 @@ class ExecutionFrame(
      */
     fun markToBeClosedVar(registerIndex: Int) {
         val value = registers[registerIndex]
+
+        println("[TBC mark] reg=$registerIndex value=$value")
 
         // nil and false are allowed but won't be closed
         if (value is ai.tenum.lua.runtime.LuaNil ||

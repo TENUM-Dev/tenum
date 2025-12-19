@@ -6,7 +6,7 @@ import ai.tenum.lua.vm.CallFrame
 /**
  * Builds Lua stack traces from call frames and bytecode information.
  */
-internal class StackTraceBuilder {
+class StackTraceBuilder {
     /**
      * Get the current line number for a given PC in a proto.
      *

@@ -286,11 +286,9 @@ object TableOpcodes {
 
         // Check if this register holds a local variable named "_ENV"
         for (localVar in proto.localVars) {
-            if (localVar.name == "_ENV" &&
-                localVar.register == registerIndex &&
-                currentPc >= localVar.startPc &&
-                currentPc < localVar.endPc
-            ) {
+            val isEnvVariable = localVar.name == "_ENV" && localVar.register == registerIndex
+            val isActiveScope = currentPc >= localVar.startPc && currentPc < localVar.endPc
+            if (isEnvVariable && isActiveScope) {
                 return true
             }
         }

@@ -1,6 +1,7 @@
 package ai.tenum.lua.runtime
 
 import ai.tenum.lua.compiler.model.Proto
+import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.vm.CallFrame
 
 /**
@@ -16,6 +17,8 @@ sealed class LuaCoroutine : LuaValue<Any> {
     override fun type(): LuaType = LuaType.THREAD
 
     override var metatableStore: LuaValue<*>? = null
+
+    override fun toString(): String = "thread: ${this.hashCode().toString(16)}"
 
     /**
      * Coroutine created from a Lua function
@@ -57,7 +60,7 @@ enum class CoroutineStatus {
 /**
  * Coroutine execution thread state
  */
-class CoroutineThread {
+class CoroutineThread : ai.tenum.lua.vm.debug.ThreadHookState {
     // Execution state
     var proto: Proto? = null
     var pc: Int = 0
@@ -66,6 +69,16 @@ class CoroutineThread {
     var varargs: List<LuaValue<*>> = emptyList() // Save varargs for VARARG opcode
     var yieldTargetRegister: Int = 0 // Register where yield call results should go
     var yieldExpectedResults: Int = 0 // Number of results expected by CALL (c field)
+    var toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>> = mutableListOf()
+    var pendingCloseStartReg: Int = 0
+    var pendingCloseVarState: Pair<Int, LuaValue<*>>? = null
+    var savedExecStack: List<ai.tenum.lua.vm.execution.ExecContext> = emptyList()
+    var pendingCloseYield: Boolean = false
+    var capturedReturnValues: List<LuaValue<*>>? = null
+    var pendingCloseContinuation: ai.tenum.lua.vm.execution.ResumptionState? = null
+    var pendingCloseErrorArg: LuaValue<*> = LuaNil
+    var closeResumeState: ai.tenum.lua.vm.execution.CloseResumeState? = null
+    var closeOwnerFrameStack: List<ai.tenum.lua.vm.execution.ExecutionFrame> = emptyList()
 
     // Call stack boundary: index in global call stack where this coroutine's frames start
     // Used to filter out main thread frames when saving coroutine's call stack
@@ -86,6 +99,11 @@ class CoroutineThread {
     // Saved native call depth from the calling context (for proper yield boundary checks)
     var savedNativeCallDepth: Int = 0
 
+    // Per-thread hook state (Lua 5.4 keeps hooks per coroutine)
+    override var hookConfig: ai.tenum.lua.vm.debug.HookConfig = ai.tenum.lua.vm.debug.HookConfig.NONE
+    override var hookInstructionCount: Int = 0
+    override var hookInProgress: Boolean = false
+
     fun reset() {
         proto = null
         pc = 0
@@ -98,6 +116,16 @@ class CoroutineThread {
         savedCallStack = emptyList()
         yieldedValues = emptyList()
         returnValues = emptyList()
+        toBeClosedVars = mutableListOf()
+        pendingCloseStartReg = 0
+        pendingCloseVarState = null
+        savedExecStack = emptyList()
+        pendingCloseYield = false
+        capturedReturnValues = null
+        pendingCloseContinuation = null
+        pendingCloseErrorArg = LuaNil
+        closeOwnerFrameStack = emptyList()
+        // Don't reset hook state - it persists across yields
         continuation = null
         savedNativeCallDepth = 0
     }

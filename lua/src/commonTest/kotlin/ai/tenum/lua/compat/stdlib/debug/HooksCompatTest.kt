@@ -131,17 +131,10 @@ class HooksCompatTest : LuaCompatTestBase() {
                   local function f (event, line)
                     assert(event == 'line')
                     local expected = table.remove(l, 1)
-                    print("Hook fired: expected=" .. tostring(expected) .. ", actual=" .. tostring(line))
                     if p then print(expected, line) end
                     assert(expected == line, "wrong trace!! expected " .. tostring(expected) .. ", got " .. tostring(line))
                   end
                   debug.sethook(f,"l"); load(s)(); debug.sethook()
-                  if #l > 0 then
-                    print("Remaining lines not visited:")
-                    for i=1,#l do
-                      print("  " .. tostring(l[i]))
-                    end
-                  end
                   assert(#l == 0, "not all expected lines were visited, remaining: " .. #l)
                 end
                 
@@ -619,6 +612,54 @@ end
             co()  -- run local function definition
             debug.sethook()  -- turn off hook
             assert(a == 2, "expected 2 hook calls, got " .. tostring(a))   -- ensure all two lines where hooked
+        """,
+            )
+        }
+
+    @Test
+    fun testReturnHooksForCloseMetamethods() =
+        runTest {
+            // Test from locals.lua:780-808
+            // Return hooks should fire when __close metamethods return
+            vm.debugEnabled = true
+            execute(
+                """
+            local function func2close(f)
+              return setmetatable({}, {__close = f})
+            end
+            
+            local trace = {}
+            
+            local function hook (event)
+              trace[#trace + 1] = event .. " " .. debug.getinfo(2).name
+            end
+            
+            local function foo (...)
+              local x <close> = func2close(function (_,msg)
+                trace[#trace + 1] = "x"
+              end)
+            
+              local y <close> = func2close(function (_,msg)
+                debug.sethook(hook, "r")
+              end)
+            
+              return ...
+            end
+            
+            local t = {foo(10,20,30)}
+            debug.sethook()
+            
+            -- Check results
+            assert(#t == 3 and t[1] == 10 and t[2] == 20 and t[3] == 30, "Results should be 10, 20, 30")
+            
+            -- Check trace
+            -- Expected: "return sethook", "return close", "x", "return close", "return foo"
+            assert(#trace == 5, "Expected 5 trace entries, got " .. #trace)
+            assert(trace[1] == "return sethook", "Expected 'return sethook', got '" .. tostring(trace[1]) .. "'")
+            assert(trace[2] == "return close", "Expected 'return close', got '" .. tostring(trace[2]) .. "'")
+            assert(trace[3] == "x", "Expected 'x', got '" .. tostring(trace[3]) .. "'")
+            assert(trace[4] == "return close", "Expected 'return close', got '" .. tostring(trace[4]) .. "'")
+            assert(trace[5] == "return foo", "Expected 'return foo', got '" .. tostring(trace[5]) .. "'")
         """,
             )
         }

@@ -671,12 +671,20 @@ g()
             // When error handler fails (including stack overflow), should return "error in error handling"
             execute(
                 """
+                local count = 0
+                local success = true
                 local function loop()
+                    count = count + 1
+                    if count > 100 then
+                        success = false
+                        error("The loop never ends")
+                    end
                     assert(pcall(loop))
                 end
                 
                 local err, msg = xpcall(loop, loop)
                 assert(not err, "xpcall should return false when error handler fails")
+                assert(not success, "The loop should have failed due to too many recursions")
                 assert(string.find(msg, "error"), "Error message should contain 'error', got: " .. tostring(msg))
             """,
             )

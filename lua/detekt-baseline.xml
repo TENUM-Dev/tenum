@@ -1,0 +1,824 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:IntegerFormatter.kt$IntegerFormatter$zeroPad &amp;&amp; !leftAlign &amp;&amp; (str.startsWith('-') || str.startsWith('+'))</ID>
+    <ID>CyclomaticComplexMethod:ArithmeticOpcodes.kt$ArithmeticOpcodes$inline fun executeMod( instr: Instruction, env: ExecutionEnvironment, )</ID>
+    <ID>CyclomaticComplexMethod:BasicLib.kt$BasicLib$private fun convertToNumber(value: LuaValue&lt;*&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>CyclomaticComplexMethod:BasicLib.kt$BasicLib$private fun registerRawOperations(registerGlobal: (String, LuaValue&lt;*&gt;) -&gt; Unit)</ID>
+    <ID>CyclomaticComplexMethod:BasicLibErrorHandling.kt$BasicLibErrorHandling$fun registerFunctions( registerGlobal: RegisterGlobalCallback, callFunction: CallFunctionCallback, getCallStack: GetCallStackCallback? = null, vm: ai.tenum.lua.vm.LuaVmImpl? = null, )</ID>
+    <ID>CyclomaticComplexMethod:BasicLibErrorHandling.kt$BasicLibErrorHandling$private fun xpcallImpl( callFunction: CallFunctionCallback, vm: ai.tenum.lua.vm.LuaVmImpl?, ): LuaNativeFunction</ID>
+    <ID>CyclomaticComplexMethod:BasicLibIteration.kt$BasicLibIteration$fun registerFunctions( registerGlobal: RegisterGlobalCallback, getMetamethod: GetMetamethodCallback, callFunction: CallFunctionCallback, )</ID>
+    <ID>CyclomaticComplexMethod:BasicLibLoading.kt$BasicLibLoading$private fun loadImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:BasicLibLoading.kt$BasicLibLoading$private fun requireImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:Bit32Lib.kt$Bit32Lib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>CyclomaticComplexMethod:CallCompiler.kt$CallCompiler$fun compileFunctionCall( expr: FunctionCall, targetReg: Int, ctx: CompileContext, compileExpression: (expr: Expression, targetReg: Int, ctx: CompileContext) -&gt; Unit, numResults: Int = 1, captureAllResults: Boolean = false, allowComplexNesting: Boolean = true, )</ID>
+    <ID>CyclomaticComplexMethod:CallCompiler.kt$CallCompiler$fun compileFunctionCallForMultiReturn( expr: FunctionCall, baseReg: Int, ctx: CompileContext, compileExpression: (expr: Expression, targetReg: Int, ctx: CompileContext) -&gt; Unit, numResults: Int = 0, )</ID>
+    <ID>CyclomaticComplexMethod:CompileContext.kt$CompileContext$fun validateGotosAtScopeExit( scopeLevel: Int, endPc: Int, isRepeatUntilBlock: Boolean = false, )</ID>
+    <ID>CyclomaticComplexMethod:CoroutineResumptionService.kt$CoroutineResumptionService$fun buildCloseResumeState( closeContinuationProto: Proto, closeContinuationPc: Int, closeContinuationRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, closeContinuationUpvalues: List&lt;Upvalue&gt;, closeContinuationVarargs: List&lt;LuaValue&lt;*&gt;&gt;, closeContinuationExecStack: List&lt;ExecContext&gt;, ownerProto: Proto, ownerPc: Int, ownerRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, ownerUpvalues: List&lt;Upvalue&gt;, ownerVarargs: List&lt;LuaValue&lt;*&gt;&gt;, startReg: Int, pendingTbcList: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, pendingCloseVar: Pair&lt;Int, LuaValue&lt;*&gt;&gt;?, errorArg: LuaValue&lt;*&gt;, capturedReturnValues: List&lt;LuaValue&lt;*&gt;&gt;?, yieldTargetReg: Int, yieldExpectedResults: Int, debugCallStack: List&lt;CallFrame&gt;, closeOwnerFrameStack: List&lt;ExecutionFrame&gt;, ): ResumptionState</ID>
+    <ID>CyclomaticComplexMethod:DebugLib.kt$DebugLib$private fun getInfoImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:DebugLib.kt$DebugLib$private fun tracebackImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:ExpressionCompiler.kt$ExpressionCompiler$private fun compileBinaryOp( expr: BinaryOp, targetReg: Int, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:ExpressionCompiler.kt$ExpressionCompiler$private fun compileTableConstructor( expr: TableConstructor, targetReg: Int, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:ExpressionParser.kt$ExpressionParser$private fun parsePostfixExpression(): Expression</ID>
+    <ID>CyclomaticComplexMethod:ExpressionParser.kt$ExpressionParser$private fun parsePrimaryExpression(): Expression</ID>
+    <ID>CyclomaticComplexMethod:FormatParser.kt$FormatParser$fun peekNextFormatSize(): Pair&lt;Int, Boolean&gt;</ID>
+    <ID>CyclomaticComplexMethod:FunctionNameInference.kt$FunctionNameInference$fun inferFunctionName( instructions: List&lt;Instruction&gt;, callPc: Int, funcRegister: Int, constants: List&lt;LuaValue&lt;*&gt;&gt;, localVars: List&lt;ai.tenum.lua.compiler.model.LocalVarInfo&gt; = emptyList(), ): InferredFunctionName</ID>
+    <ID>CyclomaticComplexMethod:HexFloatFormatter.kt$HexFloatFormatter$private fun formatHexFloat( value: Double, spec: FormatSpecifier, ): String</ID>
+    <ID>CyclomaticComplexMethod:IntegerFormatter.kt$IntegerFormatter$private fun formatHex( num: Long, spec: FormatSpecifier, uppercase: Boolean, ): String</ID>
+    <ID>CyclomaticComplexMethod:Lexer.kt$Lexer$private fun buildCharacterHandlers(): Map&lt;Char, (Int) -&gt; Unit&gt;</ID>
+    <ID>CyclomaticComplexMethod:Lexer.kt$Lexer$private fun number(startColumn: Int)</ID>
+    <ID>CyclomaticComplexMethod:LuaPattern.kt$LuaPattern$private fun getItemSize(pPos: Int): Int</ID>
+    <ID>CyclomaticComplexMethod:LuaPattern.kt$LuaPattern$private fun matchCharacterClass( char: Char, classChar: Char, ): Boolean</ID>
+    <ID>CyclomaticComplexMethod:LuaPattern.kt$LuaPattern$private fun matchPattern( text: String, textPos: Int, patternPos: Int, captures: MutableList&lt;Capture&gt;, captureStarts: MutableList&lt;Pair&lt;Int, Int&gt;&gt;, ): Int?</ID>
+    <ID>CyclomaticComplexMethod:LuaPattern.kt$LuaPattern$private fun matchSet( char: Char, patPos: Int, ): Boolean</ID>
+    <ID>CyclomaticComplexMethod:MathLib.kt$MathLib$private fun mathTointeger(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:NameHintResolver.kt$NameHintResolver$private fun getRegisterNameHintInternal( registerIndex: Int, originalRegister: Int, proto: Proto, currentPc: Int, minPcToCheck: Int = Int.MAX_VALUE, ): String?</ID>
+    <ID>CyclomaticComplexMethod:NumberFormatterBase.kt$NumberFormatterBase$protected open fun formatExponentialCore( value: Double, precision: Int, uppercase: Boolean, includeZeroPrecision: Boolean, ): String</ID>
+    <ID>CyclomaticComplexMethod:OpcodeDispatcher.kt$OpcodeDispatcher$private fun buildHandlerMap(): Map&lt;OpCode, (OpcodeContext) -&gt; DispatchResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:StatementCompiler.kt$StatementCompiler$fun compileAssignment( statement: Assignment, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:StatementCompiler.kt$StatementCompiler$fun compileForInStatement( statement: ForInStatement, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:StatementCompiler.kt$StatementCompiler$fun compileLocalDeclaration( statement: LocalDeclaration, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:StatementCompiler.kt$StatementCompiler$fun compileStatement( statement: Statement, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:StatementCompiler.kt$StatementCompiler$internal fun compileReturn( statement: ReturnStatement, ctx: CompileContext, )</ID>
+    <ID>CyclomaticComplexMethod:StringBinaryPack.kt$StringBinaryPack$fun computePackSize(format: String): Int</ID>
+    <ID>CyclomaticComplexMethod:StringBinaryPack.kt$StringBinaryPack$fun packValues( format: String, values: List&lt;LuaValue&lt;*&gt;&gt;, ): String</ID>
+    <ID>CyclomaticComplexMethod:StringLib.kt$StringLib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>CyclomaticComplexMethod:StringOperations.kt$StringOperations$fun repeatString( str: String, n: Int, sep: String, ): String</ID>
+    <ID>CyclomaticComplexMethod:StringParser.kt$StringParser$private fun parseEscapeSequence( onPeek: () -&gt; Char?, onAdvance: () -&gt; Char?, onNewline: () -&gt; Unit, sourceName: String = "&lt;unknown&gt;", currentLine: Int = 1, ): EscapeResult</ID>
+    <ID>CyclomaticComplexMethod:StringParser.kt$StringParser$private fun parseUnicodeEscape( onPeek: () -&gt; Char?, onAdvance: () -&gt; Char?, sourceName: String = "&lt;unknown&gt;", currentLine: Int = 1, ): EscapeResult</ID>
+    <ID>CyclomaticComplexMethod:StringPatternMatching.kt$StringPatternMatching$fun findString( str: String, pattern: String, init: Int, plain: Boolean, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:StringPatternMatching.kt$StringPatternMatching$fun gsubPattern( str: String, patternStr: String, repl: LuaValue&lt;*&gt;, maxReplacements: Int?, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>CyclomaticComplexMethod:TableLib.kt$TableLib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>CyclomaticComplexMethod:TracebackFormatter.kt$TracebackFormatter$private fun StringBuilder.formatFrame( frame: CallFrame, useUpvalueDescriptor: Boolean, )</ID>
+    <ID>CyclomaticComplexMethod:TypeComparisons.kt$TypeComparisons$fun luaLessOrEqual( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, ): Boolean?</ID>
+    <ID>CyclomaticComplexMethod:TypeComparisons.kt$TypeComparisons$fun luaLessThan( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, ): Boolean?</ID>
+    <ID>ForbiddenComment:IOLib.kt$IOLib$// TODO: Actually set this as default input</ID>
+    <ID>ForbiddenComment:IOLib.kt$IOLib$// TODO: Actually set this as default output</ID>
+    <ID>ForbiddenComment:IOLib.kt$IOLib$// TODO: Open file by name and set as default input</ID>
+    <ID>ForbiddenComment:IOLib.kt$IOLib$// TODO: Open file by name and set as default output</ID>
+    <ID>ForbiddenComment:OSLib.kt$OSLib$// TODO: DST detection</ID>
+    <ID>LargeClass:DebugLib.kt$DebugLib : LuaLibrary</ID>
+    <ID>LargeClass:LuaVmImpl.kt$LuaVmImpl : LuaVmVmCapabilitiesDebugContext</ID>
+    <ID>LargeClass:StatementCompiler.kt$StatementCompiler</ID>
+    <ID>LongMethod:BasicLib.kt$BasicLib$private fun convertToNumber(value: LuaValue&lt;*&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>LongMethod:BasicLib.kt$BasicLib$private fun registerRawOperations(registerGlobal: (String, LuaValue&lt;*&gt;) -&gt; Unit)</ID>
+    <ID>LongMethod:BasicLibErrorHandling.kt$BasicLibErrorHandling$fun registerFunctions( registerGlobal: RegisterGlobalCallback, callFunction: CallFunctionCallback, getCallStack: GetCallStackCallback? = null, vm: ai.tenum.lua.vm.LuaVmImpl? = null, )</ID>
+    <ID>LongMethod:BasicLibErrorHandling.kt$BasicLibErrorHandling$private fun xpcallImpl( callFunction: CallFunctionCallback, vm: ai.tenum.lua.vm.LuaVmImpl?, ): LuaNativeFunction</ID>
+    <ID>LongMethod:BasicLibIteration.kt$BasicLibIteration$fun registerFunctions( registerGlobal: RegisterGlobalCallback, getMetamethod: GetMetamethodCallback, callFunction: CallFunctionCallback, )</ID>
+    <ID>LongMethod:BasicLibLoading.kt$BasicLibLoading$private fun loadImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:BasicLibLoading.kt$BasicLibLoading$private fun requireImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:Bit32Lib.kt$Bit32Lib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>LongMethod:CallCompiler.kt$CallCompiler$fun compileFunctionCall( expr: FunctionCall, targetReg: Int, ctx: CompileContext, compileExpression: (expr: Expression, targetReg: Int, ctx: CompileContext) -&gt; Unit, numResults: Int = 1, captureAllResults: Boolean = false, allowComplexNesting: Boolean = true, )</ID>
+    <ID>LongMethod:CallCompiler.kt$CallCompiler$fun compileFunctionCallForMultiReturn( expr: FunctionCall, baseReg: Int, ctx: CompileContext, compileExpression: (expr: Expression, targetReg: Int, ctx: CompileContext) -&gt; Unit, numResults: Int = 0, )</ID>
+    <ID>LongMethod:CallOpcodes.kt$CallOpcodes$fun executeReturn( instr: Instruction, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, frame: ExecutionFrame, env: ExecutionEnvironment, currentLine: Int, triggerHookFn: (HookEvent, Int) -&gt; Unit, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:ChunkReader.kt$ChunkReader$private fun readFunction( source: BufferedSource, parentSource: String?, ): Proto</ID>
+    <ID>LongMethod:CompileContext.kt$CompileContext$fun compileFunction( params: List&lt;String&gt;, hasVararg: Boolean, body: List&lt;Statement&gt;, name: String = "&lt;function&gt;", functionLine: Int = 0, endLine: Int = 0, ): Proto</ID>
+    <ID>LongMethod:CoroutineResumptionService.kt$CoroutineResumptionService$fun buildCloseResumeState( closeContinuationProto: Proto, closeContinuationPc: Int, closeContinuationRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, closeContinuationUpvalues: List&lt;Upvalue&gt;, closeContinuationVarargs: List&lt;LuaValue&lt;*&gt;&gt;, closeContinuationExecStack: List&lt;ExecContext&gt;, ownerProto: Proto, ownerPc: Int, ownerRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, ownerUpvalues: List&lt;Upvalue&gt;, ownerVarargs: List&lt;LuaValue&lt;*&gt;&gt;, startReg: Int, pendingTbcList: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, pendingCloseVar: Pair&lt;Int, LuaValue&lt;*&gt;&gt;?, errorArg: LuaValue&lt;*&gt;, capturedReturnValues: List&lt;LuaValue&lt;*&gt;&gt;?, yieldTargetReg: Int, yieldExpectedResults: Int, debugCallStack: List&lt;CallFrame&gt;, closeOwnerFrameStack: List&lt;ExecutionFrame&gt;, ): ResumptionState</ID>
+    <ID>LongMethod:DebugLib.kt$DebugLib$private fun getInfoImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:DebugLib.kt$DebugLib$private fun tracebackImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:DispatchResultHandler.kt$DispatchResultHandler$private fun handleReturn( dispatchResult: DispatchResult.Return, state: DispatchHandlerState, execStack: ArrayDeque&lt;ExecContext&gt;, onCallDepthDecrement: () -&gt; Unit, ): LoopControl</ID>
+    <ID>LongMethod:DispatchResultHandler.kt$DispatchResultHandler$private fun handleTailCallTrampoline( dispatchResult: DispatchResult.TailCallTrampoline, state: DispatchHandlerState, isCoroutineContext: Boolean, ): LoopControl</ID>
+    <ID>LongMethod:ExpressionCompiler.kt$ExpressionCompiler$private fun compileBinaryOp( expr: BinaryOp, targetReg: Int, ctx: CompileContext, )</ID>
+    <ID>LongMethod:ExpressionCompiler.kt$ExpressionCompiler$private fun compileTableConstructor( expr: TableConstructor, targetReg: Int, ctx: CompileContext, )</ID>
+    <ID>LongMethod:ExpressionParser.kt$ExpressionParser$private fun parsePostfixExpression(): Expression</ID>
+    <ID>LongMethod:IOLib.kt$IOLib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>LongMethod:Lexer.kt$Lexer$private fun buildCharacterHandlers(): Map&lt;Char, (Int) -&gt; Unit&gt;</ID>
+    <ID>LongMethod:LuaVmImpl.kt$LuaVmImpl$private fun callFunctionInternal( func: LuaFunction, args: List&lt;LuaValue&lt;*&gt;&gt;, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:LuaVmImpl.kt$LuaVmImpl$private fun createExecutionHandlers(): ExecutionHandlers</ID>
+    <ID>LongMethod:LuaVmImpl.kt$LuaVmImpl$private fun executeMainLoop( state: DispatchHandlerState, handlers: ExecutionHandlers, execStack: ArrayDeque&lt;ExecContext&gt;, preparation: ExecutionPreparation, applyContextUpdate: (ExecutionContextUpdate) -&gt; Unit, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:LuaVmImpl.kt$LuaVmImpl$private fun executeProto( proto: Proto, args: List&lt;LuaValue&lt;*&gt;&gt;, upvalues: List&lt;Upvalue&gt; = emptyList(), function: LuaFunction? = null, mode: ExecutionMode = ExecutionMode.FreshCall, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:LuaVmImpl.kt$LuaVmImpl$private fun handleExecutionException( e: Throwable, handlers: ExecutionHandlers, state: DispatchHandlerState, alreadyClosedRegs: MutableSet&lt;Int&gt;, execStack: ArrayDeque&lt;ExecContext&gt;, ): Nothing</ID>
+    <ID>LongMethod:LuaVmImpl.kt$LuaVmImpl$private fun initStandardLibrary()</ID>
+    <ID>LongMethod:NameHintResolver.kt$NameHintResolver$private fun getRegisterNameHintInternal( registerIndex: Int, originalRegister: Int, proto: Proto, currentPc: Int, minPcToCheck: Int = Int.MAX_VALUE, ): String?</ID>
+    <ID>LongMethod:OSLib.kt$OSLib$private fun formatDate( format: String, dt: LocalDateTime, ): String</ID>
+    <ID>LongMethod:OpcodeDispatcher.kt$OpcodeDispatcher$private fun buildHandlerMap(): Map&lt;OpCode, (OpcodeContext) -&gt; DispatchResult&gt;</ID>
+    <ID>LongMethod:SegmentContinuationHandler.kt$SegmentContinuationHandler$fun processContinueSegment(action: ReturnLoopAction.ContinueSegment): ExecutionContextUpdate</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$fun compileAssignment( statement: Assignment, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$fun compileForInStatement( statement: ForInStatement, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$fun compileForStatement( statement: ForStatement, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$fun compileFunctionDeclaration( statement: FunctionDeclaration, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$fun compileGotoStatement( statement: GotoStatement, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$fun compileLocalDeclaration( statement: LocalDeclaration, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StatementCompiler.kt$StatementCompiler$internal fun compileReturn( statement: ReturnStatement, ctx: CompileContext, )</ID>
+    <ID>LongMethod:StringBinaryPack.kt$StringBinaryPack$fun computePackSize(format: String): Int</ID>
+    <ID>LongMethod:StringBinaryPack.kt$StringBinaryPack$fun packValues( format: String, values: List&lt;LuaValue&lt;*&gt;&gt;, ): String</ID>
+    <ID>LongMethod:StringLib.kt$StringLib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>LongMethod:StringParser.kt$StringParser$private fun parseEscapeSequence( onPeek: () -&gt; Char?, onAdvance: () -&gt; Char?, onNewline: () -&gt; Unit, sourceName: String = "&lt;unknown&gt;", currentLine: Int = 1, ): EscapeResult</ID>
+    <ID>LongMethod:StringPatternMatching.kt$StringPatternMatching$fun gsubPattern( str: String, patternStr: String, repl: LuaValue&lt;*&gt;, maxReplacements: Int?, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>LongMethod:TableLib.kt$TableLib$override fun register(context: LuaLibraryContext)</ID>
+    <ID>LongMethod:TracebackFormatter.kt$TracebackFormatter$private fun StringBuilder.formatFrame( frame: CallFrame, useUpvalueDescriptor: Boolean, )</ID>
+    <ID>LongMethod:YieldHandler.kt$YieldHandler$fun handleYield( exception: LuaYieldException, currentProto: Proto, pc: Int, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, instructions: List&lt;Instruction&gt;, execFrame: ExecutionFrame, varargs: List&lt;LuaValue&lt;*&gt;&gt;, execStack: ArrayDeque&lt;ExecContext&gt;, yieldContext: CoroutineYieldContext, closeContext: CloseContext, callerContext: CallerContext, callStackBase: Int, filterCoroutineFrames: (List&lt;ExecutionFrame&gt;, Int) -&gt; List&lt;ExecutionFrame&gt;, getCapturedReturnValues: () -&gt; List&lt;LuaValue&lt;*&gt;&gt;?, )</ID>
+    <ID>LongMethod:YieldHandler.kt$YieldHandler$private fun buildCloseResumeState( currentProto: Proto, pc: Int, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, execFrame: ExecutionFrame, varargs: List&lt;LuaValue&lt;*&gt;&gt;, execStack: ArrayDeque&lt;ExecContext&gt;, yieldTargetReg: Int, yieldExpectedResults: Int, coroutineCallStack: List&lt;CallFrame&gt;, callerContext: CallerContext, closeContext: CloseContext, callStackBase: Int, filterCoroutineFrames: (List&lt;ExecutionFrame&gt;, Int) -&gt; List&lt;ExecutionFrame&gt;, ownerTbc: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, ): CloseResumeState</ID>
+    <ID>LongParameterList:ArithmeticOpcodes.kt$ArithmeticOpcodes$( env: ExecutionEnvironment, left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, metamethodName: String, noinline opLong: (Long, Long) -&gt; Long, noinline opDouble: (Double, Double) -&gt; Double, )</ID>
+    <ID>LongParameterList:ArithmeticOpcodes.kt$ArithmeticOpcodes$( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, regB: Int, regC: Int, pc: Int, env: ExecutionEnvironment, noinline opLong: (Long, Long) -&gt; Long, noinline opDouble: (Double, Double) -&gt; Double, )</ID>
+    <ID>LongParameterList:BitwiseOpcodes.kt$BitwiseOpcodes$( env: ExecutionEnvironment, left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, leftRegister: Int, rightRegister: Int, pc: Int, metamethodName: String, op: (Long, Long) -&gt; Long, )</ID>
+    <ID>LongParameterList:BitwiseOpcodes.kt$BitwiseOpcodes$( instr: Instruction, env: ExecutionEnvironment, pc: Int, metamethod: String, isLeftShift: Boolean, debugOp: String, )</ID>
+    <ID>LongParameterList:BitwiseOpcodes.kt$BitwiseOpcodes$( instr: Instruction, env: ExecutionEnvironment, pc: Int, metamethodName: String, debugSymbol: String, noinline op: (Long, Long) -&gt; Long, )</ID>
+    <ID>LongParameterList:BitwiseOpcodes.kt$BitwiseOpcodes$( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, leftRegister: Int, rightRegister: Int, pc: Int, env: ExecutionEnvironment, isLeftShift: Boolean, )</ID>
+    <ID>LongParameterList:CallCompiler.kt$CallCompiler$( expr: FunctionCall, targetReg: Int, ctx: CompileContext, compileExpression: (expr: Expression, targetReg: Int, ctx: CompileContext) -&gt; Unit, numResults: Int = 1, captureAllResults: Boolean = false, allowComplexNesting: Boolean = true, )</ID>
+    <ID>LongParameterList:CallOpcodes.kt$CallOpcodes$( instr: Instruction, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, frame: ExecutionFrame, env: ExecutionEnvironment, currentLine: Int, triggerHookFn: (HookEvent, Int) -&gt; Unit, )</ID>
+    <ID>LongParameterList:CallOpcodes.kt$CallOpcodes$( instr: Instruction, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, frame: ExecutionFrame, env: ExecutionEnvironment, pc: Int, setCallContext: (InferredFunctionName) -&gt; Unit, )</ID>
+    <ID>LongParameterList:CallStackManager.kt$CallStackManager$( proto: Proto, function: LuaFunction?, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, varargs: List&lt;LuaValue&lt;*&gt;&gt;, args: List&lt;LuaValue&lt;*&gt;&gt;, inferredName: InferredFunctionName?, pc: Int = 0, isCloseMetamethod: Boolean = false, )</ID>
+    <ID>LongParameterList:CompileContext.kt$CompileContext$( gotoScopeLevel: Int, gotoLocalCount: Int, labelScopeLevel: Int, labelLocalCount: Int, labelName: String, isForward: Boolean, gotoLine: Int = -1, gotoInstructionIndex: Int = -1, labelInstructionIndex: Int = -1, )</ID>
+    <ID>LongParameterList:CompileContext.kt$CompileContext$( params: List&lt;String&gt;, hasVararg: Boolean, body: List&lt;Statement&gt;, name: String = "&lt;function&gt;", functionLine: Int = 0, endLine: Int = 0, )</ID>
+    <ID>LongParameterList:CompilerHelpers.kt$CompilerHelpers$( funcReg: Int, targetReg: Int, argCount: Int, numResults: Int, captureAllResults: Boolean, ctx: CompileContext, )</ID>
+    <ID>LongParameterList:CompilerHelpers.kt$CompilerHelpers$( functionExpr: Expression, args: List&lt;Expression&gt;, targetReg: Int, numResults: Int, captureAllResults: Boolean, line: Int, ctx: CompileContext, compileExpression: (Expression, Int, CompileContext) -&gt; Unit, compileFunctionCall: FunctionCallCompiler? = null, updateLineForCall: (Int, CompileContext) -&gt; Unit, )</ID>
+    <ID>LongParameterList:CompilerHelpers.kt$CompilerHelpers$( receiverExpr: Expression, methodName: String, base: Int, selfReg: Int, ctx: CompileContext, compileExpression: (Expression, Int, CompileContext) -&gt; Unit, )</ID>
+    <ID>LongParameterList:CoroutineResumptionService.kt$CoroutineResumptionService$( closeContinuationProto: Proto, closeContinuationPc: Int, closeContinuationRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, closeContinuationUpvalues: List&lt;Upvalue&gt;, closeContinuationVarargs: List&lt;LuaValue&lt;*&gt;&gt;, closeContinuationExecStack: List&lt;ExecContext&gt;, ownerProto: Proto, ownerPc: Int, ownerRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, ownerUpvalues: List&lt;Upvalue&gt;, ownerVarargs: List&lt;LuaValue&lt;*&gt;&gt;, startReg: Int, pendingTbcList: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, pendingCloseVar: Pair&lt;Int, LuaValue&lt;*&gt;&gt;?, errorArg: LuaValue&lt;*&gt;, capturedReturnValues: List&lt;LuaValue&lt;*&gt;&gt;?, yieldTargetReg: Int, yieldExpectedResults: Int, debugCallStack: List&lt;CallFrame&gt;, closeOwnerFrameStack: List&lt;ExecutionFrame&gt;, )</ID>
+    <ID>LongParameterList:CoroutineResumptionService.kt$CoroutineResumptionService$( pendingCloseOwnerFrame: ExecutionFrame?, callStack: List&lt;ExecutionFrame&gt;, currentProto: Proto, currentPc: Int, currentRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;, currentUpvalues: List&lt;Upvalue&gt;, currentVarargs: List&lt;LuaValue&lt;*&gt;&gt;, defaultTbc: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, )</ID>
+    <ID>LongParameterList:CoroutineResumptionService.kt$CoroutineResumptionService$( proto: Proto, pc: Int, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, upvalues: List&lt;Upvalue&gt;, varargs: List&lt;LuaValue&lt;*&gt;&gt;, yieldTargetReg: Int, yieldExpectedResults: Int, toBeClosedVars: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, pendingCloseStartReg: Int, pendingCloseVar: Pair&lt;Int, LuaValue&lt;*&gt;&gt;?, execStack: List&lt;ExecContext&gt;, pendingCloseYield: Boolean, capturedReturnValues: List&lt;LuaValue&lt;*&gt;&gt;?, debugCallStack: List&lt;CallFrame&gt;, closeOwnerFrameStack: List&lt;ExecutionFrame&gt;, closeResumeState: CloseResumeState? = null, )</ID>
+    <ID>LongParameterList:CoroutineStateManager.kt$CoroutineStateManager$( coroutine: LuaCoroutine?, proto: Proto, programCounter: Int, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, upvalues: List&lt;Upvalue&gt;, varargs: List&lt;LuaValue&lt;*&gt;&gt;, yieldedValues: List&lt;LuaValue&lt;*&gt;&gt;, yieldTargetRegister: Int, yieldExpectedResults: Int, callStack: List&lt;ai.tenum.lua.vm.CallFrame&gt;, toBeClosedVars: MutableList&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, pendingCloseStartReg: Int, pendingCloseVar: Pair&lt;Int, LuaValue&lt;*&gt;&gt;?, execStack: List&lt;ai.tenum.lua.vm.execution.ExecContext&gt;, pendingCloseYield: Boolean, capturedReturnValues: List&lt;LuaValue&lt;*&gt;&gt;?, pendingCloseContinuation: ai.tenum.lua.vm.execution.ResumptionState? = null, pendingCloseErrorArg: LuaValue&lt;*&gt; = ai.tenum.lua.runtime.LuaNil, incrementPc: Boolean = true, closeResumeState: ai.tenum.lua.vm.execution.CloseResumeState? = null, closeOwnerFrameStack: List&lt;ai.tenum.lua.vm.execution.ExecutionFrame&gt; = emptyList(), )</ID>
+    <ID>LongParameterList:DispatchResultHandler.kt$DispatchResultHandler$( dispatchResult: DispatchResult, state: DispatchHandlerState, execStack: ArrayDeque&lt;ExecContext&gt;, callDepth: Int, isCoroutineContext: Boolean, onCallDepthIncrement: () -&gt; Unit, onCallDepthDecrement: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:DispatchResultHandler.kt$DispatchResultHandler$( dispatchResult: DispatchResult.CallTrampoline, state: DispatchHandlerState, execStack: ArrayDeque&lt;ExecContext&gt;, callDepth: Int, isCoroutineContext: Boolean, onCallDepthIncrement: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:DispatchResultHandler.kt$DispatchResultHandler$( private val debugSink: VmDebugSink, private val resultProcessor: DispatchResultProcessor, private val segmentContinuationHandler: SegmentContinuationHandler, private val trampolineHandler: TrampolineHandler, private val callStackManager: CallStackManager, private val hookHelper: HookTriggerHelper, private val flowState: ExecutionFlowState, private val closeContext: CloseContext, private val globals: MutableMap&lt;String, LuaValue&lt;*&gt;&gt;, private val vmCapabilities: VmCapabilities, private val triggerHook: (HookEvent, Int) -&gt; Unit, )</ID>
+    <ID>LongParameterList:ErrorHandler.kt$ErrorHandler$( exception: Exception, currentProto: Proto, pc: Int, registers: List&lt;LuaValue&lt;*&gt;&gt;, constants: List&lt;LuaValue&lt;*&gt;&gt;, instructions: List&lt;ai.tenum.lua.compiler.model.Instruction&gt;, )</ID>
+    <ID>LongParameterList:ExecutionFrame.kt$ExecutionFrame$( /** Function prototype being executed */ val proto: Proto, /** Initial arguments passed to function */ initialArgs: List&lt;LuaValue&lt;*&gt;&gt;, /** Upvalue bindings for this closure */ val upvalues: List&lt;Upvalue&gt;, /** Initial program counter (for resumption) */ initialPc: Int = 0, /** Existing registers (for resumption) */ existingRegisters: MutableList&lt;LuaValue&lt;*&gt;&gt;? = null, /** Existing varargs (for resumption) */ existingVarargs: List&lt;LuaValue&lt;*&gt;&gt;? = null, /** Existing to-be-closed variables (for resumption) */ existingToBeClosedVars: MutableList&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;? = null, /** Existing open upvalues map (for resumption) */ existingOpenUpvalues: MutableMap&lt;Int, Upvalue&gt;? = null, /** Existing already-closed registers (for resumption of RETURN) */ val existingAlreadyClosed: MutableSet&lt;Int&gt;? = null, )</ID>
+    <ID>LongParameterList:ExecutionPreparation.kt$ExecutionPreparation.Companion$( mode: ExecutionMode, proto: Proto, args: List&lt;LuaValue&lt;*&gt;&gt;, upvalues: List&lt;Upvalue&gt;, callStackManager: CallStackManager, isCoroutine: Boolean, )</ID>
+    <ID>LongParameterList:IOHandleTableFactory.kt$IOHandleTableFactory$( handle: Any, readFn: (List&lt;LuaValue&lt;*&gt;&gt;) -&gt; List&lt;LuaValue&lt;*&gt;&gt;, writeFn: (List&lt;LuaValue&lt;*&gt;&gt;) -&gt; List&lt;LuaValue&lt;*&gt;&gt;, closeFn: () -&gt; Unit, flushFn: () -&gt; Unit, linesFn: (() -&gt; List&lt;LuaValue&lt;*&gt;&gt;)? = null, gcAction: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:LuaPattern.kt$LuaPattern$( text: String, textPos: Int, patPos: Int, nextPatPos: Int, min: Int, max: Int, greedy: Boolean, captures: MutableList&lt;Capture&gt;, captureStarts: MutableList&lt;Pair&lt;Int, Int&gt;&gt;, )</ID>
+    <ID>LongParameterList:NumericPackHelpers.kt$NumericPackHelpers$( result: StringBuilder, values: List&lt;LuaValue&lt;*&gt;&gt;, index: Int, size: Int, littleEndian: Boolean, signed: Boolean, )</ID>
+    <ID>LongParameterList:OpcodeDispatcher.kt$OpcodeDispatcher$( instr: Instruction, env: ExecutionEnvironment, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, execFrame: ExecutionFrame, openUpvalues: MutableMap&lt;Int, Upvalue&gt;, varargs: List&lt;LuaValue&lt;*&gt;&gt;, pc: Int, frame: CallFrame, executeProto: (Proto, List&lt;LuaValue&lt;*&gt;&gt;, List&lt;Upvalue&gt;, ai.tenum.lua.runtime.LuaFunction?) -&gt; List&lt;LuaValue&lt;*&gt;&gt;, callFunction: (ai.tenum.lua.runtime.LuaFunction, List&lt;LuaValue&lt;*&gt;&gt;) -&gt; List&lt;LuaValue&lt;*&gt;&gt;, traceRegisterWrite: (Int, LuaValue&lt;*&gt;, String) -&gt; Unit, triggerHook: (HookEvent, Int) -&gt; Unit, setCallContext: (InferredFunctionName) -&gt; Unit, )</ID>
+    <ID>LongParameterList:OpcodeHelpers.kt$( e: RuntimeException, left: ai.tenum.lua.runtime.LuaValue&lt;*&gt;, right: ai.tenum.lua.runtime.LuaValue&lt;*&gt;, leftOperand: Int, rightOperand: Int, pc: Int, env: ExecutionEnvironment, )</ID>
+    <ID>LongParameterList:StringFormatting.kt$StringFormatting$( formatChar: Char, flags: ParsedFlags, dimensions: ParsedDimensions, values: List&lt;LuaValue&lt;*&gt;&gt;, valueIndex: Int, registry: FormatterRegistry, )</ID>
+    <ID>LongParameterList:StringParser.kt$StringParser$( source: String, start: Int, quote: Char, sourceName: String = "&lt;unknown&gt;", currentLine: Int = 1, onAdvance: () -&gt; Char?, onPeek: () -&gt; Char?, onNewline: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:TableOpcodes.kt$TableOpcodes$( value: LuaValue&lt;*&gt;, key: LuaValue&lt;*&gt;, env: ExecutionEnvironment, registerIndex: Int, pc: Int, allowRecursion: Boolean, )</ID>
+    <ID>LongParameterList:YieldHandler.kt$YieldHandler$( currentProto: Proto, pc: Int, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, execFrame: ExecutionFrame, varargs: List&lt;LuaValue&lt;*&gt;&gt;, execStack: ArrayDeque&lt;ExecContext&gt;, yieldTargetReg: Int, yieldExpectedResults: Int, coroutineCallStack: List&lt;CallFrame&gt;, callerContext: CallerContext, closeContext: CloseContext, callStackBase: Int, filterCoroutineFrames: (List&lt;ExecutionFrame&gt;, Int) -&gt; List&lt;ExecutionFrame&gt;, ownerTbc: List&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;, )</ID>
+    <ID>LongParameterList:YieldHandler.kt$YieldHandler$( exception: LuaYieldException, currentProto: Proto, pc: Int, registers: MutableList&lt;LuaValue&lt;*&gt;&gt;, instructions: List&lt;Instruction&gt;, execFrame: ExecutionFrame, varargs: List&lt;LuaValue&lt;*&gt;&gt;, execStack: ArrayDeque&lt;ExecContext&gt;, yieldContext: CoroutineYieldContext, closeContext: CloseContext, callerContext: CallerContext, callStackBase: Int, filterCoroutineFrames: (List&lt;ExecutionFrame&gt;, Int) -&gt; List&lt;ExecutionFrame&gt;, getCapturedReturnValues: () -&gt; List&lt;LuaValue&lt;*&gt;&gt;?, )</ID>
+    <ID>LoopWithTooManyJumpStatements:BasicLibLoading.kt$BasicLibLoading$while</ID>
+    <ID>LoopWithTooManyJumpStatements:CoroutineResumptionService.kt$CoroutineResumptionService$for</ID>
+    <ID>LoopWithTooManyJumpStatements:ExpressionParser.kt$ExpressionParser$while</ID>
+    <ID>LoopWithTooManyJumpStatements:FormatParserHelpers.kt$FormatParserHelpers$while</ID>
+    <ID>LoopWithTooManyJumpStatements:FunctionNameInference.kt$FunctionNameInference$for</ID>
+    <ID>LoopWithTooManyJumpStatements:LuaPattern.kt$LuaPattern$while</ID>
+    <ID>LoopWithTooManyJumpStatements:LuaVmImpl.kt$LuaVmImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:NameHintResolver.kt$NameHintResolver$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Parser.kt$Parser$while</ID>
+    <ID>LoopWithTooManyJumpStatements:StatementParser.kt$StatementParser$while</ID>
+    <ID>LoopWithTooManyJumpStatements:StringBinaryPack.kt$StringBinaryPack$while</ID>
+    <ID>LoopWithTooManyJumpStatements:StringBinaryUnpack.kt$StringBinaryUnpack$while</ID>
+    <ID>LoopWithTooManyJumpStatements:StringFormatting.kt$StringFormatting$while</ID>
+    <ID>LoopWithTooManyJumpStatements:StringParser.kt$StringParser$while</ID>
+    <ID>MagicNumber:ArgumentHelpers.kt$ArgumentHelpers$14</ID>
+    <ID>MagicNumber:BasicLib.kt$BasicLib$16</ID>
+    <ID>MagicNumber:BasicLib.kt$BasicLib$3</ID>
+    <ID>MagicNumber:BasicLib.kt$BasicLib$36</ID>
+    <ID>MagicNumber:BasicLibIteration.kt$BasicLibIteration$3</ID>
+    <ID>MagicNumber:BasicLibLoading.kt$BasicLibLoading$127</ID>
+    <ID>MagicNumber:BasicLibLoading.kt$BasicLibLoading$200</ID>
+    <ID>MagicNumber:BasicLibLoading.kt$BasicLibLoading$3</ID>
+    <ID>MagicNumber:BasicLibLoading.kt$BasicLibLoading$32</ID>
+    <ID>MagicNumber:BasicLibLoading.kt$BasicLibLoading$4</ID>
+    <ID>MagicNumber:BinaryOperations.kt$BinaryOperations$0xFF</ID>
+    <ID>MagicNumber:BinaryOperations.kt$BinaryOperations$16</ID>
+    <ID>MagicNumber:BinaryOperations.kt$BinaryOperations$7</ID>
+    <ID>MagicNumber:BinaryOperations.kt$BinaryOperations$8</ID>
+    <ID>MagicNumber:Bit32Lib.kt$Bit32Lib$0x80000000L</ID>
+    <ID>MagicNumber:Bit32Lib.kt$Bit32Lib$0xFFFFFFFFL</ID>
+    <ID>MagicNumber:Bit32Lib.kt$Bit32Lib$3</ID>
+    <ID>MagicNumber:Bit32Lib.kt$Bit32Lib$32</ID>
+    <ID>MagicNumber:BitwiseOpcodes.kt$BitwiseOpcodes$64L</ID>
+    <ID>MagicNumber:BitwiseOpcodes.kt$BitwiseOpcodes$9223372036854775808.0</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$0x1B</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$0x1FF</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$0x3F</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$0xFF</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$0xFFFFFFFFL</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$0xFFL</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$100</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$14</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$23</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$4</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$6</ID>
+    <ID>MagicNumber:ChunkReader.kt$ChunkReader$8</ID>
+    <ID>MagicNumber:CompileContext.kt$CompileContext$255</ID>
+    <ID>MagicNumber:CompileContext.kt$CompileContext$256</ID>
+    <ID>MagicNumber:CoroutineLib.kt$CoroutineLib$3</ID>
+    <ID>MagicNumber:DebugLib.kt$DebugLib$3</ID>
+    <ID>MagicNumber:DebugLib.kt$DebugLib.Companion$3</ID>
+    <ID>MagicNumber:DispatchResultHandler.kt$DispatchResultHandler$10</ID>
+    <ID>MagicNumber:DoubleUtils.kt$DoubleUtils$0x7FF</ID>
+    <ID>MagicNumber:DoubleUtils.kt$DoubleUtils$0xFFFFFFFFFFFFFL</ID>
+    <ID>MagicNumber:DoubleUtils.kt$DoubleUtils$1023</ID>
+    <ID>MagicNumber:DoubleUtils.kt$DoubleUtils$52</ID>
+    <ID>MagicNumber:DoubleUtils.kt$DoubleUtils$63</ID>
+    <ID>MagicNumber:ErrorHandler.kt$ErrorHandler$199</ID>
+    <ID>MagicNumber:ErrorHandler.kt$ErrorHandler$8</ID>
+    <ID>MagicNumber:ExecutionEnvironment.kt$ExecutionEnvironment$20</ID>
+    <ID>MagicNumber:ExecutionFrame.kt$ExecutionFrame$1024</ID>
+    <ID>MagicNumber:ExponentialFormatter.kt$ExponentialFormatter$6</ID>
+    <ID>MagicNumber:ExpressionCompiler.kt$ExpressionCompiler$50</ID>
+    <ID>MagicNumber:FloatFormatter.kt$FloatFormatter$6</ID>
+    <ID>MagicNumber:FloatHandlers.kt$DoubleHandler$8</ID>
+    <ID>MagicNumber:FloatHandlers.kt$FloatHandler$4</ID>
+    <ID>MagicNumber:FormatParser.kt$FormatParser$4</ID>
+    <ID>MagicNumber:FormatParser.kt$FormatParser$8</ID>
+    <ID>MagicNumber:FormatParserHelpers.kt$FormatParserHelpers$8</ID>
+    <ID>MagicNumber:FrameOpcodes.kt$FrameOpcodes$10</ID>
+    <ID>MagicNumber:FunctionNameInference.kt$FunctionNameInference$256</ID>
+    <ID>MagicNumber:FunctionNameInference.kt$FunctionNameInference$3</ID>
+    <ID>MagicNumber:FunctionNameInference.kt$FunctionNameInference$5</ID>
+    <ID>MagicNumber:HexFloatFormatter.kt$HexFloatFormatter$13</ID>
+    <ID>MagicNumber:HexFloatFormatter.kt$HexFloatFormatter$16</ID>
+    <ID>MagicNumber:InstructionEncoder.kt$InstructionEncoder$0x1FF</ID>
+    <ID>MagicNumber:InstructionEncoder.kt$InstructionEncoder$0x3F</ID>
+    <ID>MagicNumber:InstructionEncoder.kt$InstructionEncoder$0xFF</ID>
+    <ID>MagicNumber:InstructionEncoder.kt$InstructionEncoder$14</ID>
+    <ID>MagicNumber:InstructionEncoder.kt$InstructionEncoder$23</ID>
+    <ID>MagicNumber:InstructionEncoder.kt$InstructionEncoder$6</ID>
+    <ID>MagicNumber:IntHandlers.kt$SignedIntHandler$4</ID>
+    <ID>MagicNumber:IntHandlers.kt$UnsignedIntHandler$4</ID>
+    <ID>MagicNumber:IntegerFormatter.kt$IntegerFormatter$16</ID>
+    <ID>MagicNumber:IntegerFormatter.kt$IntegerFormatter$8</ID>
+    <ID>MagicNumber:LongHandlers.kt$SignedLongHandler$8</ID>
+    <ID>MagicNumber:LongHandlers.kt$SizeTHandler$8</ID>
+    <ID>MagicNumber:LongHandlers.kt$UnsignedLongHandler$8</ID>
+    <ID>MagicNumber:LoopOpcodes.kt$LoopOpcodes$3</ID>
+    <ID>MagicNumber:LuaDouble.kt$LuaDouble$9007199254740992L</ID>
+    <ID>MagicNumber:LuaLong.kt$LuaLong$9007199254740992L</ID>
+    <ID>MagicNumber:LuaNumber.kt$LuaNumber.Companion$9223372036854775808.0</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$123</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$126</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$3</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$32</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$33</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$47</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$58</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$64</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$91</ID>
+    <ID>MagicNumber:LuaPattern.kt$LuaPattern$96</ID>
+    <ID>MagicNumber:LuaTable.kt$LuaTable$16</ID>
+    <ID>MagicNumber:LuaThread.kt$LuaThread$16</ID>
+    <ID>MagicNumber:LuaUserdata.kt$LuaUserdata$16</ID>
+    <ID>MagicNumber:LuaVmImpl.kt$LuaVmImpl$1000</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$1.1102230246251565e-16</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$11</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$180.0</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$27</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$30</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$31</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$32</ID>
+    <ID>MagicNumber:MathLib.kt$MathLib$9223372036854775808.0</ID>
+    <ID>MagicNumber:NumberFormatterBase.kt$NumberFormatterBase$10.0</ID>
+    <ID>MagicNumber:NumberFormatterBase.kt$NumberFormatterBase$4</ID>
+    <ID>MagicNumber:NumberFormatterBase.kt$NumberFormatterBase$6</ID>
+    <ID>MagicNumber:NumberParser.kt$NumberParser$10</ID>
+    <ID>MagicNumber:NumberParser.kt$NumberParser$16</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$16</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$24</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$3</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$32</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$4</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$40</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$48</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$5</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$56</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$6</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$7</ID>
+    <ID>MagicNumber:NumericPackHelpers.kt$NumericPackHelpers$8</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$0xFFFF</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$0xFFFFFFFF</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$16</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$24</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$3</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$32</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$4</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$40</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$48</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$5</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$56</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$6</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$7</ID>
+    <ID>MagicNumber:NumericUnpackHelpers.kt$NumericUnpackHelpers$8</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$100</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$1000</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$1000.0</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$12</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$3</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$4</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$7</ID>
+    <ID>MagicNumber:OSLib.kt$OSLib$9999</ID>
+    <ID>MagicNumber:OpcodeDispatcher.kt$OpcodeDispatcher$50</ID>
+    <ID>MagicNumber:OpcodeHelpers.kt$255</ID>
+    <ID>MagicNumber:OpcodeHelpers.kt$256</ID>
+    <ID>MagicNumber:PointerFormatter.kt$PointerFormatter$16</ID>
+    <ID>MagicNumber:QuotedFormatter.kt$QuotedFormatter$13</ID>
+    <ID>MagicNumber:QuotedFormatter.kt$QuotedFormatter$16</ID>
+    <ID>MagicNumber:StackOpcodes.kt$StackOpcodes$10</ID>
+    <ID>MagicNumber:StatementCompiler.kt$StatementCompiler$3</ID>
+    <ID>MagicNumber:StatementCompiler.kt$StatementCompiler$4</ID>
+    <ID>MagicNumber:StringBinaryPack.kt$StringBinaryPack$0xFF</ID>
+    <ID>MagicNumber:StringBinaryPack.kt$StringBinaryPack$4</ID>
+    <ID>MagicNumber:StringBinaryPack.kt$StringBinaryPack$8</ID>
+    <ID>MagicNumber:StringFormatting.kt$StringFormatting$99</ID>
+    <ID>MagicNumber:StringHandlers.kt$PrefixedStringHandler$8</ID>
+    <ID>MagicNumber:StringLib.kt$StringLib$0xFF</ID>
+    <ID>MagicNumber:StringLib.kt$StringLib$3</ID>
+    <ID>MagicNumber:StringOperations.kt$StringOperations$255.0</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x1FFFFF</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x3F</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x3FFFFFF</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x7F</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x7FF</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x7FFFFFFF</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0x80</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xC0</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xE0</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xF0</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xF8</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xFC</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xFF</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$0xFFFF</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$10</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$12</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$18</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$24</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$30</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$4</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$5</ID>
+    <ID>MagicNumber:StringParser.kt$StringParser$6</ID>
+    <ID>MagicNumber:TableLib.kt$TableLib$3</ID>
+    <ID>MagicNumber:TableLib.kt$TableLib$4</ID>
+    <ID>MagicNumber:TableLib.kt$TableLib$999_999</ID>
+    <ID>MagicNumber:TableOpcodes.kt$TableOpcodes$255</ID>
+    <ID>MagicNumber:TableOpcodes.kt$TableOpcodes$256</ID>
+    <ID>MagicNumber:TracebackFormatter.kt$TracebackFormatter$10</ID>
+    <ID>MagicNumber:TracebackFormatter.kt$TracebackFormatter$11</ID>
+    <ID>MagicNumber:TracebackFormatter.kt$TracebackFormatter$22</ID>
+    <ID>MagicNumber:TypeComparisons.kt$TypeComparisons$9007199254740992L</ID>
+    <ID>MagicNumber:UnpackContext.kt$UnpackContext$0xFF</ID>
+    <ID>MagicNumber:Utf8Lib.kt$Utf8Lib$0x10FFFF</ID>
+    <ID>MagicNumber:VariableIntHandlers.kt$VariableIntHandlerBase$4</ID>
+    <ID>MaxLineLength:ArgumentCollector.kt$ArgumentCollector$*</ID>
+    <ID>MaxLineLength:ArithmeticOpcodes.kt$ArithmeticOpcodes$else -&gt; env.luaError("attempt to perform arithmetic on a ${LoopOpcodes.getTypeName(left, env)} value")</ID>
+    <ID>MaxLineLength:ArithmeticOpcodes.kt$ArithmeticOpcodes$else -&gt; env.luaError("attempt to perform arithmetic on a ${LoopOpcodes.getTypeName(right, env)} value")</ID>
+    <ID>MaxLineLength:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("bad argument #1 to 'select' (number expected, got ${indexValue::class.simpleName})")</ID>
+    <ID>MaxLineLength:BitwiseOpcodes.kt$BitwiseOpcodes$env.setRegister(instr.a, binaryBitwiseWithMetamethod(env, left, right, instr.b, instr.c, pc, metamethodName, op))</ID>
+    <ID>MaxLineLength:CallCompiler.kt$CallCompiler$*</ID>
+    <ID>MaxLineLength:CallCompiler.kt$CallCompiler$compileFunctionCall(arg, argReg, ctx, compileExpression, numResults = 1, captureAllResults = false)</ID>
+    <ID>MaxLineLength:CallCompiler.kt$CallCompiler$compileFunctionCall(innerCall, innerResultsReg, ctx, compileExpression, numResults = 1, captureAllResults = true)</ID>
+    <ID>MaxLineLength:CallFrame.kt$CallFrame$val isReturning: Boolean = false</ID>
+    <ID>MaxLineLength:CallFrame.kt$CallFrame$val tailCallDepth: Int = 0</ID>
+    <ID>MaxLineLength:CallOpcodes.kt$CallOpcodes$// CRITICAL: If this is a resume after yield-in-close, the __close metamethods already ran (Phase 1 completed them).</ID>
+    <ID>MaxLineLength:CallOpcodes.kt$CallOpcodes$// [RETURN CLEAR] Clearing capturedReturns (had ${frame.capturedReturns?.size} values) Frame: ${frame.proto.name}</ID>
+    <ID>MaxLineLength:CallOpcodes.kt$CallOpcodes$println("[CALL debug] calling pcall; caller TBC size=${frame.toBeClosedVars.size} TBC=${frame.toBeClosedVars}")</ID>
+    <ID>MaxLineLength:CloseErrorHandler.kt$CloseErrorHandler$is LuaException -&gt; originalException.errorValue ?: (originalException.message?.let { LuaString(it) } ?: LuaNil)</ID>
+    <ID>MaxLineLength:CloseResumeOrchestrator.kt$CloseResumeOrchestrator$"[Segment Orchestrator] Processing first segment: proto=${firstSegment.proto.name}, total segments=${closeState.ownerSegments.size}"</ID>
+    <ID>MaxLineLength:CloseResumeOrchestrator.kt$CloseResumeOrchestrator$"[Segment Orchestrator] Rebuilt frame: pc=${firstSegment.pcToResume}, TBC.size=${firstSegment.toBeClosedVars.size}, capturedReturns=${firstSegment.capturedReturns?.size}, isMidReturn=${firstSegment.isMidReturn}"</ID>
+    <ID>MaxLineLength:CloseResumeOrchestrator.kt$CloseResumeOrchestrator$debugSink.debug { "[Segment Orchestrator] Single frame - clearing segments but preserving closeOwnerFrameStack" }</ID>
+    <ID>MaxLineLength:CloseResumeOrchestrator.kt$CloseResumeOrchestrator$private val executeProto: (Proto, List&lt;LuaValue&lt;*&gt;&gt;, List&lt;Upvalue&gt;, LuaFunction?, ExecutionMode) -&gt; List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>MaxLineLength:CompileContext.kt$CompileContext$message = "&lt;goto ${gotoInfo.labelName}&gt;$lineInfo jumps into the scope of local '${firstJumpedLocal?.name ?: "?"}'"</ID>
+    <ID>MaxLineLength:CompileContext.kt$CompileContext$token = Token(TokenType.IDENTIFIER, firstUnresolved.labelName, firstUnresolved.labelName, currentLine, 1)</ID>
+    <ID>MaxLineLength:CoroutineLib.kt$CoroutineLib$val stateManager = context.getCoroutineStateManager?.invoke() ?: return resumeError("no coroutine state manager")</ID>
+    <ID>MaxLineLength:CoroutineLib.kt$CoroutineLib$vm.setHook(coroutine = null, hook = prevConfig.hook, mask = prevConfig.mask.joinToString(""), count = prevConfig.count)</ID>
+    <ID>MaxLineLength:CoroutineResumptionService.kt$CoroutineResumptionService$execStack = if (i == startIndex &amp;&amp; capturedReturnValues != null) closeContinuationExecStack.toList() else emptyList()</ID>
+    <ID>MaxLineLength:CoroutineStateManager.kt$CoroutineStateManager$"[DEBUG close-yield save] pendingCloseYield=$pendingCloseYield tbc=${toBeClosedVars.size} vals=$toBeClosedVars captured=${capturedReturnValues?.size} cont=${pendingCloseContinuation != null} pcv=$pendingCloseVar"</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$(frame.function as? ai.tenum.lua.runtime.LuaNativeFunction)?.name == "coroutine.yield"</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$// For both SUSPENDED and DEAD coroutines: use "in upvalue/function &lt;&gt;" descriptor (Lua 5.4 behavior)</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$// Only treat as "in coroutine" if the coroutine is actually running (not dead/suspended with saved stack)</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$if</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$useUpvalueDescriptor = true</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$val frame = stackView.atLevel(level) ?: throw LuaRuntimeError("bad argument #1 to '$functionName' (level out of range)")</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$val hasInferredName = frame.inferredFunctionName?.name?.let { it.isNotEmpty() &amp;&amp; it != "?" } == true</ID>
+    <ID>MaxLineLength:DebugLib.kt$DebugLib$val isActiveCoroutine = isInCoroutine &amp;&amp; currentCo!!.status == ai.tenum.lua.runtime.CoroutineStatus.RUNNING</ID>
+    <ID>MaxLineLength:DispatchResultHandler.kt$DispatchResultHandler$"[NO-CALLER] activeCloseState=${closeContext.activeCloseResumeState != null} segments=${closeContext.activeCloseResumeState?.ownerSegments?.size} outerFrames=${closeContext.activeCloseResumeState?.closeOwnerFrameStack?.size}"</ID>
+    <ID>MaxLineLength:DispatchResultHandler.kt$DispatchResultHandler$debugSink.debug { " TCO: After fill, registers[0]=${state.registers[0]}, registers.hashCode=${state.registers.hashCode()}" }</ID>
+    <ID>MaxLineLength:DispatchResultProcessor.kt$DispatchResultProcessor$"[SEGMENT FINAL] Continuing outer frame: proto=${nonSegmentFrame.proto.name} pc=${nonSegmentFrame.pcToResume}"</ID>
+    <ID>MaxLineLength:DispatchResultProcessor.kt$DispatchResultProcessor$"[Segment Orchestrator] First segment completed, processing next segment: proto=${nextSegment.proto.name}"</ID>
+    <ID>MaxLineLength:ErrorHandler.kt$ErrorHandler$" PC=$i: ${ins.opcode} a=${ins.a} b=${ins.b} c=${ins.c} # line=${stackTraceBuilder.getCurrentLine(proto, i)}"</ID>
+    <ID>MaxLineLength:ErrorHandler.kt$ErrorHandler$"pc=$pc, instr=${instr?.opcode ?: "?"} a=${instr?.a ?: -1} b=${instr?.b ?: -1} c=${instr?.c ?: -1}, registers=${registers.size}, constants=${constants.size}, instructions=${instructions.size}"</ID>
+    <ID>MaxLineLength:ErrorHandler.kt$ErrorHandler$"pc=$pc, registers=${registers.size}, constants=${constants.size}, instructions=${instructions.size}"</ID>
+    <ID>MaxLineLength:ExecutionEnvironment.kt$ExecutionEnvironment$fun preserveErrorCallStack(callStack: List&lt;ai.tenum.lua.vm.CallFrame&gt;)</ID>
+    <ID>MaxLineLength:ExecutionEnvironment.kt$ExecutionEnvironment$fun setPendingCloseOwnerTbc(vars: MutableList&lt;Pair&lt;Int, LuaValue&lt;*&gt;&gt;&gt;)</ID>
+    <ID>MaxLineLength:ExecutionPreparation.kt$ExecutionPreparation.Companion$!frame.isNative || (frame.function as? ai.tenum.lua.runtime.LuaNativeFunction)?.name != "coroutine.yield"</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$BooleanLiteral::class to { expr, targetReg, ctx -&gt; compileBooleanLiteral(expr as BooleanLiteral, targetReg, ctx) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$FunctionExpression::class to { expr, targetReg, ctx -&gt; compileFunctionExpression(expr as FunctionExpression, targetReg, ctx) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$NumberLiteral::class to { expr, targetReg, ctx -&gt; compileNumberLiteral(expr as NumberLiteral, targetReg, ctx) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$ParenExpression::class to { expr, targetReg, ctx -&gt; compileExpression((expr as ParenExpression).expression, targetReg, ctx) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$StringLiteral::class to { expr, targetReg, ctx -&gt; compileStringLiteral(expr as StringLiteral, targetReg, ctx) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$TableConstructor::class to { expr, targetReg, ctx -&gt; compileTableConstructor(expr as TableConstructor, targetReg, ctx) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler$val proto = ctx.compileFunction(expr.parameters, expr.hasVararg, expr.body, functionLine = expr.line, endLine = expr.endLine)</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler${ expr, targetReg, ctx -&gt; callCompiler.compileFunctionCall(expr as FunctionCall, targetReg, ctx, ::compileExpression) }</ID>
+    <ID>MaxLineLength:ExpressionCompiler.kt$ExpressionCompiler${ expr, targetReg, ctx -&gt; callCompiler.compileMethodCall(expr as MethodCall, targetReg, ctx, ::compileExpression) }</ID>
+    <ID>MaxLineLength:FrameOpcodes.kt$FrameOpcodes$env.debug("[REGISTERS after CLOSE] ${frame.registers.slice(0..10).mapIndexed { i, v -&gt; "R[$i]=$v" }.joinToString(", ")}")</ID>
+    <ID>MaxLineLength:FrameOpcodes.kt$FrameOpcodes$env.debug("[TO-BE-CLOSED after CLOSE] ${frame.toBeClosedVars.map { (reg, v) -&gt; "reg=$reg value=$v" }.joinToString(", ")}")</ID>
+    <ID>MaxLineLength:HexFloatFormatter.kt$HexFloatFormatter$return "${signStr}${hexPrefix}1${decimalPart}$expChar${if (doubleBits.exponent &gt;= 0) "+" else ""}${doubleBits.exponent}"</ID>
+    <ID>MaxLineLength:IntHandlers.kt$SignedIntHandler$context.result.add(NumericUnpackHelpers.unpackInt(context::readByte, context.parser.littleEndian, signed = true))</ID>
+    <ID>MaxLineLength:IntHandlers.kt$UnsignedIntHandler$context.result.add(NumericUnpackHelpers.unpackInt(context::readByte, context.parser.littleEndian, signed = false))</ID>
+    <ID>MaxLineLength:LongHandlers.kt$SignedLongHandler$context.result.add(NumericUnpackHelpers.unpackLong(context::readByte, context.parser.littleEndian, signed = true))</ID>
+    <ID>MaxLineLength:LongHandlers.kt$SizeTHandler$context.result.add(NumericUnpackHelpers.unpackLong(context::readByte, context.parser.littleEndian, signed = false))</ID>
+    <ID>MaxLineLength:LongHandlers.kt$UnsignedLongHandler$context.result.add(NumericUnpackHelpers.unpackLong(context::readByte, context.parser.littleEndian, signed = false))</ID>
+    <ID>MaxLineLength:LoopOpcodes.kt$LoopOpcodes$" FORPREP (integer): init=$init, limit=$limit, step=$step -&gt; index=$startIndex, jump to PC=${currentPc + instr.b + 1}"</ID>
+    <ID>MaxLineLength:LoopOpcodes.kt$LoopOpcodes$env.debug(" FORLOOP (float): index=$index, limit=$limit, step=$step -&gt; continue (jump to PC=${newPc + 1})")</ID>
+    <ID>MaxLineLength:LoopOpcodes.kt$LoopOpcodes$env.debug(" FORLOOP (integer): index=$index, limit=$limit, step=$step -&gt; continue (jump to PC=${newPc + 1})")</ID>
+    <ID>MaxLineLength:LoopOpcodes.kt$LoopOpcodes$env.debug(" FORPREP (float): init=$init, limit=$limit, step=$step -&gt; index=$startIndex, jump to PC=${currentPc + instr.b + 1}")</ID>
+    <ID>MaxLineLength:LuaLibraryContext.kt$LuaLibraryContext$val cleanupCallStackFrames: ((Int) -&gt; Unit)? = null</ID>
+    <ID>MaxLineLength:LuaLibraryContext.kt$LuaLibraryContext$val getCoroutineStateManager: (() -&gt; ai.tenum.lua.vm.coroutine.CoroutineStateManager)? = null</ID>
+    <ID>MaxLineLength:LuaPattern.kt$LuaPattern$'p' -&gt; char.code in 33..47 || char.code in 58..64 || char.code in 91..96 || char.code in 123..126</ID>
+    <ID>MaxLineLength:LuaPattern.kt$LuaPattern$val result = matchRepeat(text, tPos, pPos, nextPos + 1, 0, 1, greedy = true, captures, captureStarts)</ID>
+    <ID>MaxLineLength:LuaPattern.kt$LuaPattern$val result = matchRepeat(text, tPos, pPos, nextPos + 1, 0, Int.MAX_VALUE, greedy = false, captures, captureStarts)</ID>
+    <ID>MaxLineLength:LuaPattern.kt$LuaPattern$val result = matchRepeat(text, tPos, pPos, nextPos + 1, 0, Int.MAX_VALUE, greedy = true, captures, captureStarts)</ID>
+    <ID>MaxLineLength:LuaPattern.kt$LuaPattern$val result = matchRepeat(text, tPos, pPos, nextPos + 1, 1, Int.MAX_VALUE, greedy = true, captures, captureStarts)</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$"[PUSH-FIX] frame=${callerFrame?.proto?.name} hasTBC=${callerFrame?.toBeClosedVars?.isNotEmpty()} tbcCount=${callerFrame?.toBeClosedVars?.size} shouldPush=$shouldPush"</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$"[callFunction finally] Popping frame: proto=${frameToPop?.proto?.name} TBC.size=${frameToPop?.toBeClosedVars?.size}"</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$*</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$// Use referential equality (not proto equality) since different execution instances of the same function are distinct</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$cleanupCallStackFrames = { initialSize -&gt; callStackManager.cleanupFrames(initialSize) }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$debugSink.debug { "[callFunction finally] Same list? ${frameToPop.toBeClosedVars === activeFrame.toBeClosedVars}" }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$debugSink.debug { "[callFunction finally] Transferring ${frameToPop.toBeClosedVars.size} TBC vars to active frame" }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$debugSink.debug { "[callFunction finally] activeFrame=${activeFrame != null} activeProto=${activeFrame?.proto?.name}" }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$fun</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$getCurrentCoroutine = { coroutineStateManager.getCurrentCoroutine() }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$saveNativeCallDepth = { depth -&gt; nativeCallDepth = depth }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$setCurrentCoroutine = { coroutine -&gt; coroutineStateManager.setCurrentCoroutine(coroutine) }</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$val callStackBase = (currentCoroutine as? LuaCoroutine.LuaFunctionCoroutine)?.thread?.callStackBase ?: 0</ID>
+    <ID>MaxLineLength:LuaVmImpl.kt$LuaVmImpl$val updatedFrame = CallOpcodes.prepareFrameWithReturnValues(currentFrame, returnFtransfer, results)</ID>
+    <ID>MaxLineLength:NameHintResolver.kt$NameHintResolver$*</ID>
+    <ID>MaxLineLength:NameHintResolver.kt$NameHintResolver$if</ID>
+    <ID>MaxLineLength:OSLib.kt$OSLib$"$weekdayName ${dt.month.name.substring(0, 3)} ${dt.day} ${dt.hour}:${dt.minute}:${dt.second} ${dt.year}"</ID>
+    <ID>MaxLineLength:OSLib.kt$OSLib$"${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}:${dt.second.toString().padStart(2, '0')}"</ID>
+    <ID>MaxLineLength:OpcodeDispatcher.kt$OpcodeDispatcher$CallOpcodes</ID>
+    <ID>MaxLineLength:OpcodeDispatcher.kt$OpcodeDispatcher$UpvalueOpcodes</ID>
+    <ID>MaxLineLength:OpcodeDispatcher.kt$OpcodeDispatcher$ctx.env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)</ID>
+    <ID>MaxLineLength:RegisterAllocator.kt$RegisterAllocator$"function or expression requires too many registers (limit is $MAX_REGISTERS, attempting to allocate ${stackTop + count})"</ID>
+    <ID>MaxLineLength:RegisterAllocator.kt$RegisterAllocator$error("function or expression requires too many registers (limit is $MAX_REGISTERS, attempting to allocate register $stackTop)")</ID>
+    <ID>MaxLineLength:RegisterAllocator.kt$RegisterAllocator$error("function or expression requires too many registers (limit is $MAX_REGISTERS, attempting to set stackTop to $newTop)")</ID>
+    <ID>MaxLineLength:ScopeManager.kt$ScopeManager$"endScope: level=$currentScopeLevel, snapshotLocalSize=$snapshotLocalSize, totalLocals=${_locals.size}, activeLocals=$activeLocalsCount"</ID>
+    <ID>MaxLineLength:ShortHandlers.kt$SignedShortHandler$context.result.add(NumericUnpackHelpers.unpackShort(context::readByte, context.parser.littleEndian, signed = true))</ID>
+    <ID>MaxLineLength:ShortHandlers.kt$UnsignedShortHandler$context.result.add(NumericUnpackHelpers.unpackShort(context::readByte, context.parser.littleEndian, signed = false))</ID>
+    <ID>MaxLineLength:StackOpcodes.kt$StackOpcodes$env.debug("[REGISTERS after MOVE] ${env.registers.slice(0..10).mapIndexed { i, v -&gt; "R[$i]=$v" }.joinToString(", ")}")</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$.</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$CompilerHelpers.emitEnvUpvalueAccess(valueReg, envUpvalue, nameConst, ctx, isRead = false)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$callCompiler.compileFunctionCall(call, loopStateRegs[0], ctx, expressionCompiler::compileExpression, numResults)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$callCompiler.compileFunctionCall(expr, targetReg, ctx, expressionCompiler::compileExpression, numResults)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$callCompiler.compileFunctionCallForMultiReturn(expr, targetReg, ctx, expressionCompiler::compileExpression)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$callCompiler.compileFunctionCallForMultiReturn(nestedCall, nestedTarget, ctx, expressionCompiler::compileExpression)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$compileExpression = { expr, reg, context -&gt; expressionCompiler.compileExpression(expr, reg, context) }</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$ctx.emit(OpCode.SETTABLE, envLocal.register, ctx.getRKOperandForConstant(nameConst), valueReg)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$ctx.emit(OpCode.SETTABLE, target.tableReg!!, ctx.getRKOperandForConstant(fieldConst), valueReg)</ID>
+    <ID>MaxLineLength:StatementCompiler.kt$StatementCompiler$leftOnDifferentLine || rightOnDifferentLine || hasMultiLineBinaryOp(expr.left) || hasMultiLineBinaryOp(expr.right)</ID>
+    <ID>MaxLineLength:StatementParser.kt$StatementParser$return FunctionDeclaration(name, finalParams, hasVararg, body, tablePath, isMethod, line = functionLine, endLine = endLine)</ID>
+    <ID>MaxLineLength:StatementParser.kt$StatementParser$return IfStatement(condition, thenBlock, elseIfBlocks, elseBlock, line = ifLine, thenLine = thenLine, endLine = endLine)</ID>
+    <ID>MaxLineLength:Storage.kt$private</ID>
+    <ID>MaxLineLength:StringFormatting.kt$StringFormatting$private</ID>
+    <ID>MaxLineLength:StringFormatting.kt$StringFormatting$val replacement = processFormatSpecifier(formatChar, flags, dimensions, values, valueIndex, registry)</ID>
+    <ID>MaxLineLength:TableLib.kt$TableLib$throw RuntimeException("invalid value (${value.type().name.lowercase()}) at index $index in table for 'concat'")</ID>
+    <ID>MaxLineLength:TracebackFormatter.kt$TracebackFormatter$*</ID>
+    <ID>MaxLineLength:TracebackFormatter.kt$TracebackFormatter$nativeFuncName != null &amp;&amp; nativeFuncName.isNotEmpty() &amp;&amp; nativeFuncName != "native" -&gt; nativeFuncName</ID>
+    <ID>MaxLineLength:VariableIntHandlers.kt$VariableIntHandlerBase$context.result.add(NumericUnpackHelpers.unpackInteger(context::readByte, actualSize, context.parser.littleEndian, signed))</ID>
+    <ID>MaxLineLength:YieldHandler.kt$YieldHandler$"[YIELD CloseState] closeOwnerFrameStack.size=${callerContext.size}, pendingCloseOwnerFrame=${closeContext.pendingCloseOwnerFrame != null}"</ID>
+    <ID>NestedBlockDepth:ArithmeticOpcodes.kt$ArithmeticOpcodes$inline fun executeDiv( instr: Instruction, env: ExecutionEnvironment, pc: Int, )</ID>
+    <ID>NestedBlockDepth:BasicLib.kt$BasicLib$private fun convertToNumber(value: LuaValue&lt;*&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>NestedBlockDepth:BasicLibLoading.kt$BasicLibLoading$private fun loadImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>NestedBlockDepth:BinaryOperations.kt$BinaryOperations$fun longToBytes( value: Long, size: Int, littleEndian: Boolean, signed: Boolean = false, ): ByteArray</ID>
+    <ID>NestedBlockDepth:BitwiseOpcodes.kt$BitwiseOpcodes$fun shiftOp( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, leftRegister: Int, rightRegister: Int, pc: Int, env: ExecutionEnvironment, isLeftShift: Boolean, ): LuaValue&lt;*&gt;</ID>
+    <ID>NestedBlockDepth:CallFrame.kt$CallFrame$private fun findActiveLocal(index: Int): Pair&lt;ai.tenum.lua.compiler.model.LocalVarInfo, Int&gt;?</ID>
+    <ID>NestedBlockDepth:CompileContext.kt$CompileContext$fun setLabelsScopeEndPc( scopeStack: List&lt;Int&gt;, endPc: Int, isRepeatUntilBlock: Boolean = false, )</ID>
+    <ID>NestedBlockDepth:CompileContext.kt$CompileContext$fun validateGotosAtScopeExit( scopeLevel: Int, endPc: Int, isRepeatUntilBlock: Boolean = false, )</ID>
+    <ID>NestedBlockDepth:CoroutineLib.kt$CoroutineLib$private fun coroutineResume( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>NestedBlockDepth:DebugLib.kt$DebugLib$private fun calculateRegisterIndex( frame: CallFrame, index: Int, ): Int?</ID>
+    <ID>NestedBlockDepth:DebugLib.kt$DebugLib$private fun tracebackImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>NestedBlockDepth:ErrorHandler.kt$ErrorHandler$private fun dumpProtoIfNeeded( proto: Proto, pc: Int, errorMessage: String, )</ID>
+    <ID>NestedBlockDepth:ExpressionCompiler.kt$ExpressionCompiler$private fun compileTableConstructor( expr: TableConstructor, targetReg: Int, ctx: CompileContext, )</ID>
+    <ID>NestedBlockDepth:ExpressionCompiler.kt$ExpressionCompiler$private fun extractIntValueForLoadi(expression: NumberLiteral): Int?</ID>
+    <ID>NestedBlockDepth:ExpressionParser.kt$ExpressionParser$private fun parsePostfixExpression(): Expression</ID>
+    <ID>NestedBlockDepth:FunctionNameInference.kt$FunctionNameInference$fun inferFunctionName( instructions: List&lt;Instruction&gt;, callPc: Int, funcRegister: Int, constants: List&lt;LuaValue&lt;*&gt;&gt;, localVars: List&lt;ai.tenum.lua.compiler.model.LocalVarInfo&gt; = emptyList(), ): InferredFunctionName</ID>
+    <ID>NestedBlockDepth:FunctionNameInference.kt$FunctionNameInference$private fun findTableName( instructions: List&lt;Instruction&gt;, startPc: Int, tableRegister: Int, constants: List&lt;LuaValue&lt;*&gt;&gt;, localVars: List&lt;ai.tenum.lua.compiler.model.LocalVarInfo&gt;, ): String?</ID>
+    <ID>NestedBlockDepth:Lexer.kt$Lexer$private fun longString(startColumn: Int)</ID>
+    <ID>NestedBlockDepth:Lexer.kt$Lexer$private fun multiLineComment(equalCount: Int)</ID>
+    <ID>NestedBlockDepth:LuaDouble.kt$LuaDouble$override fun equals(other: Any?): Boolean</ID>
+    <ID>NestedBlockDepth:LuaLong.kt$LuaLong$override fun equals(other: Any?): Boolean</ID>
+    <ID>NestedBlockDepth:MathLib.kt$MathLib$private fun mathTointeger(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>NestedBlockDepth:NumberParser.kt$NumberParser$fun parseHexFloat(hexString: String): Double?</ID>
+    <ID>NestedBlockDepth:Parser.kt$Parser$fun parse(): Chunk</ID>
+    <ID>NestedBlockDepth:ParserHelpers.kt$fun parseParameterList(nav: TokenNavigator): Pair&lt;List&lt;String&gt;, Boolean&gt;</ID>
+    <ID>NestedBlockDepth:ScopeManager.kt$ScopeManager$fun endScope( snapshotLocalSize: Int, endPc: Int, ): ScopeExitInfo</ID>
+    <ID>NestedBlockDepth:StatementCompiler.kt$StatementCompiler$fun compileAssignment( statement: Assignment, ctx: CompileContext, )</ID>
+    <ID>NestedBlockDepth:StatementParser.kt$StatementParser$fun parseBlock(vararg terminators: TokenType): List&lt;Statement&gt;</ID>
+    <ID>NestedBlockDepth:TracebackFormatter.kt$TracebackFormatter$private fun StringBuilder.formatFrame( frame: CallFrame, useUpvalueDescriptor: Boolean, )</ID>
+    <ID>ReturnCount:BasicLib.kt$BasicLib$private fun convertToNumber(value: LuaValue&lt;*&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:BasicLib.kt$BasicLib$private fun convertToNumberWithBase( value: LuaValue&lt;*&gt;, base: Int, ): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:BasicLibIteration.kt$BasicLibIteration$fun nextPair( tableValue: LuaValue&lt;*&gt;?, keyValue: LuaValue&lt;*&gt;?, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:BasicLibLoading.kt$BasicLibLoading$private fun loadImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:BasicLibLoading.kt$BasicLibLoading$private fun loadfileImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:BasicLibLoading.kt$BasicLibLoading$private fun requireImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:BitwiseOpcodes.kt$BitwiseOpcodes$fun hasIntegerRepresentation(value: Double): Boolean</ID>
+    <ID>ReturnCount:CallCompiler.kt$CallCompiler$fun compileFunctionCall( expr: FunctionCall, targetReg: Int, ctx: CompileContext, compileExpression: (expr: Expression, targetReg: Int, ctx: CompileContext) -&gt; Unit, numResults: Int = 1, captureAllResults: Boolean = false, allowComplexNesting: Boolean = true, )</ID>
+    <ID>ReturnCount:CallFrame.kt$CallFrame$fun getCurrentLine(): Int</ID>
+    <ID>ReturnCount:CallFrame.kt$CallFrame$fun getLocal(index: Int): Pair&lt;String, LuaValue&lt;*&gt;&gt;?</ID>
+    <ID>ReturnCount:CallFrame.kt$CallFrame$fun setLocal( index: Int, value: LuaValue&lt;*&gt;, ): String?</ID>
+    <ID>ReturnCount:CallFrame.kt$CallFrame$private fun findActiveLocal(index: Int): Pair&lt;ai.tenum.lua.compiler.model.LocalVarInfo, Int&gt;?</ID>
+    <ID>ReturnCount:CoroutineLib.kt$CoroutineLib$private fun activateCoroutineHook( coroutine: LuaCoroutine, context: LuaLibraryContext, ): HookState?</ID>
+    <ID>ReturnCount:CoroutineLib.kt$CoroutineLib$private fun coroutineResume( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:CoroutineStateManager.kt$CoroutineStateManager$fun beginResume( coroutine: LuaCoroutine, currentCallStackSize: Int, currentNativeDepth: Int, ): ResumeResult</ID>
+    <ID>ReturnCount:CoroutineStateManager.kt$CoroutineStateManager$fun isYieldable(nativeCallDepth: Int): Boolean</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun calculateRegisterIndex( frame: CallFrame, index: Int, ): Int?</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun getHookImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun getInfoImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun getLocalImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun getLocalStackFrame( args: List&lt;LuaValue&lt;*&gt;&gt;, functionName: String, ): Pair&lt;CallFrame, Int&gt;?</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun getLocalStackFrameFromCoroutine( coroutine: LuaCoroutine, args: List&lt;LuaValue&lt;*&gt;&gt;, functionName: String, ): Pair&lt;CallFrame, Int&gt;?</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun getUservalueImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun parseLevelAndIndex(args: List&lt;LuaValue&lt;*&gt;&gt;): Pair&lt;Int, Int&gt;?</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun setLocalImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:DebugLib.kt$DebugLib$private fun setLocalInCoroutine( coroutine: LuaCoroutine, frame: CallFrame, index: Int, value: LuaValue&lt;*&gt;, ): String?</ID>
+    <ID>ReturnCount:DispatchResultProcessor.kt$DispatchResultProcessor$fun processReturn( dispatchResult: DispatchResult.Return, execStack: ArrayDeque&lt;ExecContext&gt;, execFrame: ExecutionFrame, activeCloseState: CloseResumeState?, ): ReturnLoopAction</ID>
+    <ID>ReturnCount:ExecutionEnvironment.kt$ExecutionEnvironment$fun getRegisterHintWithRuntime( registerIndex: Int, pc: Int, ): String?</ID>
+    <ID>ReturnCount:ExpressionCompiler.kt$ExpressionCompiler$private fun compileVariable( expression: Variable, targetReg: Int, ctx: CompileContext, )</ID>
+    <ID>ReturnCount:FloatFormatter.kt$FloatFormatter$private fun formatFixed( num: Double, spec: FormatSpecifier, ): String</ID>
+    <ID>ReturnCount:FloatFormatter.kt$FloatFormatter$private fun formatGeneral( num: Double, spec: FormatSpecifier, ): String</ID>
+    <ID>ReturnCount:FormatParser.kt$FormatParser$fun readNumber(): Int?</ID>
+    <ID>ReturnCount:FunctionNameInference.kt$FunctionNameInference$fun inferFunctionName( instructions: List&lt;Instruction&gt;, callPc: Int, funcRegister: Int, constants: List&lt;LuaValue&lt;*&gt;&gt;, localVars: List&lt;ai.tenum.lua.compiler.model.LocalVarInfo&gt; = emptyList(), ): InferredFunctionName</ID>
+    <ID>ReturnCount:FunctionNameInference.kt$FunctionNameInference$private fun findTableName( instructions: List&lt;Instruction&gt;, startPc: Int, tableRegister: Int, constants: List&lt;LuaValue&lt;*&gt;&gt;, localVars: List&lt;ai.tenum.lua.compiler.model.LocalVarInfo&gt;, ): String?</ID>
+    <ID>ReturnCount:HexFloatFormatter.kt$HexFloatFormatter$private fun formatHexFloat( value: Double, spec: FormatSpecifier, ): String</ID>
+    <ID>ReturnCount:IOLib.kt$IOLib$private fun ioClose(args: List&lt;LuaValue&lt;*&gt;&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:IOLib.kt$IOLib$private fun ioInput( args: List&lt;LuaValue&lt;*&gt;&gt;, fileSystem: FileSystem, ): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:IOLib.kt$IOLib$private fun ioLines( args: List&lt;LuaValue&lt;*&gt;&gt;, fileSystem: FileSystem, ): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:IOLib.kt$IOLib$private fun ioOpen( args: List&lt;LuaValue&lt;*&gt;&gt;, fileSystem: FileSystem, ): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:IOLib.kt$IOLib$private fun ioOutput( args: List&lt;LuaValue&lt;*&gt;&gt;, fileSystem: FileSystem, ): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:IOLib.kt$IOLib$private fun ioType(args: List&lt;LuaValue&lt;*&gt;&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:IntegerFormatter.kt$IntegerFormatter$private fun applyWidth( str: String, width: Int, leftAlign: Boolean, zeroPad: Boolean, ): String</ID>
+    <ID>ReturnCount:Lexer.kt$Lexer$private fun hexNumber(startColumn: Int)</ID>
+    <ID>ReturnCount:Lexer.kt$Lexer$private fun match(expected: Char): Boolean</ID>
+    <ID>ReturnCount:Lexer.kt$Lexer$private fun number(startColumn: Int)</ID>
+    <ID>ReturnCount:LuaPattern.kt$LuaPattern$fun find( text: String, init: Int = 0, ): MatchResult?</ID>
+    <ID>ReturnCount:LuaPattern.kt$LuaPattern$private fun getItemSize(pPos: Int): Int</ID>
+    <ID>ReturnCount:LuaPattern.kt$LuaPattern$private fun matchBalanced( text: String, textPos: Int, openChar: Char, closeChar: Char, ): Int</ID>
+    <ID>ReturnCount:LuaPattern.kt$LuaPattern$private fun matchPattern( text: String, textPos: Int, patternPos: Int, captures: MutableList&lt;Capture&gt;, captureStarts: MutableList&lt;Pair&lt;Int, Int&gt;&gt;, ): Int?</ID>
+    <ID>ReturnCount:LuaPattern.kt$LuaPattern$private fun matchRepeat( text: String, textPos: Int, patPos: Int, nextPatPos: Int, min: Int, max: Int, greedy: Boolean, captures: MutableList&lt;Capture&gt;, captureStarts: MutableList&lt;Pair&lt;Int, Int&gt;&gt;, ): Int?</ID>
+    <ID>ReturnCount:LuaPattern.kt$LuaPattern$private fun matchSingleItem( text: String, textPos: Int, patPos: Int, ): Pair&lt;Boolean, Int&gt;</ID>
+    <ID>ReturnCount:LuaTable.kt$LuaTable$private fun internalGet(key: LuaValue&lt;*&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:LuaVmImpl.kt$LuaVmImpl$private fun executeMainLoop( state: DispatchHandlerState, handlers: ExecutionHandlers, execStack: ArrayDeque&lt;ExecContext&gt;, preparation: ExecutionPreparation, applyContextUpdate: (ExecutionContextUpdate) -&gt; Unit, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:MathLib.kt$MathLib$private fun randomLongInclusive( from: Long, to: Long, ): Long</ID>
+    <ID>ReturnCount:NameHintResolver.kt$NameHintResolver$private fun getRegisterConstantValue( registerIndex: Int, proto: Proto, currentPc: Int, ): LuaString?</ID>
+    <ID>ReturnCount:NameHintResolver.kt$NameHintResolver$private fun getRegisterNameHintInternal( registerIndex: Int, originalRegister: Int, proto: Proto, currentPc: Int, minPcToCheck: Int = Int.MAX_VALUE, ): String?</ID>
+    <ID>ReturnCount:NameHintResolver.kt$NameHintResolver$private fun isEnvRegister( registerIndex: Int, proto: Proto, currentPc: Int, ): Boolean</ID>
+    <ID>ReturnCount:NameHintResolver.kt$NameHintResolver$private fun wasTestedByShortCircuit( registerIndex: Int, proto: Proto, startPc: Int, endPc: Int, ): Boolean</ID>
+    <ID>ReturnCount:NumberFormatterBase.kt$NumberFormatterBase$protected open fun formatExponentialCore( value: Double, precision: Int, uppercase: Boolean, includeZeroPrecision: Boolean, ): String</ID>
+    <ID>ReturnCount:NumberParser.kt$NumberParser$fun parseHexAsDouble(hexString: String): Double?</ID>
+    <ID>ReturnCount:NumberParser.kt$NumberParser$fun parseHexFloat(hexString: String): Double?</ID>
+    <ID>ReturnCount:NumberParser.kt$NumberParser$fun parseHexInteger(hexString: String): Any?</ID>
+    <ID>ReturnCount:NumberParser.kt$NumberParser$fun parseStringToNumber(input: String): Any?</ID>
+    <ID>ReturnCount:QuotedFormatter.kt$QuotedFormatter$private fun formatHexFloat(value: Double): String</ID>
+    <ID>ReturnCount:StackView.kt$StackView$fun atLevel(level: Int): CallFrame?</ID>
+    <ID>ReturnCount:StatementParser.kt$StatementParser$private fun parseAssignmentOrExpressionStatement(): Statement</ID>
+    <ID>ReturnCount:StringBinaryUnpack.kt$StringBinaryUnpack$private fun handleModifierOrAlignment( context: UnpackContext, c: Char, ): Boolean</ID>
+    <ID>ReturnCount:StringOperations.kt$StringOperations$fun repeatString( str: String, n: Int, sep: String, ): String</ID>
+    <ID>ReturnCount:StringOperations.kt$StringOperations$fun stringByte( str: String, i: Int, j: Int, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:StringParser.kt$StringParser$fun parseQuotedString( source: String, start: Int, quote: Char, sourceName: String = "&lt;unknown&gt;", currentLine: Int = 1, onAdvance: () -&gt; Char?, onPeek: () -&gt; Char?, onNewline: () -&gt; Unit, ): ParseResult</ID>
+    <ID>ReturnCount:StringParser.kt$StringParser$private fun parseHexEscape( onPeek: () -&gt; Char?, onAdvance: () -&gt; Char?, ): EscapeResult</ID>
+    <ID>ReturnCount:StringParser.kt$StringParser$private fun parseUnicodeEscape( onPeek: () -&gt; Char?, onAdvance: () -&gt; Char?, sourceName: String = "&lt;unknown&gt;", currentLine: Int = 1, ): EscapeResult</ID>
+    <ID>ReturnCount:StringPatternMatching.kt$StringPatternMatching$fun findString( str: String, pattern: String, init: Int, plain: Boolean, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:TableLib.kt$TableLib$private fun compareValues( a: LuaValue&lt;*&gt;, b: LuaValue&lt;*&gt;, context: LuaLibraryContext, ): Int</ID>
+    <ID>ReturnCount:TypeComparisons.kt$TypeComparisons$fun luaLessOrEqual( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, ): Boolean?</ID>
+    <ID>ReturnCount:TypeComparisons.kt$TypeComparisons$fun luaLessThan( left: LuaValue&lt;*&gt;, right: LuaValue&lt;*&gt;, ): Boolean?</ID>
+    <ID>ReturnCount:TypeComparisons.kt$TypeComparisons$private fun compareMixedLessThan( intVal: Long, floatVal: Double, ): Boolean</ID>
+    <ID>ReturnCount:TypeComparisons.kt$TypeComparisons$private fun compareMixedNumbers( intVal: Long, floatVal: Double, ): Boolean</ID>
+    <ID>ReturnCount:Upvalue.kt$Upvalue$fun get(): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:UpvalueHelper.kt$UpvalueHelper$fun getUpvalueAccess( func: LuaValue&lt;*&gt;?, index: Int, ): UpvalueAccess?</ID>
+    <ID>ReturnCount:UpvalueResolver.kt$UpvalueResolver$fun captureFromChild(name: String): Int?</ID>
+    <ID>ReturnCount:UpvalueResolver.kt$UpvalueResolver$fun isConstOrClose(name: String): Boolean</ID>
+    <ID>ReturnCount:UpvalueResolver.kt$UpvalueResolver$fun resolve(name: String): Int?</ID>
+    <ID>ReturnCount:Utf8Lib.kt$Utf8Lib$private fun utf8Char(args: List&lt;LuaValue&lt;*&gt;&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:Utf8Lib.kt$Utf8Lib$private fun utf8Codepoint(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ReturnCount:Utf8Lib.kt$Utf8Lib$private fun utf8Len(args: List&lt;LuaValue&lt;*&gt;&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>ReturnCount:Utf8Lib.kt$Utf8Lib$private fun utf8Offset(args: List&lt;LuaValue&lt;*&gt;&gt;): LuaValue&lt;*&gt;</ID>
+    <ID>SafeCast:BasicLib.kt$BasicLib$if (metatable is LuaTable) metatable else null</ID>
+    <ID>SpreadOperator:Parser.kt$Parser$(*terminators)</ID>
+    <ID>SwallowedException:BasicLibErrorHandling.kt$BasicLibErrorHandling$handlerEx: Exception</ID>
+    <ID>SwallowedException:BasicLibLoading.kt$BasicLibLoading$e: Exception</ID>
+    <ID>SwallowedException:Bit32Lib.kt$Bit32Lib$e: Exception</ID>
+    <ID>SwallowedException:CoroutineLib.kt$CoroutineLib$e: LuaYieldException</ID>
+    <ID>SwallowedException:ErrorHandler.kt$ErrorHandler$inner: Exception</ID>
+    <ID>SwallowedException:IOLib.kt$IOLib$e: Exception</ID>
+    <ID>SwallowedException:NumberParser.kt$NumberParser$e: Exception</ID>
+    <ID>SwallowedException:OSLib.kt$OSLib$e: Exception</ID>
+    <ID>SwallowedException:RegisterAllocator.kt$RegisterAllocator$e: IllegalStateException</ID>
+    <ID>SwallowedException:StandardStreamHandle.kt$StandardStreamHandle$e: Exception</ID>
+    <ID>SwallowedException:StringLib.kt$StringLib$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:StringLib.kt$StringLib$e: IndexOutOfBoundsException</ID>
+    <ID>SwallowedException:TableLib.kt$TableLib$ex: ArithmeticException</ID>
+    <ID>SwallowedException:Utf8Lib.kt$Utf8Lib$e: Exception</ID>
+    <ID>ThrowsCount:BasicLib.kt$BasicLib$private fun registerCoreTypeFunctions( registerGlobal: RegisterGlobalCallback, getMetamethod: GetMetamethodCallback, callFunction: CallFunctionCallback, )</ID>
+    <ID>ThrowsCount:BasicLib.kt$BasicLib$private fun registerRawOperations(registerGlobal: (String, LuaValue&lt;*&gt;) -&gt; Unit)</ID>
+    <ID>ThrowsCount:BasicLibErrorHandling.kt$BasicLibErrorHandling$fun registerFunctions( registerGlobal: RegisterGlobalCallback, callFunction: CallFunctionCallback, getCallStack: GetCallStackCallback? = null, vm: ai.tenum.lua.vm.LuaVmImpl? = null, )</ID>
+    <ID>ThrowsCount:BasicLibIteration.kt$BasicLibIteration$fun registerFunctions( registerGlobal: RegisterGlobalCallback, getMetamethod: GetMetamethodCallback, callFunction: CallFunctionCallback, )</ID>
+    <ID>ThrowsCount:BasicLibLoading.kt$BasicLibLoading$private fun requireImpl( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ThrowsCount:BinaryOperations.kt$BinaryOperations$fun validateIntegerRange( value: Long, size: Int, signed: Boolean, )</ID>
+    <ID>ThrowsCount:Bit32Lib.kt$Bit32Lib$fun checkField( f: Int, w: Int, )</ID>
+    <ID>ThrowsCount:ChunkReader.kt$ChunkReader$private fun loadImpl(source: BufferedSource): Proto</ID>
+    <ID>ThrowsCount:DebugLib.kt$DebugLib$private fun upvaluejoinImpl(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ThrowsCount:IOHandleTableFactory.kt$IOHandleTableFactory$fun createHandleTable( handle: Any, readFn: (List&lt;LuaValue&lt;*&gt;&gt;) -&gt; List&lt;LuaValue&lt;*&gt;&gt;, writeFn: (List&lt;LuaValue&lt;*&gt;&gt;) -&gt; List&lt;LuaValue&lt;*&gt;&gt;, closeFn: () -&gt; Unit, flushFn: () -&gt; Unit, linesFn: (() -&gt; List&lt;LuaValue&lt;*&gt;&gt;)? = null, gcAction: () -&gt; Unit, ): LuaTable</ID>
+    <ID>ThrowsCount:MathLib.kt$MathLib$private fun mathRandom(args: List&lt;LuaValue&lt;*&gt;&gt;): List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>ThrowsCount:StandardStreamHandle.kt$StandardStreamHandle$fun toLuaUserdata(): LuaUserdata&lt;StandardStreamHandle&gt;</ID>
+    <ID>ThrowsCount:StringBinaryPack.kt$StringBinaryPack$fun computePackSize(format: String): Int</ID>
+    <ID>ThrowsCount:StringBinaryPack.kt$StringBinaryPack$fun packValues( format: String, values: List&lt;LuaValue&lt;*&gt;&gt;, ): String</ID>
+    <ID>ThrowsCount:StringFormatting.kt$StringFormatting$private fun parseSingleDimension( result: String, startPos: Int, ): Pair&lt;Int, Int&gt;</ID>
+    <ID>ThrowsCount:StringFormatting.kt$StringFormatting$private fun validateModifiers( formatChar: Char, flags: ParsedFlags, dimensions: ParsedDimensions, )</ID>
+    <ID>ThrowsCount:StringLib.kt$StringLib$private fun dumpFunction( args: List&lt;LuaValue&lt;*&gt;&gt;, context: LuaLibraryContext, ): LuaValue&lt;*&gt;</ID>
+    <ID>ThrowsCount:StringOperations.kt$StringOperations$fun repeatString( str: String, n: Int, sep: String, ): String</ID>
+    <ID>TooGenericExceptionCaught:ArithmeticOpcodes.kt$ArithmeticOpcodes$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:BasicLibErrorHandling.kt$BasicLibErrorHandling$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BasicLibErrorHandling.kt$BasicLibErrorHandling$handlerEx: Exception</ID>
+    <ID>TooGenericExceptionCaught:BasicLibLoading.kt$BasicLibLoading$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Bit32Lib.kt$Bit32Lib$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CallOpcodes.kt$CallOpcodes$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CloseHandler.kt$CloseHandler$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CoroutineLib.kt$CoroutineLib$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ErrorHandler.kt$ErrorHandler$inner: Exception</ID>
+    <ID>TooGenericExceptionCaught:IOLib.kt$IOLib$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NumberParser.kt$NumberParser$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:OSLib.kt$OSLib$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:StandardStreamHandle.kt$StandardStreamHandle$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:StringLib.kt$StringLib$e: IndexOutOfBoundsException</ID>
+    <ID>TooGenericExceptionCaught:Utf8Lib.kt$Utf8Lib$e: Exception</ID>
+    <ID>TooGenericExceptionThrown:ArgumentHelpers.kt$ArgumentHelpers$throw RuntimeException("number has no integer representation")</ID>
+    <ID>TooGenericExceptionThrown:ArgumentHelpers.kt$ArgumentHelpers$throw RuntimeException(message)</ID>
+    <ID>TooGenericExceptionThrown:ArithmeticOpcodes.kt$ArithmeticOpcodes$throw RuntimeException("attempt to perform arithmetic")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("'__tostring' must return a string")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("bad argument #1 to 'rawlen' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("bad argument #1 to 'tonumber' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("bad argument #1 to 'tostring' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("bad argument #1 to 'type' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("bad argument #2 to 'tonumber' (base out of range)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("rawequal expects 2 arguments")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("rawget expects 2 arguments")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("rawget expects a table as first argument")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("rawlen expects a table or string")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("rawset expects 3 arguments")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("rawset expects a table as first argument")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("table index is NaN")</ID>
+    <ID>TooGenericExceptionThrown:BasicLib.kt$BasicLib$throw RuntimeException("table index is nil")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibErrorHandling.kt$BasicLibErrorHandling$throw RuntimeException("attempt to call a ${func::class.simpleName} value")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibErrorHandling.kt$BasicLibErrorHandling$throw RuntimeException("bad argument #1 to 'assert' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibErrorHandling.kt$BasicLibErrorHandling$throw RuntimeException("bad argument #1 to 'pcall' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibErrorHandling.kt$BasicLibErrorHandling$throw RuntimeException("bad argument #2 to 'xpcall' (function expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibErrorHandling.kt$throw RuntimeException(message)</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("attempt to call a $typeName value")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("bad argument #1 to 'next' (table expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("bad argument #1 to 'select' (number expected, got ${indexValue::class.simpleName})")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("bad argument #1 to 'select' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("invalid key to 'next'")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("ipairs expects a table")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibIteration.kt$BasicLibIteration$throw RuntimeException("pairs expects a table")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("bad argument #1 to 'searchpath' (string expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("bad argument #2 to 'searchpath' (string expected)")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("cannot open ${filename.value}: No such file or directory")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("collectgarbage: invalid option '$opt'")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("filename expected")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("module '$moduleName' not found:\n" + errorLines.joinToString("\n"))</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("module name expected")</ID>
+    <ID>TooGenericExceptionThrown:BasicLibLoading.kt$BasicLibLoading$throw RuntimeException("package.path must be a string")</ID>
+    <ID>TooGenericExceptionThrown:BinaryOperations.kt$BinaryOperations$throw RuntimeException("$size-byte integer does not fit into Lua Integer")</ID>
+    <ID>TooGenericExceptionThrown:BinaryOperations.kt$BinaryOperations$throw RuntimeException("format asks for alignment not power of 2")</ID>
+    <ID>TooGenericExceptionThrown:BinaryOperations.kt$BinaryOperations$throw RuntimeException("integral size ($size) out of limits [1,16]")</ID>
+    <ID>TooGenericExceptionThrown:BinaryOperations.kt$BinaryOperations$throw RuntimeException("overflow")</ID>
+    <ID>TooGenericExceptionThrown:BinaryOperations.kt$BinaryOperations$throw RuntimeException("unsigned overflow")</ID>
+    <ID>TooGenericExceptionThrown:Bit32Lib.kt$Bit32Lib$throw RuntimeException("bad argument to '$name' (expected 2 arguments)")</ID>
+    <ID>TooGenericExceptionThrown:Bit32Lib.kt$Bit32Lib$throw RuntimeException("bad argument to 'arshift' (expected 2 arguments)")</ID>
+    <ID>TooGenericExceptionThrown:Bit32Lib.kt$Bit32Lib$throw RuntimeException("bad argument to bit32 function (number expected)")</ID>
+    <ID>TooGenericExceptionThrown:Bit32Lib.kt$Bit32Lib$throw RuntimeException("field cannot be negative")</ID>
+    <ID>TooGenericExceptionThrown:Bit32Lib.kt$Bit32Lib$throw RuntimeException("trying to access non-existent bits")</ID>
+    <ID>TooGenericExceptionThrown:Bit32Lib.kt$Bit32Lib$throw RuntimeException("width must be positive")</ID>
+    <ID>TooGenericExceptionThrown:BitwiseOpcodes.kt$BitwiseOpcodes$throw RuntimeException("attempt to perform bitwise operation on a $typeName value")</ID>
+    <ID>TooGenericExceptionThrown:CallFrame.kt$CallFrame$throw RuntimeException("attempt to assign to const variable '${localVar.name}'")</ID>
+    <ID>TooGenericExceptionThrown:CoroutineLib.kt$CoroutineLib$throw RuntimeException(errorMsg)</ID>
+    <ID>TooGenericExceptionThrown:FormatParser.kt$FormatParser$throw RuntimeException("invalid format")</ID>
+    <ID>TooGenericExceptionThrown:FormatParser.kt$FormatParser$throw RuntimeException("invalid next option for option 'X'")</ID>
+    <ID>TooGenericExceptionThrown:LuaVmImpl.kt$LuaVmImpl$throw RuntimeException("attempt to call a ${func.type().name.lowercase()} value")</ID>
+    <ID>TooGenericExceptionThrown:MathLib.kt$MathLib$throw RuntimeException( "bad argument #${index + 1} to '$funcName' (number expected, got $typeName)", )</ID>
+    <ID>TooGenericExceptionThrown:MathLib.kt$MathLib$throw RuntimeException("bad argument #1 to 'max' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:MathLib.kt$MathLib$throw RuntimeException("bad argument #1 to 'min' (value expected)")</ID>
+    <ID>TooGenericExceptionThrown:MathLib.kt$MathLib$throw RuntimeException("bad argument #1 to 'random' (interval is empty)")</ID>
+    <ID>TooGenericExceptionThrown:MathLib.kt$MathLib$throw RuntimeException("bad argument #2 to 'random' (interval is empty)")</ID>
+    <ID>TooGenericExceptionThrown:MathLib.kt$MathLib$throw RuntimeException("wrong number of arguments to 'random' (too many arguments)")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("difftime requires two numbers")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("getenv requires a string argument")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("invalid date: ${e.message}")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("remove requires a filename")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("rename requires new filename")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("rename requires old filename")</ID>
+    <ID>TooGenericExceptionThrown:OSLib.kt$OSLib$throw RuntimeException("year, month, and day are required")</ID>
+    <ID>TooGenericExceptionThrown:OpcodeHelpers.kt$throw RuntimeException("attempt to perform arithmetic on a $typeName value")</ID>
+    <ID>TooGenericExceptionThrown:QuotedFormatter.kt$QuotedFormatter$throw RuntimeException("value has no literal form")</ID>
+    <ID>TooGenericExceptionThrown:StringBinaryPack.kt$StringBinaryPack$throw RuntimeException("does not fit")</ID>
+    <ID>TooGenericExceptionThrown:StringBinaryPack.kt$StringBinaryPack$throw RuntimeException("format result too large")</ID>
+    <ID>TooGenericExceptionThrown:StringBinaryPack.kt$StringBinaryPack$throw RuntimeException("invalid format option '$c'")</ID>
+    <ID>TooGenericExceptionThrown:StringBinaryPack.kt$StringBinaryPack$throw RuntimeException("string contains zeros")</ID>
+    <ID>TooGenericExceptionThrown:StringBinaryPack.kt$StringBinaryPack$throw RuntimeException("string longer than given size")</ID>
+    <ID>TooGenericExceptionThrown:StringFormatting.kt$StringFormatting$throw RuntimeException("bad argument #${valueIndex + 2} to 'string.format' (no value)")</ID>
+    <ID>TooGenericExceptionThrown:StringFormatting.kt$StringFormatting$throw RuntimeException("cannot have modifiers")</ID>
+    <ID>TooGenericExceptionThrown:StringFormatting.kt$StringFormatting$throw RuntimeException("invalid conversion (width or precision too long)")</ID>
+    <ID>TooGenericExceptionThrown:StringFormatting.kt$StringFormatting$throw RuntimeException("invalid conversion")</ID>
+    <ID>TooGenericExceptionThrown:StringFormatting.kt$StringFormatting$throw RuntimeException("too long")</ID>
+    <ID>TooGenericExceptionThrown:StringHandlers.kt$FixedStringHandler$throw RuntimeException("data string too short")</ID>
+    <ID>TooGenericExceptionThrown:StringHandlers.kt$PrefixedStringHandler$throw RuntimeException("unfinished string")</ID>
+    <ID>TooGenericExceptionThrown:StringHandlers.kt$ZeroTerminatedStringHandler$throw RuntimeException("infinite loop detected in zero-terminated string")</ID>
+    <ID>TooGenericExceptionThrown:StringHandlers.kt$ZeroTerminatedStringHandler$throw RuntimeException("unfinished string for format 'z'")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("'__tostring' must return a string")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("data string too short")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("format and string required")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("format string required")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("initial position out of string")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("number has no integer representation")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("resulting string too large")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("unable to dump given function")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException("unable to dump native function")</ID>
+    <ID>TooGenericExceptionThrown:StringLib.kt$StringLib$throw RuntimeException(e.message ?: "invalid format")</ID>
+    <ID>TooGenericExceptionThrown:StringOpcodes.kt$StringOpcodes$throw RuntimeException("attempt to concatenate a $badType value")</ID>
+    <ID>TooGenericExceptionThrown:StringOperations.kt$StringOperations$throw RuntimeException("resulting string too large")</ID>
+    <ID>TooGenericExceptionThrown:StringOperations.kt$StringOperations$throw RuntimeException("value out of range")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("attempt to call a $typeStr value (metamethod 'lt')")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("invalid order function for sorting")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("invalid value (${value.type().name.lowercase()}) at index $index in table for 'concat'")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("number expected")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("object length is not an integer")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("too many elements to move")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("too many results to unpack")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("wrap around")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException("wrong number of arguments to 'insert'")</ID>
+    <ID>TooGenericExceptionThrown:TableLib.kt$TableLib$throw RuntimeException(message)</ID>
+    <ID>TooGenericExceptionThrown:UnpackContext.kt$UnpackContext$throw RuntimeException("data string too short")</ID>
+    <ID>TooManyFunctions:ArgumentHelpers.kt$ArgumentHelpers</ID>
+    <ID>TooManyFunctions:ArithmeticOpcodes.kt$ArithmeticOpcodes</ID>
+    <ID>TooManyFunctions:BasicLibLoading.kt$BasicLibLoading</ID>
+    <ID>TooManyFunctions:BitwiseOpcodes.kt$BitwiseOpcodes</ID>
+    <ID>TooManyFunctions:CallStackManager.kt$CallStackManager</ID>
+    <ID>TooManyFunctions:CloseContext.kt$CloseContext</ID>
+    <ID>TooManyFunctions:CompileContext.kt$CompileContext</ID>
+    <ID>TooManyFunctions:CompilerHelpers.kt$CompilerHelpers</ID>
+    <ID>TooManyFunctions:CoroutineLib.kt$CoroutineLib : LuaLibrary</ID>
+    <ID>TooManyFunctions:DebugLib.kt$DebugLib : LuaLibrary</ID>
+    <ID>TooManyFunctions:ExecutionEnvironment.kt$ExecutionEnvironment</ID>
+    <ID>TooManyFunctions:ExecutionFrame.kt$ExecutionFrame</ID>
+    <ID>TooManyFunctions:ExpressionCompiler.kt$ExpressionCompiler</ID>
+    <ID>TooManyFunctions:ExpressionParser.kt$ExpressionParser : ParserNavigationHelpers</ID>
+    <ID>TooManyFunctions:IOLib.kt$IOLib : LuaLibrary</ID>
+    <ID>TooManyFunctions:IRegisterAllocator.kt$IRegisterAllocator</ID>
+    <ID>TooManyFunctions:Lexer.kt$Lexer</ID>
+    <ID>TooManyFunctions:LuaTable.kt$LuaTable : LuaValue</ID>
+    <ID>TooManyFunctions:LuaVmImpl.kt$LuaVmImpl : LuaVmVmCapabilitiesDebugContext</ID>
+    <ID>TooManyFunctions:MathLib.kt$MathLib : LuaLibrary</ID>
+    <ID>TooManyFunctions:OSLib.kt$OSLib : LuaLibrary</ID>
+    <ID>TooManyFunctions:RegisterAllocator.kt$RegisterAllocator : IRegisterAllocator</ID>
+    <ID>TooManyFunctions:ScopeManager.kt$ScopeManager</ID>
+    <ID>TooManyFunctions:StatementCompiler.kt$StatementCompiler</ID>
+    <ID>TooManyFunctions:StatementParser.kt$StatementParser : ParserNavigationHelpers</ID>
+    <ID>TooManyFunctions:StringFormatting.kt$StringFormatting</ID>
+    <ID>TooManyFunctions:VmCapabilities.kt$VmCapabilities</ID>
+    <ID>UnusedParameter:CallOpcodes.kt$CallOpcodes$frame: ExecutionFrame</ID>
+    <ID>UnusedParameter:CallOpcodes.kt$CallOpcodes$registers: MutableList&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>UnusedParameter:CloseResumeOrchestrator.kt$CloseResumeOrchestrator$currentExecFrame: ExecutionFrame</ID>
+    <ID>UnusedParameter:CompileContext.kt$CompileContext$gotoInstructionIndex: Int = -1</ID>
+    <ID>UnusedParameter:CompileContext.kt$CompileContext$gotoLocalCount: Int</ID>
+    <ID>UnusedParameter:CompileContext.kt$CompileContext$labelInstructionIndex: Int = -1</ID>
+    <ID>UnusedParameter:CompileContext.kt$CompileContext$labelLocalCount: Int</ID>
+    <ID>UnusedParameter:CoroutineOpcodes.kt$CoroutineOpcodes$env: ExecutionEnvironment</ID>
+    <ID>UnusedParameter:CoroutineOpcodes.kt$CoroutineOpcodes$instr: Instruction</ID>
+    <ID>UnusedParameter:CoroutineResumptionService.kt$CoroutineResumptionService$callStack: List&lt;ExecutionFrame&gt;</ID>
+    <ID>UnusedParameter:CoroutineStateManager.kt$CoroutineStateManager$results: List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>UnusedParameter:DebugLib.kt$DebugLib$args: List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>UnusedParameter:DispatchResultHandler.kt$DispatchResultHandler$isCoroutineContext: Boolean</ID>
+    <ID>UnusedParameter:IOLib.kt$IOLib$args: List&lt;LuaValue&lt;*&gt;&gt;</ID>
+    <ID>UnusedParameter:IOLib.kt$IOLib$fileSystem: FileSystem</ID>
+    <ID>UnusedParameter:Lexer.kt$Lexer$exponentChar: Char</ID>
+    <ID>UnusedParameter:LoopOpcodes.kt$LoopOpcodes$env: ExecutionEnvironment</ID>
+    <ID>UnusedParameter:NumericPackHelpers.kt$NumericPackHelpers$signed: Boolean</ID>
+    <ID>UnusedParameter:NumericUnpackHelpers.kt$NumericUnpackHelpers$signed: Boolean</ID>
+    <ID>UnusedParameter:OpcodeHelpers.kt$operand: LuaValue&lt;*&gt;</ID>
+    <ID>UnusedParameter:StringLib.kt$StringLib$context: LuaLibraryContext</ID>
+    <ID>UnusedParameter:StringParser.kt$StringParser$currentLine: Int = 1</ID>
+    <ID>UnusedParameter:StringParser.kt$StringParser$source: String</ID>
+    <ID>UnusedParameter:StringParser.kt$StringParser$sourceName: String = "&lt;unknown&gt;"</ID>
+    <ID>UnusedParameter:Utf8Lib.kt$Utf8Lib$context: LuaLibraryContext</ID>
+    <ID>UnusedPrivateMember:StatementCompiler.kt$StatementCompiler$private fun emitCloseVariablesMode2( scopeLevel: Int, ctx: CompileContext, )</ID>
+    <ID>UnusedPrivateProperty:BasicLibLoading.kt$BasicLibLoading$upvalInfo</ID>
+    <ID>UnusedPrivateProperty:CallCompiler.kt$CallCompiler$val funcCallIndices = args .withIndex() .filter { it.value is FunctionCall } .map { it.index } .toSet()</ID>
+    <ID>UnusedPrivateProperty:CallOpcodes.kt$CallOpcodes$val methodErrorHint = env.methodCallErrorHint</ID>
+    <ID>UnusedPrivateProperty:ChunkReader.kt$ChunkReader$private const val LUA_SIGNATURE = "\u001bLua"</ID>
+    <ID>UnusedPrivateProperty:ChunkReader.kt$ChunkReader$val instructionSize = source.readByte().toInt() and 0xFF</ID>
+    <ID>UnusedPrivateProperty:ChunkReader.kt$ChunkReader$val intSize = source.readByte().toInt() and 0xFF</ID>
+    <ID>UnusedPrivateProperty:CompilerHelpers.kt$CompilerHelpers$local</ID>
+    <ID>UnusedPrivateProperty:CompilerHelpers.kt$CompilerHelpers$val scopeLevel = ctx.scopeManager.currentScopeLevel</ID>
+    <ID>UnusedPrivateProperty:CoroutineStateManager.kt$CoroutineStateManager$val currentCo = currentCoroutine ?: return mainThreadDepth</ID>
+    <ID>UnusedPrivateProperty:DebugLib.kt$DebugLib$val isSuspended = targetThread.status == ai.tenum.lua.runtime.CoroutineStatus.SUSPENDED</ID>
+    <ID>UnusedPrivateProperty:LuaTable.kt$LuaTable$/** * Weak mode tracking */ private val weakMode: String? get() = value.mode.toModeLuaString()</ID>
+    <ID>UnusedPrivateProperty:OpcodeDispatcher.kt$OpcodeDispatcher$private val debugTracer: ai.tenum.lua.vm.debug.DebugTracer</ID>
+    <ID>UnusedPrivateProperty:StatementCompiler.kt$StatementCompiler$val bodyStartPc = ctx.instructions.size</ID>
+    <ID>UnusedPrivateProperty:StatementCompiler.kt$StatementCompiler$val state = loopStateBase + 1</ID>
+    <ID>UnusedPrivateProperty:StringHandlers.kt$FixedStringHandler$j</ID>
+    <ID>UnusedPrivateProperty:StringHandlers.kt$PrefixedStringHandler$j</ID>
+    <ID>UnusedPrivateProperty:StringParser.kt$StringParser$var current = start</ID>
+    <ID>UnusedPrivateProperty:StringParser.kt$StringParser.Companion$private const val MAX_UNICODE_ESCAPE_DIGITS = 8</ID>
+    <ID>UnusedPrivateProperty:YieldHandler.kt$YieldHandler$val closeContinuation = ResumptionState( proto = currentProto, pc = pc + 1, registers = registers, upvalues = execFrame.upvalues, varargs = varargs, yieldTargetRegister = yieldTargetReg, yieldExpectedResults = yieldExpectedResults, toBeClosedVars = execFrame.toBeClosedVars, // __close function's TBC (should be empty) pendingCloseStartReg = 0, // Not relevant for continuation pendingCloseVar = null, // Not relevant for continuation execStack = execStack.toList(), pendingCloseYield = false, capturedReturnValues = closeContext.pendingCloseOwnerFrame?.capturedReturns, debugCallStack = coroutineCallStack, closeResumeState = null, closeOwnerFrameStack = callerContext.snapshot(), )</ID>
+    <ID>UseCheckOrError:BasicLibLoading.kt$BasicLibLoading$throw IllegalStateException("error loading binary chunk")</ID>
+    <ID>UseRequire:ChunkReader.kt$ChunkReader$throw IllegalArgumentException("Incompatible Lua version")</ID>
+    <ID>UseRequire:ChunkReader.kt$ChunkReader$throw IllegalArgumentException("Incompatible format")</ID>
+    <ID>UseRequire:ChunkReader.kt$ChunkReader$throw IllegalArgumentException("Invalid Lua binary chunk signature")</ID>
+    <ID>UseRequire:LuaTable.kt$LuaTable$throw IllegalArgumentException("table index is NaN")</ID>
+    <ID>UseRequire:LuaTable.kt$LuaTable$throw IllegalArgumentException("table index is nil")</ID>
+    <ID>UseRequire:MathLib.kt$MathLib$throw IllegalArgumentException("bad argument #2 to 'fmod' (zero)")</ID>
+    <ID>UseRequire:StringBinaryPack.kt$StringBinaryPack$throw IllegalArgumentException("empty format")</ID>
+    <ID>UseRequire:StringFormatter.kt$StringFormatter$throw IllegalArgumentException("string contains zeros")</ID>
+  </CurrentIssues>
+</SmellBaseline>

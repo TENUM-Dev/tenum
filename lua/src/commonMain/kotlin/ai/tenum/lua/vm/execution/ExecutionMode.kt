@@ -1,6 +1,7 @@
 package ai.tenum.lua.vm.execution
 
 import ai.tenum.lua.compiler.model.Proto
+import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
 import ai.tenum.lua.vm.CallFrame
@@ -45,10 +46,28 @@ data class ResumptionState(
     val varargs: List<LuaValue<*>>,
     val yieldTargetRegister: Int,
     val yieldExpectedResults: Int,
+    val toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>,
+    val pendingCloseStartReg: Int = 0,
+    val pendingCloseVar: Pair<Int, LuaValue<*>>? = null,
+    val execStack: List<ExecContext>,
+    val pendingCloseYield: Boolean,
+    val capturedReturnValues: List<LuaValue<*>>?,
+    val pendingCloseContinuation: ResumptionState? = null,
+    val pendingCloseErrorArg: LuaValue<*> = ai.tenum.lua.runtime.LuaNil,
     /**
      * Call stack frames for debug tracebacks.
      * These represent the accumulated call history across all yield/resume cycles.
      * Used ONLY for error reporting and debug.traceback, NOT for frame lifecycle management.
      */
     val debugCallStack: List<CallFrame>,
+    /**
+     * Aggregated close-resume state for yields that occurred inside __close metamethods.
+     * When non-null, resume must first complete the close chain before returning to normal execution.
+     */
+    val closeResumeState: CloseResumeState? = null,
+    /**
+     * Owner frame stack for close handling across native function boundaries.
+     * Preserved across yields to maintain correct TBC context.
+     */
+    val closeOwnerFrameStack: List<ExecutionFrame> = emptyList(),
 )

@@ -24,7 +24,7 @@ object FrameOpcodes {
         instr: Instruction,
         frame: ExecutionFrame,
         env: ExecutionEnvironment,
-        crossinline callCloseFn: (LuaFunction, LuaValue<*>, LuaValue<*>) -> Unit,
+        crossinline callCloseFn: (LuaFunction, LuaValue<*>, LuaValue<*>, Int) -> Unit,
     ) {
         val a = instr.a
         val mode = instr.b
@@ -49,14 +49,26 @@ object FrameOpcodes {
                 env.debug("[CLOSE] scope-exit close for regs >= $a")
 
                 // Use the shared executeCloseMetamethods which handles validation and error chaining
-                frame.executeCloseMetamethods(a) { upvalue, value, errorArg ->
+                env.setPendingCloseStartReg(a)
+                // Save owner frame snapshot for yield-in-close
+                // PC will be incremented by calculateResumePc(incrementPc=true) in yield catch
+                env.setPendingCloseOwnerFrame(frame)
+                // Capture snapshot BEFORE executeCloseMetamethods clears the live list
+                val ownerTbcSnapshot = frame.toBeClosedVars.toMutableList()
+                env.setPendingCloseOwnerTbc(ownerTbcSnapshot)
+                frame.executeCloseMetamethods(a) { regIdx, upvalue, value, errorArg ->
                     val closeFun =
                         upvalue.closedValue as? LuaFunction
                             ?: error("Expected function in upvalue")
                     env.debug("[CLOSE] calling __close for value=$value, error=$errorArg")
                     // Call with the chained error argument
-                    callCloseFn(closeFun, value, errorArg)
+                    env.setPendingCloseErrorArg(errorArg)
+                    println("[CLOSE callback CLOSE] reg=$regIdx val=$value")
+                    env.setYieldResumeContext(targetReg = 0, encodedCount = 1, stayOnSamePc = true)
+                    callCloseFn(closeFun, value, errorArg, regIdx)
                 }
+                env.clearPendingCloseStartReg()
+                env.clearYieldResumeContext()
             }
 
             else -> {

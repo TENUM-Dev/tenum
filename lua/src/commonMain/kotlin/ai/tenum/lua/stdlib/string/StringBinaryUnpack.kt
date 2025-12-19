@@ -2,16 +2,56 @@
 
 package ai.tenum.lua.stdlib.string
 
-import ai.tenum.lua.runtime.LuaDouble
-import ai.tenum.lua.runtime.LuaLong
 import ai.tenum.lua.runtime.LuaNumber
-import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.runtime.LuaValue
+import ai.tenum.lua.stdlib.string.unpack.UnpackContext
+import ai.tenum.lua.stdlib.string.unpack.UnpackHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.AlignHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.DoubleHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.FixedStringHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.FloatHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.PrefixedStringHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SignedByteHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SignedIntHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SignedLongHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SignedShortHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SignedVariableIntHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SizeTHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.SkipByteHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.UnsignedByteHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.UnsignedIntHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.UnsignedLongHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.UnsignedShortHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.UnsignedVariableIntHandler
+import ai.tenum.lua.stdlib.string.unpack.handlers.ZeroTerminatedStringHandler
 
 /**
  * Binary unpacking operations for string.unpack.
  */
 object StringBinaryUnpack {
+    private val handlers: Map<Char, UnpackHandler> =
+        mapOf(
+            'b' to SignedByteHandler(),
+            'B' to UnsignedByteHandler(),
+            'h' to SignedShortHandler(),
+            'H' to UnsignedShortHandler(),
+            'l' to SignedIntHandler(),
+            'L' to UnsignedIntHandler(),
+            'j' to SignedLongHandler(),
+            'J' to UnsignedLongHandler(),
+            'i' to SignedVariableIntHandler(),
+            'I' to UnsignedVariableIntHandler(),
+            'f' to FloatHandler(),
+            'd' to DoubleHandler(),
+            'n' to DoubleHandler(),
+            'T' to SizeTHandler(),
+            'c' to FixedStringHandler(),
+            's' to PrefixedStringHandler(),
+            'z' to ZeroTerminatedStringHandler(),
+            'x' to SkipByteHandler(),
+            'X' to AlignHandler(),
+        )
+
     /**
      * Unpack values from a binary string according to format string.
      */
@@ -21,154 +61,55 @@ object StringBinaryUnpack {
         startPos: Int = 0,
     ): List<LuaValue<*>> {
         val result = mutableListOf<LuaValue<*>>()
-        var pos = startPos
         val parser = FormatParser(format)
+        val context = UnpackContext(data, parser, result, startPos)
 
-        fun readByte(): Int {
-            if (pos >= data.length) throw RuntimeException("data string too short")
-            return data[pos++].code.and(0xFF)
-        }
-
-        // Auto-align current position to given size (when ! is active)
-        fun autoAlign(size: Int) {
-            val padding = BinaryOperations.autoAlign(pos, size, parser.maxAlign)
-            repeat(padding) { readByte() }
-        }
-
-        // Unpack variable-size integer with size validation and alignment
-        fun unpackVariableInteger(signed: Boolean) {
-            val size = parser.readNumber() ?: 4
-            BinaryOperations.validateIntegerSize(size)
-            val actualSize = if (parser.maxAlign != null) minOf(size, parser.maxAlign!!) else size
-            autoAlign(actualSize)
-            result.add(NumericUnpackHelpers.unpackInteger(::readByte, actualSize, parser.littleEndian, signed))
-        }
-
-        // CPD-OFF: unpack loop structure (similar to pack but reads instead of writes)
-        while (parser.hasMore()) {
-            parser.skipWhitespace()
-            if (!parser.hasMore()) break
-
-            val c = parser.current()
-            if (FormatParserHelpers.processModifier(parser, c)) {
-                continue
-            }
-
-            if (c == '!') {
-                FormatParserHelpers.processAlignment(parser)
-                continue
-            }
-            // CPD-ON
-
-            parser.advance()
-            when (c) {
-                'b' -> {
-                    val v = readByte().toByte()
-                    result.add(LuaNumber.of(v.toLong().toDouble()))
-                }
-                'B' -> {
-                    val v = readByte()
-                    result.add(LuaNumber.of(v.toDouble()))
-                }
-                'h' -> {
-                    autoAlign(2)
-                    result.add(NumericUnpackHelpers.unpackShort(::readByte, parser.littleEndian, signed = true))
-                }
-                'H' -> {
-                    autoAlign(2)
-                    result.add(NumericUnpackHelpers.unpackShort(::readByte, parser.littleEndian, signed = false))
-                }
-                'l' -> {
-                    autoAlign(4)
-                    result.add(NumericUnpackHelpers.unpackInt(::readByte, parser.littleEndian, signed = true))
-                }
-                'L' -> {
-                    autoAlign(4)
-                    result.add(NumericUnpackHelpers.unpackInt(::readByte, parser.littleEndian, signed = false))
-                }
-                'j' -> {
-                    autoAlign(8)
-                    result.add(NumericUnpackHelpers.unpackLong(::readByte, parser.littleEndian, signed = true))
-                }
-                'J' -> {
-                    autoAlign(8)
-                    result.add(NumericUnpackHelpers.unpackLong(::readByte, parser.littleEndian, signed = false))
-                }
-                'i' -> unpackVariableInteger(signed = true)
-                'I' -> unpackVariableInteger(signed = false)
-                'f' -> {
-                    autoAlign(4)
-                    result.add(NumericUnpackHelpers.unpackFloat(::readByte, parser.littleEndian))
-                }
-                'd' -> {
-                    autoAlign(8)
-                    result.add(NumericUnpackHelpers.unpackDouble(::readByte, parser.littleEndian))
-                }
-                'n' -> {
-                    autoAlign(8)
-                    result.add(NumericUnpackHelpers.unpackDouble(::readByte, parser.littleEndian))
-                }
-                'T' -> {
-                    autoAlign(8)
-                    result.add(NumericUnpackHelpers.unpackLong(::readByte, parser.littleEndian, signed = false))
-                }
-                'c' -> {
-                    val size = parser.readNumber() ?: throw IllegalArgumentException("missing size for 'c'")
-                    if (pos + size > data.length) {
-                        throw RuntimeException("data string too short")
-                    }
-                    val sb = StringBuilder()
-                    for (j in 0 until size) {
-                        sb.append(readByte().toChar())
-                    }
-                    result.add(LuaString(sb.toString()))
-                }
-                's' -> {
-                    val size = parser.readNumber() ?: 8
-                    BinaryOperations.validateIntegerSize(size)
-                    val length =
-                        when (val lengthVal = NumericUnpackHelpers.unpackInteger(::readByte, size, parser.littleEndian, signed = false)) {
-                            is LuaLong -> lengthVal.value
-                            is LuaDouble -> lengthVal.value.toLong()
-                            else -> 0L
-                        }
-                    if (length < 0 || length > Int.MAX_VALUE) {
-                        throw RuntimeException("unfinished string")
-                    }
-                    val sb = StringBuilder()
-                    for (j in 0 until length.toInt()) {
-                        sb.append(readByte().toChar())
-                    }
-                    result.add(LuaString(sb.toString()))
-                }
-                'z' -> {
-                    val sb = StringBuilder()
-                    while (true) {
-                        if (pos >= data.length) {
-                            throw RuntimeException("unfinished string for format 'z'")
-                        }
-                        val b = readByte()
-                        if (b == 0) break
-                        sb.append(b.toChar())
-                    }
-                    result.add(LuaString(sb.toString()))
-                }
-                'x' -> readByte()
-                'X' -> {
-                    val (nextSize, alreadyAdvanced) = parser.peekNextFormatSize()
-                    if (parser.maxAlign != null) {
-                        val alignSize = minOf(nextSize, parser.maxAlign!!)
-                        val padding = BinaryOperations.calculatePadding(pos, alignSize)
-                        repeat(padding) { readByte() }
-                    }
-                    parser.consumeNextFormatChar(alreadyAdvanced)
-                }
-                else -> throw IllegalArgumentException("invalid format option '$c'")
-            }
-        }
-
-        // Add final position as last return value
-        result.add(LuaNumber.of((pos + 1).toDouble())) // Lua uses 1-based indexing
+        processFormatString(context)
+        addFinalPosition(context, result)
         return result
+    }
+
+    private fun processFormatString(context: UnpackContext) {
+        while (context.parser.hasMore()) {
+            context.parser.skipWhitespace()
+            if (!context.parser.hasMore()) break
+
+            val c = context.parser.current()
+            if (handleModifierOrAlignment(context, c)) {
+                continue
+            }
+
+            context.parser.advance()
+            dispatchHandler(c, context)
+        }
+    }
+
+    private fun handleModifierOrAlignment(
+        context: UnpackContext,
+        c: Char,
+    ): Boolean {
+        if (FormatParserHelpers.processModifier(context.parser, c)) {
+            return true
+        }
+        if (c == '!') {
+            FormatParserHelpers.processAlignment(context.parser)
+            return true
+        }
+        return false
+    }
+
+    private fun dispatchHandler(
+        c: Char,
+        context: UnpackContext,
+    ) {
+        val handler = handlers[c] ?: throw IllegalArgumentException("invalid format option '$c'")
+        handler.unpack(context)
+    }
+
+    private fun addFinalPosition(
+        context: UnpackContext,
+        result: MutableList<LuaValue<*>>,
+    ) {
+        result.add(LuaNumber.of((context.pos + 1).toDouble()))
     }
 }
