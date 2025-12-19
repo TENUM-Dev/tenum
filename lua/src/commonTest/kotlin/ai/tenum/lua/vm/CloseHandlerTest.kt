@@ -228,13 +228,3 @@ class CloseHandlerTest {
         assertEquals(1, closedVars[1])
     }
 }
-
-/**
- * State snapshot for CloseHandler to support yield/resume
- */
-data class CloseHandlerState(
-    val startReg: Int,
-    val pendingTbcList: List<Pair<Int, LuaValue<*>>>,
-    val currentVar: Pair<Int, LuaValue<*>>?,
-    val errorArg: LuaValue<*>,
-)
