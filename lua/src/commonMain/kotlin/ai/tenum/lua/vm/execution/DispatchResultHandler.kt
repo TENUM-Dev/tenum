@@ -157,9 +157,6 @@ internal class DispatchResultHandler(
                 LoopControl.ContinueWithContext(result)
             }
             is ReturnLoopAction.ExitProto -> {
-                println(
-                    "[NO-CALLER] activeCloseState=${closeContext.activeCloseResumeState != null} segments=${closeContext.activeCloseResumeState?.ownerSegments?.size} outerFrames=${closeContext.activeCloseResumeState?.closeOwnerFrameStack?.size}",
-                )
                 LoopControl.ExitProto(action.returnValues)
             }
         }

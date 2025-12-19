@@ -1540,9 +1540,6 @@ class LuaVmImpl(
         // ONLY push if not already at top (avoid duplicates from nested native calls)
         // Use referential equality (not proto equality) since different execution instances of the same function are distinct
         val shouldPush = callerFrame != null && (callerContext.size == 0 || callerContext.peek() !== callerFrame)
-        println(
-            "[PUSH-FIX] frame=${callerFrame?.proto?.name} hasTBC=${callerFrame?.toBeClosedVars?.isNotEmpty()} tbcCount=${callerFrame?.toBeClosedVars?.size} shouldPush=$shouldPush",
-        )
         if (shouldPush) {
             // Create a shallow snapshot - most fields are immutable or shouldn't change
             // TBC list is shared (not copied) so CLOSE instructions update it

@@ -27,9 +27,6 @@ class SegmentContinuationHandler(
      * Process a ContinueSegment action - rebuild next segment's frame and update state.
      */
     fun processContinueSegment(action: ReturnLoopAction.ContinueSegment): ExecutionContextUpdate {
-        println(
-            "[NO-CALLER] activeCloseState=true segments=${closeContext.activeCloseResumeState?.ownerSegments?.size}",
-        )
         debugSink.debug {
             "[SEGMENT VALUES] Got ${action.segmentReturnValues.size} values"
         }
