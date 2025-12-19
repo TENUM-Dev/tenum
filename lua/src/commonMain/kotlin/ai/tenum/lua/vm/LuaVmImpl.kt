@@ -366,7 +366,7 @@ class LuaVmImpl(
             frames.filter { execFrame ->
                 execFrame.proto in coroutineFrameProtos || execFrame.toBeClosedVars.isNotEmpty()
             }
-        println("[FILTER] in=${frames.size} coroutineProtos=${coroutineFrameProtos.size} out=${filtered.size}")
+        debug { "[FILTER] in=${frames.size} coroutineProtos=${coroutineFrameProtos.size} out=${filtered.size}" }
         return filtered
     }
 
@@ -1067,13 +1067,51 @@ class LuaVmImpl(
             !justFinishedCloseHandling &&
             context.resumptionState?.closeResumeState == null
         ) {
+            // Debug: log resumption result placement
+            try {
+                debug {
+                    "[RESUME-STORE] targetReg=${context.mode.state.yieldTargetRegister} encodedCount=${context.mode.state.yieldExpectedResults} argsCount=${context.args.size}"
+                }
+            } catch (_: Exception) {
+            }
             val storage = ResultStorage(context.env)
+            // Prefer using the RETURN instruction's target register when resuming.
+            // Some compiled patterns place the resumed value into a different register
+            // than the CALL's temporary. If the current PC points at a RETURN, use its A.
+            var resumeTarget = context.mode.state.yieldTargetRegister
+            try {
+                val ins =
+                    context.mode.state.proto.instructions
+                        .getOrNull(context.mode.state.pc)
+                if (ins != null && ins.opcode == ai.tenum.lua.vm.OpCode.RETURN) {
+                    resumeTarget = ins.a
+                    debug {
+                        "[RESUME-STORE] adjusting targetReg from yieldTarget=${context.mode.state.yieldTargetRegister} to returnInstr.a=$resumeTarget"
+                    }
+                }
+            } catch (_: Exception) {
+            }
             storage.storeResults(
-                targetReg = context.mode.state.yieldTargetRegister,
+                targetReg = resumeTarget,
                 encodedCount = context.mode.state.yieldExpectedResults,
                 results = context.args,
                 opcodeName = "RESUME",
             )
+            try {
+                // Only stash resume args as captured returns when there are actual args.
+                // If there are no args, leave `capturedReturns` null so RETURN will
+                // gather values from the resumed frame's registers (the saved yield values).
+                if (context.args.isNotEmpty()) {
+                    // Make a defensive copy so later mutations to `context.args` don't
+                    // affect the captured returns stored on the resumed frame.
+                    context.execFrame.capturedReturns = context.args.toList()
+                    debug { "[RESUME-STORE] also set execFrame.capturedReturns=${context.execFrame.capturedReturns}" }
+                } else {
+                    context.execFrame.capturedReturns = null
+                    debug { "[RESUME-STORE] did not set capturedReturns (args empty)" }
+                }
+            } catch (_: Exception) {
+            }
         }
 
         return ResumptionHandlingResult(
@@ -1308,7 +1346,7 @@ class LuaVmImpl(
                 throw handlers.errorHandler.handlePlatformError(e, state.currentProto, state.pc)
             }
             else -> {
-                println("[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException")
+                debug { "[EXCEPTION HANDLER] Converting ${e::class.simpleName} to LuaException" }
                 val luaEx =
                     handlers.errorHandler.handleGenericException(
                         e as Exception,
@@ -1451,6 +1489,42 @@ class LuaVmImpl(
             env = ExecutionEnvironment(execFrame, globals, this)
         }
 
+        // Diagnostic: if we're resuming a coroutine, print the target register and nearby registers
+        if (mode is ExecutionMode.ResumeContinuation) {
+            try {
+                val tgt = mode.state.yieldTargetRegister
+                val regsSample =
+                    execFrame.registers
+                        .take(8)
+                        .mapIndexed { i, v -> "R[$i]=$v" }
+                        .joinToString(", ")
+                val tgtVal = execFrame.registers.getOrNull(tgt)
+                debug { "[POST-RESUME] proto=${mode.state.proto.name} pc=${mode.state.pc} yieldTarget=$tgt regsSample=[$regsSample]" }
+                debug { "[POST-RESUME] R[target]=$tgtVal" }
+                try {
+                    val localInfo =
+                        mode.state.proto.localVars
+                            .filter { it.isAliveAt(mode.state.pc) }
+                            .map { lv -> "${lv.name}:R[${lv.register}]" }
+                    debug { "[POST-RESUME] liveLocals=$localInfo" }
+                } catch (_: Exception) {
+                }
+                try {
+                    val execCallAs = mode.state.execStack.map { it.callInstruction.a }
+                    debug { "[POST-RESUME] resumed.execStack.callA=$execCallAs" }
+                } catch (_: Exception) {
+                }
+                try {
+                    val ins =
+                        mode.state.proto.instructions
+                            .getOrNull(mode.state.pc)
+                    if (ins != null) debug { "[POST-RESUME] instr_at_pc=${ins.opcode} a=${ins.a} b=${ins.b} c=${ins.c}" }
+                } catch (_: Exception) {
+                }
+            } catch (_: Exception) {
+            }
+        }
+
         // Setup function entry (call frame, hooks, environment)
         val entryState =
             setupFunctionEntry(
@@ -1540,24 +1614,13 @@ class LuaVmImpl(
         // ONLY push if not already at top (avoid duplicates from nested native calls)
         // Use referential equality (not proto equality) since different execution instances of the same function are distinct
         val shouldPush = callerFrame != null && (callerContext.size == 0 || callerContext.peek() !== callerFrame)
-        println(
-            "[PUSH-FIX] frame=${callerFrame?.proto?.name} hasTBC=${callerFrame?.toBeClosedVars?.isNotEmpty()} tbcCount=${callerFrame?.toBeClosedVars?.size} shouldPush=$shouldPush",
-        )
+        debug {
+            "[PUSH-FIX] frame=${callerFrame?.proto?.name} hasTBC=${callerFrame?.toBeClosedVars?.isNotEmpty()} tbcCount=${callerFrame?.toBeClosedVars?.size} shouldPush=$shouldPush"
+        }
         if (shouldPush) {
-            // Create a shallow snapshot - most fields are immutable or shouldn't change
-            // TBC list is shared (not copied) so CLOSE instructions update it
-            val snapshotFrame =
-                ExecutionFrame(
-                    proto = callerFrame.proto,
-                    initialArgs = emptyList(), // Not used after construction
-                    upvalues = callerFrame.upvalues,
-                    initialPc = callerFrame.pc,
-                    existingRegisters = callerFrame.registers,
-                    existingVarargs = callerFrame.varargs,
-                    existingToBeClosedVars = callerFrame.toBeClosedVars, // Share, don't copy!
-                    existingOpenUpvalues = callerFrame.openUpvalues,
-                )
-            callerContext.push(snapshotFrame)
+            // Push the actual caller frame reference to preserve to-be-closed list identity
+            // and avoid duplicating frame instances across native call boundaries.
+            callerContext.push(callerFrame)
         }
     }
 
@@ -1763,6 +1826,12 @@ class LuaVmImpl(
                     // Convert CoroutineThread to ExecutionMode.ResumeContinuation
                     val mode =
                         if (thread != null) {
+                            try {
+                                debug {
+                                    "[RESUME-CTX] Converting CoroutineThread -> ResumptionState proto=${thread.proto?.name} pc=${thread.pc} yieldTarget=${thread.yieldTargetRegister} yieldExpected=${thread.yieldExpectedResults} regs=${thread.registers?.size} pendingCloseYield=${thread.pendingCloseYield}"
+                                }
+                            } catch (_: Exception) {
+                            }
                             ExecutionMode.ResumeContinuation(
                                 ResumptionState(
                                     proto = thread.proto!!,
@@ -1855,6 +1924,13 @@ class LuaVmImpl(
 
                 var isYieldException = false
                 try {
+                    try {
+                        val callerRegs = frame.registers.take(8).mapIndexed { i, v -> "R[$i]=$v" }
+                        debug {
+                            "[NATIVE-CALL] proto=${frame.proto?.name} native=${func.name} args=${args.map { it }} callerRegs=$callerRegs"
+                        }
+                    } catch (_: Exception) {
+                    }
                     val results = func.function(args)
 
                     // Update frame transfer info for return values before triggering RETURN hook

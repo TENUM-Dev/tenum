@@ -90,6 +90,10 @@ class DispatchResultProcessor(
         execFrame: ExecutionFrame,
         activeCloseState: CloseResumeState?,
     ): ReturnLoopAction {
+        debugSink.debug {
+            val vals = dispatchResult.values.map { v -> v.toString() }
+            "[processReturn] incoming return values (${vals.size}): ${vals.joinToString(", ")}"
+        }
         // Check if there's a caller waiting (trampolined call stack)
         if (execStack.isNotEmpty()) {
             val callerContext = execStack.removeLast()

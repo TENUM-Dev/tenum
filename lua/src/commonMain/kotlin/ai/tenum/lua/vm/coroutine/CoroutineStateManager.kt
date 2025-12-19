@@ -287,9 +287,7 @@ class CoroutineStateManager {
         closeResumeState: ai.tenum.lua.vm.execution.CloseResumeState? = null,
         closeOwnerFrameStack: List<ai.tenum.lua.vm.execution.ExecutionFrame> = emptyList(),
     ) {
-        println(
-            "[DEBUG close-yield save] pendingCloseYield=$pendingCloseYield tbc=${toBeClosedVars.size} vals=$toBeClosedVars captured=${capturedReturnValues?.size} cont=${pendingCloseContinuation != null} pcv=$pendingCloseVar",
-        )
+        // Removed temporary debug print: "[DEBUG close-yield save] pendingCloseYield=$pendingCloseYield tbc=${toBeClosedVars.size} vals=$toBeClosedVars captured=${capturedReturnValues?.size} cont=${pendingCloseContinuation != null} pcv=$pendingCloseVar"
         val co = coroutine ?: return
 
         val thread =
