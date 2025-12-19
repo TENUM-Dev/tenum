@@ -53,22 +53,28 @@ interface DebugContext {
     )
 
     /**
-     * Set the debug hook configuration.
+     * Set the debug hook configuration for a coroutine.
+     * In Lua 5.4, hook state is per-coroutine.
      *
+     * @param coroutine The coroutine to set hook for (null = current thread)
      * @param hook The hook implementation (null to disable)
      * @param mask The event mask string (e.g., "crl" for call/return/line)
      * @param count The instruction count for COUNT hooks (0 to disable)
      */
     fun setHook(
+        coroutine: ai.tenum.lua.runtime.LuaCoroutine? = null,
         hook: DebugHook?,
         mask: String = "",
         count: Int = 0,
     )
 
     /**
-     * Get the current hook configuration.
+     * Get the hook configuration for a coroutine.
+     * In Lua 5.4, hook state is per-coroutine.
+     *
+     * @param coroutine The coroutine to get hook for (null = current thread)
      */
-    fun getHook(): HookConfig
+    fun getHook(coroutine: ai.tenum.lua.runtime.LuaCoroutine? = null): HookConfig
 
     /**
      * Get the VM's registry table for storing debug metadata.

@@ -68,27 +68,42 @@ class Lexer(
      */
     private fun scanToken() {
         val startColumn = column
-        val startLine = line
         val c = advance()
 
-        when (c) {
-            '(' -> addToken(TokenType.LEFT_PAREN, startColumn)
-            ')' -> addToken(TokenType.RIGHT_PAREN, startColumn)
-            '{' -> addToken(TokenType.LEFT_BRACE, startColumn)
-            '}' -> addToken(TokenType.RIGHT_BRACE, startColumn)
-            '[' -> {
+        val handler = characterHandlers[c]
+        if (handler != null) {
+            handler(startColumn)
+        } else {
+            // Default handlers for digits, identifiers, and errors
+            when {
+                isDigit(c) -> number(startColumn)
+                isAlpha(c) -> identifier(startColumn)
+                else -> addToken(TokenType.ERROR, startColumn)
+            }
+        }
+    }
+
+    private val characterHandlers: Map<Char, (Int) -> Unit> by lazy { buildCharacterHandlers() }
+
+    private fun buildCharacterHandlers(): Map<Char, (Int) -> Unit> =
+        mapOf(
+            '(' to { col -> addToken(TokenType.LEFT_PAREN, col) },
+            ')' to { col -> addToken(TokenType.RIGHT_PAREN, col) },
+            '{' to { col -> addToken(TokenType.LEFT_BRACE, col) },
+            '}' to { col -> addToken(TokenType.RIGHT_BRACE, col) },
+            '[' to { col ->
                 // Check for long string [[ or [=[ syntax
                 if (peek() == '[' || peek() == '=') {
-                    longString(startColumn)
+                    longString(col)
                 } else {
-                    addToken(TokenType.LEFT_BRACKET, startColumn)
+                    addToken(TokenType.LEFT_BRACKET, col)
                 }
-            }
-            ']' -> addToken(TokenType.RIGHT_BRACKET, startColumn)
-            ';' -> addToken(TokenType.SEMICOLON, startColumn)
-            ',' -> addToken(TokenType.COMMA, startColumn)
-            '+' -> addToken(TokenType.PLUS, startColumn)
-            '-' -> {
+            },
+            ']' to { col -> addToken(TokenType.RIGHT_BRACKET, col) },
+            ';' to { col -> addToken(TokenType.SEMICOLON, col) },
+            ',' to { col -> addToken(TokenType.COMMA, col) },
+            '+' to { col -> addToken(TokenType.PLUS, col) },
+            '-' to { col ->
                 // Check for comments
                 if (match('-')) {
                     // Check for multi-line comment --[[ or --[=[
@@ -114,100 +129,102 @@ class Lexer(
                         while (peek() != '\n' && peek() != '\r' && !isAtEnd()) advance()
                     }
                 } else {
-                    addToken(TokenType.MINUS, startColumn)
+                    addToken(TokenType.MINUS, col)
                 }
-            }
-            '*' -> addToken(TokenType.MULTIPLY, startColumn)
-            '/' -> {
+            },
+            '*' to { col -> addToken(TokenType.MULTIPLY, col) },
+            '/' to { col ->
                 // Check for floor division //
                 if (match('/')) {
-                    addToken(TokenType.FLOOR_DIVIDE, startColumn)
+                    addToken(TokenType.FLOOR_DIVIDE, col)
                 } else {
-                    addToken(TokenType.DIVIDE, startColumn)
+                    addToken(TokenType.DIVIDE, col)
                 }
-            }
-            '%' -> addToken(TokenType.MODULO, startColumn)
-            '^' -> addToken(TokenType.POWER, startColumn)
-            '#' -> addToken(TokenType.HASH, startColumn)
-            ':' -> {
+            },
+            '%' to { col -> addToken(TokenType.MODULO, col) },
+            '^' to { col -> addToken(TokenType.POWER, col) },
+            '#' to { col -> addToken(TokenType.HASH, col) },
+            ':' to { col ->
                 if (match(':')) {
-                    addToken(TokenType.DOUBLE_COLON, startColumn)
+                    addToken(TokenType.DOUBLE_COLON, col)
                 } else {
-                    addToken(TokenType.COLON, startColumn)
+                    addToken(TokenType.COLON, col)
                 }
-            }
-            '&' -> addToken(TokenType.BITWISE_AND, startColumn)
-            '|' -> addToken(TokenType.BITWISE_OR, startColumn)
-            '~' -> {
+            },
+            '&' to { col -> addToken(TokenType.BITWISE_AND, col) },
+            '|' to { col -> addToken(TokenType.BITWISE_OR, col) },
+            '~' to { col ->
                 if (match('=')) {
-                    addToken(TokenType.NOT_EQUAL, startColumn)
+                    addToken(TokenType.NOT_EQUAL, col)
                 } else {
-                    addToken(TokenType.BITWISE_XOR, startColumn)
+                    addToken(TokenType.BITWISE_XOR, col)
                 }
-            }
-            '=' -> {
+            },
+            '=' to { col ->
                 if (match('=')) {
-                    addToken(TokenType.EQUAL, startColumn)
+                    addToken(TokenType.EQUAL, col)
                 } else {
-                    addToken(TokenType.ASSIGN, startColumn)
+                    addToken(TokenType.ASSIGN, col)
                 }
-            }
-            '<' -> {
+            },
+            '<' to { col ->
                 if (match('=')) {
-                    addToken(TokenType.LESS_EQUAL, startColumn)
+                    addToken(TokenType.LESS_EQUAL, col)
                 } else if (match('<')) {
-                    addToken(TokenType.SHIFT_LEFT, startColumn)
+                    addToken(TokenType.SHIFT_LEFT, col)
                 } else {
-                    addToken(TokenType.LESS, startColumn)
+                    addToken(TokenType.LESS, col)
                 }
-            }
-            '>' -> {
+            },
+            '>' to { col ->
                 if (match('=')) {
-                    addToken(TokenType.GREATER_EQUAL, startColumn)
+                    addToken(TokenType.GREATER_EQUAL, col)
                 } else if (match('>')) {
-                    addToken(TokenType.SHIFT_RIGHT, startColumn)
+                    addToken(TokenType.SHIFT_RIGHT, col)
                 } else {
-                    addToken(TokenType.GREATER, startColumn)
+                    addToken(TokenType.GREATER, col)
                 }
-            }
-            '.' -> {
+            },
+            '.' to { col ->
                 if (match('.')) {
                     if (match('.')) {
-                        addToken(TokenType.VARARG, startColumn)
+                        addToken(TokenType.VARARG, col)
                     } else {
-                        addToken(TokenType.CONCAT, startColumn)
+                        addToken(TokenType.CONCAT, col)
                     }
                 } else if (isDigit(peek())) {
-                    number(startColumn)
+                    number(col)
                 } else {
-                    addToken(TokenType.DOT, startColumn)
+                    addToken(TokenType.DOT, col)
                 }
-            }
-            ' ', '\t', '\u000B', '\u000C' -> {
-                // Ignore whitespace (space, tab, vertical tab, form feed)
-            }
-            '\n' -> {
+            },
+            ' ' to { _ ->
+                // Ignore whitespace
+            },
+            '\t' to { _ ->
+                // Ignore whitespace
+            },
+            '\u000B' to { _ ->
+                // Ignore vertical tab
+            },
+            '\u000C' to { _ ->
+                // Ignore form feed
+            },
+            '\n' to { _ ->
                 line++
                 column = 1
                 // Handle \n\r as a single line ending
                 if (peek() == '\r') advance()
-            }
-            '\r' -> {
+            },
+            '\r' to { _ ->
                 line++
                 column = 1
                 // Handle \r\n as a single line ending
                 if (peek() == '\n') advance()
-            }
-            '"', '\'' -> string(c, startColumn)
-            else -> {
-                when {
-                    isDigit(c) -> number(startColumn)
-                    isAlpha(c) -> identifier(startColumn)
-                    else -> addToken(TokenType.ERROR, startColumn)
-                }
-            }
-        }
-    }
+            },
+            '"' to { col -> string('"', col) },
+            '\'' to { col -> string('\'', col) },
+        )
 
     /**
      * Scan an identifier or keyword token.
@@ -227,11 +244,13 @@ class Lexer(
      */
     private fun number(startColumn: Int) {
         // Check for hexadecimal number
-        if (current < source.length &&
-            source[start] == '0' &&
-            current + 1 < source.length &&
-            (source[current] == 'x' || source[current] == 'X')
-        ) {
+        val startsWithZero = source[start] == '0'
+        val hasHexPrefix =
+            current < source.length &&
+                current + 1 < source.length &&
+                (source[current] == 'x' || source[current] == 'X')
+
+        if (startsWithZero && hasHexPrefix) {
             advance() // consume 'x' or 'X'
             hexNumber(startColumn)
             return
@@ -247,7 +266,8 @@ class Lexer(
         } else if (peek() == '.') {
             // Check if next is exponent marker or end of number
             val next = peekNext()
-            if (next == 'e' || next == 'E' || !isAlpha(next) && next != '.') {
+            val isValidTrailingDecimal = next == 'e' || next == 'E' || (!isAlpha(next) && next != '.')
+            if (isValidTrailingDecimal) {
                 // Trailing decimal point like "5." or "5.e2"
                 advance() // consume the '.'
             }

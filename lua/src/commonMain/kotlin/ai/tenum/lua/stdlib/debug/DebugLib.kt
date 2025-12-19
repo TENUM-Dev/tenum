@@ -240,7 +240,12 @@ class DebugLib : LuaLibrary {
     private fun getProtoName(func: LuaValue<*>): InferredFunctionName {
         if (func is LuaCompiledFunction) {
             val protoName = func.proto.name
-            if (protoName.isNotEmpty() && protoName != "main" && protoName != "?" && protoName != "<function>") {
+            val isValidProtoName =
+                protoName.isNotEmpty() &&
+                    protoName != "main" &&
+                    protoName != "?" &&
+                    protoName != "<function>"
+            if (isValidProtoName) {
                 return InferredFunctionName(protoName, FunctionNameSource.Unknown)
             }
         }
@@ -793,6 +798,7 @@ class DebugLib : LuaLibrary {
                                 message,
                                 startIndex,
                                 useUpvalueDescriptor = true, // Use upvalue descriptor for both suspended and dead coroutines
+                                isInCoroutine = true, // Coroutine tracebacks don't include final [C]: in ? frame
                             )
                         } else {
                             // Coroutine finished or hasn't yielded yet - return just header
@@ -817,54 +823,79 @@ class DebugLib : LuaLibrary {
                 }
             } else if (currentContext != null) {
                 // Check if there's a preserved error call stack (e.g., from __close metamethod)
-                // If so, use it instead of the current stack to show the __close frames
+                // Only use it in main thread context, not in coroutines (which have their own error handling)
+                // This prevents stale error stacks from dead coroutines contaminating new coroutine tracebacks
                 val lastErrorStack = currentContext.getAndClearLastErrorCallStack()
 
                 // Get stack view for coroutine boundary check and level calculation
                 val stackView = currentContext.getStackView()
                 val snapshot = currentContext.getHookSnapshot()
 
+                // Check if we're currently in a coroutine
+                val currentCo = libContext?.getCurrentCoroutine?.invoke()
+                val isInCoroutine = currentCo != null
+
                 val rawCallStack =
-                    if (lastErrorStack != null && lastErrorStack.isNotEmpty()) {
-                        // Use the preserved error stack which includes __close frames
+                    if (lastErrorStack != null && lastErrorStack.isNotEmpty() && !isInCoroutine) {
+                        // Use the preserved error stack only in main thread context (not in coroutines)
+                        // This handles __close metamethod errors where the stack has already unwound
                         lastErrorStack.asReversed() // Most-recent-first for traceback
                     } else {
                         // Normal path: get stack from view - automatically handles hook context
                         // If in hook, combine hook frame with observed frames
                         if (snapshot != null && stackView.size > 0) {
-                            // Hook context: find the hook frame (skip native frames like debug.traceback)
-                            // and combine with observed frames from when the hook was triggered
-                            val hookFrame = stackView.forTraceback().firstOrNull { !it.isNative }
-                            if (hookFrame != null) {
-                                listOf(hookFrame) + snapshot.frames.asReversed()
-                            } else {
-                                snapshot.frames.asReversed()
-                            }
+                            // Hook context: combine current Lua frames (from within hook) with observed frames
+                            // C frames will be filtered out later, so we just need all Lua frames
+                            // The current stack includes frames like [caller of debug.traceback, hook function, ...]
+                            // We combine these with the observed frames from when the hook was triggered
+                            stackView.forTraceback() + snapshot.frames.asReversed()
                         } else {
                             // Normal context: use stack as-is (most-recent-first for traceback)
                             stackView.forTraceback()
                         }
                     }
 
-                // When in a coroutine, filter frames to only show those within the coroutine
-                // This prevents leaking frames from outside the coroutine boundary
-                val currentCo = libContext?.getCurrentCoroutine?.invoke()
-                val filteredByBoundary =
-                    if (currentCo != null) {
-                        // Only apply filtering when getting traceback of current thread (not another coroutine)
-                        val callStackBase = currentCo.thread.callStackBase
-                        // rawCallStack is most-recent-first, so we need to filter from the end
-                        // Frames at the end (oldest) before callStackBase should be excluded
-                        // stackView.size gives us total frames including the ones before callStackBase
-                        val totalFrames = if (lastErrorStack != null) rawCallStack.size else stackView.size
-                        if (callStackBase > 0 && callStackBase < totalFrames) {
-                            val framesToDrop = callStackBase
-                            rawCallStack.dropLast(framesToDrop)
+                // Filter out C frames when called from within a hook
+                // PUC Lua's debug.traceback() filters intermediate C frames (like assert, string.match)
+                // when called from within a hook function, but NOT in normal contexts
+                // Error tracebacks always show C frames regardless of context
+                val filteredCFrames =
+                    if (snapshot != null && rawCallStack.isNotEmpty()) {
+                        // In hook context: filter out C frames except the final runner
+                        val nonNativeFrames = rawCallStack.filter { !it.isNative }
+                        val lastFrame = rawCallStack.lastOrNull()
+                        // Add back the final C frame if it exists and looks like the top-level runner
+                        if (lastFrame != null && lastFrame.isNative && lastFrame != nonNativeFrames.lastOrNull()) {
+                            nonNativeFrames + lastFrame
                         } else {
-                            rawCallStack
+                            nonNativeFrames
                         }
                     } else {
+                        // Normal context or error stack: keep all frames
                         rawCallStack
+                    }
+
+                // When in a coroutine, filter frames to only show those within the coroutine
+                // This prevents leaking frames from outside the coroutine boundary
+                // Only treat as "in coroutine" if the coroutine is actually running (not dead/suspended with saved stack)
+                val isActiveCoroutine = isInCoroutine && currentCo!!.status == ai.tenum.lua.runtime.CoroutineStatus.RUNNING
+
+                val filteredByBoundary =
+                    if (isActiveCoroutine) {
+                        // Only apply filtering when getting traceback of current thread (not another coroutine)
+                        val callStackBase = currentCo.thread.callStackBase
+                        // filteredCFrames is most-recent-first, so we need to filter from the end
+                        // Frames at the end (oldest) before callStackBase should be excluded
+                        // stackView.size gives us total frames including the ones before callStackBase
+                        val totalFrames = if (lastErrorStack != null) filteredCFrames.size else stackView.size
+                        if (callStackBase > 0 && callStackBase < totalFrames) {
+                            val framesToDrop = callStackBase
+                            filteredCFrames.dropLast(framesToDrop)
+                        } else {
+                            filteredCFrames
+                        }
+                    } else {
+                        filteredCFrames
                     }
 
                 // Filter out anonymous native wrapper functions (e.g., from coroutine.wrap)
@@ -900,7 +931,9 @@ class DebugLib : LuaLibrary {
                         val offset = if (snapshot != null) 0 else 1
                         (requestedLevel - 1 + offset).coerceIn(0, callStack.size)
                     }
-                TracebackFormatter.formatTraceback(callStack, message, startIndex)
+                // Pass isInCoroutine flag to control whether to append final [C]: in ? frame
+                // Use isActiveCoroutine (not just currentCo != null) to avoid including final [C] for dead coroutines
+                TracebackFormatter.formatTraceback(callStack, message, startIndex, isInCoroutine = isActiveCoroutine)
             } else {
                 buildString {
                     if (message.isNotEmpty()) {
@@ -930,7 +963,7 @@ class DebugLib : LuaLibrary {
 
         if (args.isEmpty()) {
             // Disable hook for current thread
-            currentContext.setHook(null, "")
+            currentContext.setHook(coroutine = null, hook = null, mask = "")
         } else {
             // Check if first argument is a coroutine (thread-specific hook)
             val firstArg = args.getOrNull(0)
@@ -941,30 +974,26 @@ class DebugLib : LuaLibrary {
                     val mask = (args.getOrNull(2) as? LuaString)?.value ?: ""
                     val count = (args.getOrNull(3) as? LuaNumber)?.toDouble()?.toInt() ?: 0
 
-                    // Store hook in registry's _HOOKKEY table with coroutine as key
-                    val registry = currentContext.getRegistry()
-                    val hookKey = LuaString("_HOOKKEY")
-                    val hookTable =
-                        registry[hookKey] as? LuaTable ?: run {
-                            // Initialize _HOOKKEY table if not present
-                            val newTable = LuaTable()
-                            val mt = LuaTable()
-                            mt[LuaString("__mode")] = LuaString("k")
-                            newTable.metatable = mt
-                            registry[hookKey] = newTable
-                            newTable
-                        }
-
                     if (hookFunc is LuaFunction) {
-                        // Store hook info as a table: {func, mask, count}
-                        val hookInfo = LuaTable()
-                        hookInfo[LuaNumber.of(1)] = hookFunc
-                        hookInfo[LuaNumber.of(2)] = LuaString(mask)
-                        hookInfo[LuaNumber.of(3)] = LuaNumber.of(count)
-                        hookTable[firstArg] = hookInfo
+                        // Create Kotlin hook that uses DebugContext.executeHook()
+                        val debugHook =
+                            object : DebugHook {
+                                override val luaFunction: LuaFunction = hookFunc
+
+                                override fun onHook(
+                                    event: HookEvent,
+                                    line: Int,
+                                    callStack: List<CallFrame>,
+                                ) {
+                                    // Delegate to DebugContext which handles all state management
+                                    currentContext.executeHook(hookFunc, event, line, callStack)
+                                }
+                            }
+
+                        currentContext.setHook(coroutine = firstArg, hook = debugHook, mask = mask, count = count)
                     } else if (hookFunc is LuaNil) {
                         // Clear hook for this coroutine
-                        hookTable[firstArg] = LuaNil
+                        currentContext.setHook(coroutine = firstArg, hook = null, mask = "")
                     }
                 }
                 is LuaFunction -> {
@@ -987,11 +1016,11 @@ class DebugLib : LuaLibrary {
                             }
                         }
 
-                    currentContext.setHook(debugHook, mask, count)
+                    currentContext.setHook(coroutine = null, hook = debugHook, mask = mask, count = count)
                 }
                 is LuaNil -> {
                     // debug.sethook(nil) should also clear the hook (Lua 5.4 behavior)
-                    currentContext.setHook(null, "")
+                    currentContext.setHook(coroutine = null, hook = null, mask = "")
                 }
                 else -> {
                     // Invalid first argument
@@ -1014,24 +1043,14 @@ class DebugLib : LuaLibrary {
 
         // Check if first argument is a coroutine
         val firstArg = args.getOrNull(0)
-        if (firstArg is LuaCoroutine) {
-            // debug.gethook(thread) - get hook for specific coroutine
-            val registry = currentVm.getRegistry()
-            val hookKey = LuaString("_HOOKKEY")
-            val hookTable = registry[hookKey] as? LuaTable ?: return listOf()
-
-            val hookInfo = hookTable[firstArg] as? LuaTable ?: return listOf()
-
-            // Extract hook info: {func, mask, count}
-            val hookFunc = hookInfo[LuaNumber.of(1)] ?: LuaNil
-            val mask = hookInfo[LuaNumber.of(2)] ?: LuaString("")
-            val count = hookInfo[LuaNumber.of(3)] ?: LuaNumber.of(0)
-
-            return listOf(hookFunc, mask, count)
-        }
-
-        // debug.gethook() - get hook for current thread
-        val config = currentVm.getHook()
+        val config =
+            if (firstArg is LuaCoroutine) {
+                // debug.gethook(thread) - get hook for specific coroutine
+                currentVm.getHook(coroutine = firstArg)
+            } else {
+                // debug.gethook() - get hook for current thread
+                currentVm.getHook(coroutine = null)
+            }
 
         if (config.hook == null) {
             return listOf()

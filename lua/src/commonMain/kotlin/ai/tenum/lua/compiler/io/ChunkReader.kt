@@ -50,7 +50,8 @@ object ChunkReader {
         val sig3 = source.readByte().toInt() and 0xFF
         val sig4 = source.readByte().toInt() and 0xFF
 
-        if (sig1 != 0x1B || sig2 != 'L'.code || sig3 != 'u'.code || sig4 != 'a'.code) {
+        val hasValidSignature = sig1 == 0x1B && sig2 == 'L'.code && sig3 == 'u'.code && sig4 == 'a'.code
+        if (!hasValidSignature) {
             throw IllegalArgumentException("Invalid Lua binary chunk signature")
         }
 

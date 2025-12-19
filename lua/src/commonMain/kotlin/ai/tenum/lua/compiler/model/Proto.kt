@@ -72,6 +72,13 @@ enum class LineEventKind {
      * Used for loop headers where we want hooks to fire on each iteration.
      */
     ITERATION,
+
+    /**
+     * Synthetic compiler-generated event - does not fire LINE hooks.
+     * Used for implicit end-of-block markers that help track control flow
+     * internally but should not be visible to debug hooks (unlike PUC Lua's lineinfo).
+     */
+    SYNTHETIC,
 }
 
 /**

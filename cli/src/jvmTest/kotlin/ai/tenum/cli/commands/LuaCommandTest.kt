@@ -61,4 +61,10 @@ class LuaCommandTest {
         assertTrue(out.isEmpty())
         assertTrue(err.startsWith("lua: cannot open nosuch.lua"), "Unexpected stderr: $err")
     }
+
+    @Test
+    fun dummyTest() {
+        // This is a dummy test to ensure the test suite runs.
+        assertTrue(true)
+    }
 }

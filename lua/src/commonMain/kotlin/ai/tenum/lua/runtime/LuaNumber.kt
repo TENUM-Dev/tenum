@@ -35,12 +35,14 @@ sealed interface LuaNumber : LuaValue<Number> {
         fun of(value: Double): LuaNumber {
             // Check if the value is exactly an integer within the Long range
             // Must check range before converting to avoid overflow/saturation
-            return if (value.isFinite() &&
-                value >= Long.MIN_VALUE.toDouble() &&
-                value < 9223372036854775808.0 &&
-                // 2^63, just beyond Long.MAX_VALUE
-                value == value.toLong().toDouble()
-            ) {
+            val isExactLong =
+                value.isFinite() &&
+                    value >= Long.MIN_VALUE.toDouble() &&
+                    value < 9223372036854775808.0 &&
+                    // 2^63, just beyond Long.MAX_VALUE
+                    value == value.toLong().toDouble()
+
+            return if (isExactLong) {
                 LuaLong(value.toLong())
             } else {
                 LuaDouble(value)

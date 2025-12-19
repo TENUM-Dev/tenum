@@ -3,6 +3,7 @@ package ai.tenum.lua.vm.coroutine
 import ai.tenum.lua.compiler.model.Proto
 import ai.tenum.lua.runtime.CoroutineStatus
 import ai.tenum.lua.runtime.LuaCoroutine
+import ai.tenum.lua.runtime.LuaNil
 import ai.tenum.lua.runtime.LuaThread
 import ai.tenum.lua.runtime.LuaValue
 import ai.tenum.lua.runtime.Upvalue
@@ -274,7 +275,21 @@ class CoroutineStateManager {
         yieldTargetRegister: Int,
         yieldExpectedResults: Int,
         callStack: List<ai.tenum.lua.vm.CallFrame>,
+        toBeClosedVars: MutableList<Pair<Int, LuaValue<*>>>,
+        pendingCloseStartReg: Int,
+        pendingCloseVar: Pair<Int, LuaValue<*>>?,
+        execStack: List<ai.tenum.lua.vm.execution.ExecContext>,
+        pendingCloseYield: Boolean,
+        capturedReturnValues: List<LuaValue<*>>?,
+        pendingCloseContinuation: ai.tenum.lua.vm.execution.ResumptionState? = null,
+        pendingCloseErrorArg: LuaValue<*> = ai.tenum.lua.runtime.LuaNil,
+        incrementPc: Boolean = true,
+        closeResumeState: ai.tenum.lua.vm.execution.CloseResumeState? = null,
+        closeOwnerFrameStack: List<ai.tenum.lua.vm.execution.ExecutionFrame> = emptyList(),
     ) {
+        println(
+            "[DEBUG close-yield save] pendingCloseYield=$pendingCloseYield tbc=${toBeClosedVars.size} vals=$toBeClosedVars captured=${capturedReturnValues?.size} cont=${pendingCloseContinuation != null} pcv=$pendingCloseVar",
+        )
         val co = coroutine ?: return
 
         val thread =
@@ -284,13 +299,23 @@ class CoroutineStateManager {
             }
 
         thread.proto = proto
-        thread.pc = programCounter + 1 // Resume at next instruction after yield
+        thread.pc = programCounter + if (incrementPc) 1 else 0 // Optionally stay on same PC (e.g., __close yields)
         thread.registers = registers.toMutableList()
         thread.upvalues = upvalues.toList() // Save upvalues for correct closure context
         thread.varargs = varargs
         thread.yieldedValues = yieldedValues
         thread.yieldTargetRegister = yieldTargetRegister
         thread.yieldExpectedResults = yieldExpectedResults
+        thread.toBeClosedVars = toBeClosedVars
+        thread.pendingCloseStartReg = pendingCloseStartReg
+        thread.pendingCloseVarState = pendingCloseVar
         thread.savedCallStack = callStack.toList() // Save a copy of the call stack
+        thread.savedExecStack = execStack.toList()
+        thread.pendingCloseYield = pendingCloseYield
+        thread.capturedReturnValues = capturedReturnValues
+        thread.pendingCloseContinuation = pendingCloseContinuation
+        thread.pendingCloseErrorArg = pendingCloseErrorArg
+        thread.closeResumeState = closeResumeState
+        thread.closeOwnerFrameStack = closeOwnerFrameStack.toList()
     }
 }
