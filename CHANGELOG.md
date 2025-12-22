@@ -1,3 +1,17 @@
+## <small>1.3.2 (2025-12-22)</small>
+
+* Fix npm install command for tenum package (#57) ([abc9c29](https://github.com/TENUM-Dev/tenum/commit/abc9c29)), closes [#57](https://github.com/TENUM-Dev/tenum/issues/57)
+* Fix: refactore code structure ([37c629e](https://github.com/TENUM-Dev/tenum/commit/37c629e))
+* bump: (deps-dev): bump @types/node from 25.0.1 to 25.0.2 in /clinpm (#58) ([ca5329f](https://github.com/TENUM-Dev/tenum/commit/ca5329f)), closes [#58](https://github.com/TENUM-Dev/tenum/issues/58)
+* bump: (deps-dev): bump @types/node from 25.0.2 to 25.0.3 in /clinpm (#65) ([d192e09](https://github.com/TENUM-Dev/tenum/commit/d192e09)), closes [#65](https://github.com/TENUM-Dev/tenum/issues/65)
+* bump: (deps-dev): bump esbuild from 0.27.1 to 0.27.2 in /clinpm (#64) ([ce1b859](https://github.com/TENUM-Dev/tenum/commit/ce1b859)), closes [#64](https://github.com/TENUM-Dev/tenum/issues/64)
+* bump: (deps): bump actions/checkout from 4 to 6 (#60) ([d51ea92](https://github.com/TENUM-Dev/tenum/commit/d51ea92)), closes [#60](https://github.com/TENUM-Dev/tenum/issues/60)
+* bump: (deps): bump actions/setup-java from 4 to 5 (#59) ([43ee612](https://github.com/TENUM-Dev/tenum/commit/43ee612)), closes [#59](https://github.com/TENUM-Dev/tenum/issues/59)
+* bump: (deps): bump actions/upload-artifact from 5 to 6 (#61) ([a574438](https://github.com/TENUM-Dev/tenum/commit/a574438)), closes [#61](https://github.com/TENUM-Dev/tenum/issues/61)
+* bump: (deps): bump kotlinVersion from 2.2.21 to 2.3.0 (#62) ([58faf80](https://github.com/TENUM-Dev/tenum/commit/58faf80)), closes [#62](https://github.com/TENUM-Dev/tenum/issues/62)
+* Merge pull request #55 from TENUM-Dev/release ([45ab130](https://github.com/TENUM-Dev/tenum/commit/45ab130)), closes [#55](https://github.com/TENUM-Dev/tenum/issues/55)
+* Merge pull request #56 from TENUM-Dev/main ([d144a80](https://github.com/TENUM-Dev/tenum/commit/d144a80)), closes [#56](https://github.com/TENUM-Dev/tenum/issues/56)
+
 ## <small>1.3.1 (2025-12-15)</small>
 
 * Fix: locals tests (#51) ([a11ba8d](https://github.com/TENUM-Dev/tenum/commit/a11ba8d)), closes [#51](https://github.com/TENUM-Dev/tenum/issues/51)
