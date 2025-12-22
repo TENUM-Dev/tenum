@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Validate wrapper
         uses: gradle/actions/wrapper-validation@v5.0.0
 
@@ -27,9 +27,9 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -46,9 +46,9 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -65,9 +65,9 @@ jobs:
     needs: wrapper-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -84,9 +84,9 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -104,9 +104,9 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -124,9 +124,9 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -144,9 +144,9 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -163,9 +163,9 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -183,9 +183,9 @@ jobs:
     needs: [lint-format, duplication, coverage]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -214,9 +214,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v5.1.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -280,7 +280,7 @@ jobs:
           echo "tar=$TAR" >> "$GITHUB_OUTPUT"
       - name: Upload installer artifacts (Linux)
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: installers-linux
           path: |
@@ -328,7 +328,7 @@ jobs:
           done
       - name: Upload installer artifacts (macOS)
         if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: installers-macos
           path: |
@@ -391,7 +391,7 @@ jobs:
           & "$WixBin\\light.exe" -ext WixUIExtension -o "tenum-windows-x64-$Version.msi" "$Stage\\tenum.wixobj"
       - name: Upload installer artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: installers-windows
           path: tenum-windows-x64-*.msi

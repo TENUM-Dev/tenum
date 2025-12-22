@@ -343,14 +343,16 @@ class StatementParser(
      */
     private fun parseReturnStatement(): Statement {
         val returnLine = previous().line
-        val expressions =
-            if (check(TokenType.END) ||
+        val isBlockTerminator =
+            check(TokenType.END) ||
                 check(TokenType.ELSEIF) ||
                 check(TokenType.ELSE) ||
                 check(TokenType.UNTIL) ||
                 check(TokenType.SEMICOLON) ||
                 check(TokenType.EOF)
-            ) {
+
+        val expressions =
+            if (isBlockTerminator) {
                 emptyList()
             } else {
                 parseExpressionListCallback()

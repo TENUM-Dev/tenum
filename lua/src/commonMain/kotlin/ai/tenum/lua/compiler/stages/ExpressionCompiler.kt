@@ -27,17 +27,51 @@ import ai.tenum.lua.runtime.LuaDouble
 import ai.tenum.lua.runtime.LuaLong
 import ai.tenum.lua.runtime.LuaString
 import ai.tenum.lua.vm.OpCode
+import kotlin.reflect.KClass
 
 class ExpressionCompiler(
     private val callCompiler: CallCompiler,
 ) {
+    private val expressionHandlers: Map<KClass<out Expression>, (Expression, Int, CompileContext) -> Unit> by lazy {
+        mapOf(
+            NilLiteral::class to { _, targetReg, ctx -> compileNilLiteral(targetReg, ctx) },
+            BooleanLiteral::class to { expr, targetReg, ctx -> compileBooleanLiteral(expr as BooleanLiteral, targetReg, ctx) },
+            NumberLiteral::class to { expr, targetReg, ctx -> compileNumberLiteral(expr as NumberLiteral, targetReg, ctx) },
+            StringLiteral::class to { expr, targetReg, ctx -> compileStringLiteral(expr as StringLiteral, targetReg, ctx) },
+            Variable::class to { expr, targetReg, ctx -> compileVariable(expr as Variable, targetReg, ctx) },
+            BinaryOp::class to { expr, targetReg, ctx -> compileBinaryOp(expr as BinaryOp, targetReg, ctx) },
+            UnaryOp::class to { expr, targetReg, ctx -> compileUnaryOp(expr as UnaryOp, targetReg, ctx) },
+            FunctionCall::class to
+                { expr, targetReg, ctx -> callCompiler.compileFunctionCall(expr as FunctionCall, targetReg, ctx, ::compileExpression) },
+            TableConstructor::class to { expr, targetReg, ctx -> compileTableConstructor(expr as TableConstructor, targetReg, ctx) },
+            IndexAccess::class to { expr, targetReg, ctx -> compileIndexAccess(expr as IndexAccess, targetReg, ctx) },
+            FieldAccess::class to { expr, targetReg, ctx -> compileFieldAccess(expr as FieldAccess, targetReg, ctx) },
+            ParenExpression::class to { expr, targetReg, ctx -> compileExpression((expr as ParenExpression).expression, targetReg, ctx) },
+            FunctionExpression::class to { expr, targetReg, ctx -> compileFunctionExpression(expr as FunctionExpression, targetReg, ctx) },
+            MethodCall::class to
+                { expr, targetReg, ctx -> callCompiler.compileMethodCall(expr as MethodCall, targetReg, ctx, ::compileExpression) },
+            VarargExpression::class to { _, targetReg, ctx -> compileVarargExpression(targetReg, ctx) },
+        )
+    }
+
     fun compileExpression(
         expression: Expression,
         targetReg: Int,
         ctx: CompileContext,
     ) {
         ctx.debug("Compiling expression: ${expression::class.simpleName}")
+        handleLineTracking(expression, ctx)
 
+        val handler =
+            expressionHandlers[expression::class]
+                ?: error("No handler for expression type: ${expression::class.simpleName}")
+        handler(expression, targetReg, ctx)
+    }
+
+    private fun handleLineTracking(
+        expression: Expression,
+        ctx: CompileContext,
+    ) {
         // Update currentLine for error reporting
         // Note: Binary and unary operators will update this again to their operator's line
         // before emitting operation instructions
@@ -78,97 +112,114 @@ class ExpressionCompiler(
                 ctx.lineInfo.add(LineEvent(ctx.instructions.size, ctx.currentLine, LineEventKind.EXECUTION))
             }
         }
+    }
 
-        when (expression) {
-            is NilLiteral -> {
-                ctx.emit(OpCode.LOADNIL, targetReg, targetReg, 0)
+    private fun compileNilLiteral(
+        targetReg: Int,
+        ctx: CompileContext,
+    ) {
+        ctx.emit(OpCode.LOADNIL, targetReg, targetReg, 0)
+    }
+
+    private fun compileBooleanLiteral(
+        expression: BooleanLiteral,
+        targetReg: Int,
+        ctx: CompileContext,
+    ) {
+        ctx.emit(
+            OpCode.LOADBOOL,
+            targetReg,
+            if (expression.value) 1 else 0,
+            0,
+        )
+    }
+
+    private fun compileNumberLiteral(
+        expression: NumberLiteral,
+        targetReg: Int,
+        ctx: CompileContext,
+    ) {
+        // For small integers, use LOADI to avoid constant pool exhaustion
+        // LOADI encodes the value in the instruction's b field (int)
+        // Safe range: values that fit in Int without overflow
+        // IMPORTANT: Only use LOADI for values that were originally integers (raw is Long),
+        // never for values written with decimal point (raw is Double), even if value is 0.0 or 1.0
+        val intValue = extractIntValueForLoadi(expression)
+
+        if (intValue != null) {
+            // Use LOADI for integer values in safe range
+            ctx.emit(OpCode.LOADI, targetReg, intValue, 0)
+        } else {
+            // Use LOADK for large integers and all floating point values
+            val constIndex = addNumberConstant(expression, ctx)
+            ctx.emit(OpCode.LOADK, targetReg, constIndex, 0)
+        }
+    }
+
+    private fun extractIntValueForLoadi(expression: NumberLiteral): Int? =
+        when (expression.raw) {
+            is Long -> {
+                val lv = expression.raw
+                if (lv >= Int.MIN_VALUE && lv <= Int.MAX_VALUE) lv.toInt() else null
             }
-            is BooleanLiteral -> {
-                ctx.emit(
-                    OpCode.LOADBOOL,
-                    targetReg,
-                    if (expression.value) 1 else 0,
-                    0,
-                )
+            is Double -> {
+                // Never use LOADI for Double - must preserve float type
+                null
             }
-            is NumberLiteral -> {
-                // For small integers, use LOADI to avoid constant pool exhaustion
-                // LOADI encodes the value in the instruction's b field (int)
-                // Safe range: values that fit in Int without overflow
-                // IMPORTANT: Only use LOADI for values that were originally integers (raw is Long),
-                // never for values written with decimal point (raw is Double), even if value is 0.0 or 1.0
-                val intValue =
-                    when (expression.raw) {
-                        is Long -> {
-                            val lv = expression.raw
+            else -> {
+                // expression.value is either Long or Double
+                when (val v = expression.value) {
+                    is Long -> if (v >= Int.MIN_VALUE && v <= Int.MAX_VALUE) v.toInt() else null
+                    is Double -> {
+                        if (v == v.toLong().toDouble()) {
+                            val lv = v.toLong()
                             if (lv >= Int.MIN_VALUE && lv <= Int.MAX_VALUE) lv.toInt() else null
-                        }
-                        is Double -> {
-                            // Never use LOADI for Double - must preserve float type
+                        } else {
                             null
                         }
-                        else -> {
-                            // expression.value is either Long or Double
-                            when (val v = expression.value) {
-                                is Long -> if (v >= Int.MIN_VALUE && v <= Int.MAX_VALUE) v.toInt() else null
-                                is Double -> {
-                                    if (v == v.toLong().toDouble()) {
-                                        val lv = v.toLong()
-                                        if (lv >= Int.MIN_VALUE && lv <= Int.MAX_VALUE) lv.toInt() else null
-                                    } else {
-                                        null
-                                    }
-                                }
-                                else -> null
-                            }
-                        }
                     }
-
-                if (intValue != null) {
-                    // Use LOADI for integer values in safe range
-                    ctx.emit(OpCode.LOADI, targetReg, intValue, 0)
-                } else {
-                    // Use LOADK for large integers and all floating point values
-                    val constIndex =
-                        when (expression.raw) {
-                            is Long -> ctx.addConstant(LuaLong(expression.raw))
-                            is Double -> ctx.addConstant(LuaDouble(expression.raw))
-                            else -> {
-                                // expression.value is either Long or Double
-                                when (val v = expression.value) {
-                                    is Long -> ctx.addConstant(LuaLong(v))
-                                    is Double -> {
-                                        if (v == v.toLong().toDouble()) {
-                                            ctx.addConstant(LuaLong(v.toLong()))
-                                        } else {
-                                            ctx.addConstant(LuaDouble(v))
-                                        }
-                                    }
-                                    else -> ctx.addConstant(LuaDouble(0.0))
-                                }
-                            }
-                        }
-                    ctx.emit(OpCode.LOADK, targetReg, constIndex, 0)
+                    else -> null
                 }
             }
-            is StringLiteral -> {
-                val constIndex = ctx.addConstant(LuaString(expression.value))
-                ctx.emit(OpCode.LOADK, targetReg, constIndex, 0)
-            }
-            is Variable -> compileVariable(expression, targetReg, ctx)
-            is BinaryOp -> compileBinaryOp(expression, targetReg, ctx)
-            is UnaryOp -> compileUnaryOp(expression, targetReg, ctx)
-            is FunctionCall -> callCompiler.compileFunctionCall(expression, targetReg, ctx, ::compileExpression)
-            is TableConstructor -> compileTableConstructor(expression, targetReg, ctx)
-            is IndexAccess -> compileIndexAccess(expression, targetReg, ctx)
-            is FieldAccess -> compileFieldAccess(expression, targetReg, ctx)
-            is ParenExpression -> compileExpression(expression.expression, targetReg, ctx)
-            is FunctionExpression -> compileFunctionExpression(expression, targetReg, ctx)
-            is MethodCall -> callCompiler.compileMethodCall(expression, targetReg, ctx, ::compileExpression)
-            is VarargExpression -> {
-                ctx.emit(OpCode.VARARG, targetReg, 0, 0)
+        }
+
+    private fun addNumberConstant(
+        expression: NumberLiteral,
+        ctx: CompileContext,
+    ): Int =
+        when (expression.raw) {
+            is Long -> ctx.addConstant(LuaLong(expression.raw))
+            is Double -> ctx.addConstant(LuaDouble(expression.raw))
+            else -> {
+                // expression.value is either Long or Double
+                when (val v = expression.value) {
+                    is Long -> ctx.addConstant(LuaLong(v))
+                    is Double -> {
+                        if (v == v.toLong().toDouble()) {
+                            ctx.addConstant(LuaLong(v.toLong()))
+                        } else {
+                            ctx.addConstant(LuaDouble(v))
+                        }
+                    }
+                    else -> ctx.addConstant(LuaDouble(0.0))
+                }
             }
         }
+
+    private fun compileStringLiteral(
+        expression: StringLiteral,
+        targetReg: Int,
+        ctx: CompileContext,
+    ) {
+        val constIndex = ctx.addConstant(LuaString(expression.value))
+        ctx.emit(OpCode.LOADK, targetReg, constIndex, 0)
+    }
+
+    private fun compileVarargExpression(
+        targetReg: Int,
+        ctx: CompileContext,
+    ) {
+        ctx.emit(OpCode.VARARG, targetReg, 0, 0)
     }
 
     private fun compileVariable(

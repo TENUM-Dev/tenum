@@ -17,10 +17,50 @@ import ai.tenum.lua.vm.library.RegisterGlobalCallback
  * Implements: assert, error, pcall, xpcall
  */
 internal object BasicLibErrorHandling {
+    // CPD-OFF
+    private fun callAndWrapSuccess(
+        func: LuaValue<*>,
+        funcArgs: List<LuaValue<*>>,
+        callFunction: (LuaValue<*>, List<LuaValue<*>>) -> List<LuaValue<*>>,
+    ): List<LuaValue<*>> {
+        // CPD-ON
+        val results = callFunction(func, funcArgs)
+        return buildList {
+            add(LuaBoolean.TRUE)
+            addAll(results)
+        }
+    }
+
+    private fun handleProtectedCall(
+        func: LuaValue<*>,
+        funcArgs: List<LuaValue<*>>,
+        callFunction: (LuaValue<*>, List<LuaValue<*>>) -> List<LuaValue<*>>,
+    ): List<LuaValue<*>> =
+        try {
+            callAndWrapSuccess(func, funcArgs, callFunction)
+        } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
+            throw e
+        } catch (e: Exception) {
+            val errorResult =
+                when (e) {
+                    is ai.tenum.lua.vm.errorhandling.LuaException -> e.errorValue
+                    is LuaRuntimeError -> e.errorValue
+                    else -> {
+                        val errorMsg = e.message
+                        if (errorMsg.isNullOrEmpty()) LuaNil else LuaString(errorMsg)
+                    }
+                }
+            buildList {
+                add(LuaBoolean.FALSE)
+                add(errorResult)
+            }
+        }
+
     fun registerFunctions(
         registerGlobal: RegisterGlobalCallback,
         callFunction: CallFunctionCallback,
         getCallStack: GetCallStackCallback? = null,
+        vm: ai.tenum.lua.vm.LuaVmImpl? = null,
     ) {
         // assert(v [, message]) - raises an error if v is false/nil
         registerGlobal(
@@ -98,7 +138,7 @@ internal object BasicLibErrorHandling {
         // xpcall(f, msgh [, arg1, ...]) - protected call with message handler
         registerGlobal(
             "xpcall",
-            xpcallImpl(callFunction),
+            xpcallImpl(callFunction, vm),
         )
     }
 
@@ -123,34 +163,13 @@ internal object BasicLibErrorHandling {
             }
 
             val funcArgs = args.drop(1)
-
-            try {
-                val results = callFunction(func, funcArgs)
-                buildList {
-                    add(LuaBoolean.TRUE)
-                    addAll(results)
-                }
-            } catch (e: Exception) {
-                // For LuaException or LuaRuntimeError, return the original errorValue (preserves tables, nil, etc.)
-                // This matches Lua 5.4 behavior where error() can pass any value through pcall
-                val errorResult =
-                    when (e) {
-                        is ai.tenum.lua.vm.errorhandling.LuaException -> e.errorValue
-                        is LuaRuntimeError -> e.errorValue
-                        else -> {
-                            // For other exceptions, convert to string with location info
-                            val errorMsg = e.message
-                            if (errorMsg.isNullOrEmpty()) LuaNil else LuaString(errorMsg)
-                        }
-                    }
-                buildList {
-                    add(LuaBoolean.FALSE)
-                    add(errorResult)
-                }
-            }
+            handleProtectedCall(func, funcArgs) { f, fArgs -> callFunction(f as LuaFunction, fArgs) }
         }
 
-    private fun xpcallImpl(callFunction: CallFunctionCallback): LuaNativeFunction =
+    private fun xpcallImpl(
+        callFunction: CallFunctionCallback,
+        vm: ai.tenum.lua.vm.LuaVmImpl?,
+    ): LuaNativeFunction =
         LuaNativeFunction("xpcall") { args ->
             if (args.size < 2) {
                 throw RuntimeException("bad argument #2 to 'xpcall' (function expected)")
@@ -166,32 +185,75 @@ internal object BasicLibErrorHandling {
             val funcArgs = args.drop(2)
 
             try {
-                val results = callFunction(func, funcArgs)
-                buildList {
-                    add(LuaBoolean.TRUE)
-                    addAll(results)
-                }
+                callAndWrapSuccess(func, funcArgs) { f, fArgs -> callFunction(f as LuaFunction, fArgs) }
+            } catch (e: ai.tenum.lua.runtime.LuaYieldException) {
+                throw e
             } catch (e: Exception) {
-                // For LuaException or LuaRuntimeError, use errorValue to preserve non-string error objects
-                // The message handler should receive the original error value (table, string, etc.)
                 val errorValue =
                     when (e) {
                         is ai.tenum.lua.vm.errorhandling.LuaException -> e.errorValue
                         is LuaRuntimeError -> e.errorValue
                         else -> LuaString(e.message ?: "")
                     }
-                try {
-                    val handlerResults = callFunction(msgh, listOf(errorValue))
-                    val handlerResult = handlerResults.firstOrNull() ?: LuaNil
-                    buildList {
+
+                // Use two-phase call if VM is available to capture return values even when __close fails
+                if (vm != null) {
+                    val result = vm.callFunctionWithCloseHandling(msgh, listOf(errorValue))
+                    val handlerResult = result.returnValues.firstOrNull() ?: LuaNil
+
+                    // If handler had a __close exception, try calling handler again (Lua 5.4 behavior)
+                    if (result.closeException != null) {
+                        val closeError =
+                            when (result.closeException) {
+                                is ai.tenum.lua.vm.errorhandling.LuaException -> result.closeException.errorValue
+                                is LuaRuntimeError -> result.closeException.errorValue
+                                else -> LuaString(result.closeException.message ?: "error in error handling")
+                            }
+
+                        // Try calling handler again with __close error (limited recursion)
+                        try {
+                            val retryResult = vm.callFunctionWithCloseHandling(msgh, listOf(closeError))
+                            val retryHandlerResult = retryResult.returnValues.firstOrNull() ?: LuaNil
+
+                            // If retry also has __close error, give up and return "error in error handling"
+                            if (retryResult.closeException != null) {
+                                return@LuaNativeFunction buildList {
+                                    add(LuaBoolean.FALSE)
+                                    add(LuaString("error in error handling"))
+                                }
+                            }
+
+                            return@LuaNativeFunction buildList {
+                                add(LuaBoolean.FALSE)
+                                add(retryHandlerResult)
+                            }
+                        } catch (_: Exception) {
+                            return@LuaNativeFunction buildList {
+                                add(LuaBoolean.FALSE)
+                                add(LuaString("error in error handling"))
+                            }
+                        }
+                    }
+
+                    // Handler succeeded (or succeeded but __close didn't throw)
+                    return@LuaNativeFunction buildList {
                         add(LuaBoolean.FALSE)
                         add(handlerResult)
                     }
-                } catch (handlerEx: Exception) {
-                    // When error handler itself fails (including stack overflow), return Lua 5.4's standard message
-                    buildList {
-                        add(LuaBoolean.FALSE)
-                        add(LuaString("error in error handling"))
+                } else {
+                    // Fallback to old behavior if no VM reference
+                    try {
+                        val handlerResults = callFunction(msgh, listOf(errorValue))
+                        val handlerResult = handlerResults.firstOrNull() ?: LuaNil
+                        buildList {
+                            add(LuaBoolean.FALSE)
+                            add(handlerResult)
+                        }
+                    } catch (handlerEx: Exception) {
+                        buildList {
+                            add(LuaBoolean.FALSE)
+                            add(LuaString("error in error handling"))
+                        }
                     }
                 }
             }

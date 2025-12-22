@@ -34,6 +34,7 @@ data class LuaLibraryContext(
             List<Upvalue>,
             LuaFunction?,
             CoroutineThread?,
+            Boolean,
         ) -> List<LuaValue<*>>
     )? = null, // For coroutine resumption with saved state
     val getCurrentEnv: (() -> Upvalue?)? = null, // Get current _ENV upvalue for load() inheritance
@@ -44,4 +45,5 @@ data class LuaLibraryContext(
     val getNativeCallDepth: (() -> Int)? = null, // Get current depth of native (C boundary) function calls
     val saveNativeCallDepth: ((Int) -> Unit)? = null, // Set native call depth (for coroutine context isolation)
     val getCoroutineStateManager: (() -> ai.tenum.lua.vm.coroutine.CoroutineStateManager)? = null, // Get coroutine state manager
+    val cleanupCallStackFrames: ((Int) -> Unit)? = null, // Clean up call stack frames to a specific size (for coroutine cleanup)
 )

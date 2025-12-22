@@ -32,6 +32,48 @@ interface VmCapabilities {
         args: List<LuaValue<*>>,
     ): List<LuaValue<*>>
 
+    fun clearCloseException()
+
+    fun setCloseException(exception: Exception)
+
+    fun getCloseException(): Exception?
+
+    fun setPendingCloseVar(
+        register: Int,
+        value: LuaValue<*>,
+    )
+
+    fun clearPendingCloseVar()
+
+    fun setPendingCloseStartReg(registerIndex: Int)
+
+    fun clearPendingCloseStartReg()
+
+    fun setPendingCloseOwnerTbc(vars: MutableList<Pair<Int, LuaValue<*>>>)
+
+    fun clearPendingCloseOwnerTbc()
+
+    fun setPendingCloseOwnerFrame(frame: ExecutionFrame)
+
+    fun getPendingCloseOwnerFrame(): ExecutionFrame?
+
+    fun setPendingCloseErrorArg(error: LuaValue<*>)
+
+    fun clearPendingCloseErrorArg()
+
+    /**
+     * When a function call can yield but its results are ignored (e.g., __close metamethods),
+     * we need to control how coroutine resume stores the yielded values.
+     * Setting encodedCount=1 makes resume store zero results (Lua CALL c=1 semantics).
+     */
+    fun setYieldResumeContext(
+        targetReg: Int,
+        encodedCount: Int,
+        stayOnSamePc: Boolean = false,
+    )
+
+    fun clearYieldResumeContext()
+
     fun isTruthy(value: LuaValue<*>): Boolean
 
     fun luaEquals(

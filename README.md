@@ -85,7 +85,7 @@ Performance testing suite to ensure TENUM stays fast.
 ### Or Install via npm
 
 ```bash
-npm install -g @tenum-dev/tenum
+npm install -g @tenum_dev/tenum
 ```
 
 ### Run a Lua script

@@ -69,11 +69,11 @@ class CoroutineLib : LuaLibrary {
                 coroutineRunning(context)
             }
 
-        // coroutine.isyieldable() - Check if current context can yield
+        // coroutine.isyieldable([thread]) - Check if given thread or current context can yield
         lib[LuaString("isyieldable")] =
             LuaNativeFunction { args ->
                 buildList {
-                    add(coroutineIsYieldable(context))
+                    add(coroutineIsYieldable(args, context))
                 }
             }
 
@@ -176,6 +176,9 @@ class CoroutineLib : LuaLibrary {
             // Complete coroutine successfully
             stateManager.completeCoroutine(coroutine, results, previousCoroutine)
 
+            // Clean up call stack frames added by coroutine
+            context.cleanupCallStackFrames?.invoke(currentCallStackSize)
+
             // Restore native call depth
             val savedDepth = stateManager.getSavedNativeDepth(coroutine)
             context.saveNativeCallDepth?.invoke(savedDepth)
@@ -185,6 +188,9 @@ class CoroutineLib : LuaLibrary {
             // Coroutine yielded - execution state already saved in VM
             stateManager.handleYield(coroutine, coroutine.thread.yieldedValues, previousCoroutine)
 
+            // Clean up call stack frames added by coroutine
+            context.cleanupCallStackFrames?.invoke(currentCallStackSize)
+
             // Restore native call depth
             val savedDepth = stateManager.getSavedNativeDepth(coroutine)
             context.saveNativeCallDepth?.invoke(savedDepth)
@@ -193,6 +199,9 @@ class CoroutineLib : LuaLibrary {
         } catch (e: Exception) {
             // Coroutine errored - call stack already saved by VM
             stateManager.handleError(coroutine, previousCoroutine)
+
+            // Clean up call stack frames added by coroutine
+            context.cleanupCallStackFrames?.invoke(currentCallStackSize)
 
             // Restore native call depth
             val savedDepth = stateManager.getSavedNativeDepth(coroutine)
@@ -292,7 +301,27 @@ class CoroutineLib : LuaLibrary {
     /**
      * coroutine.isyieldable() - Check if current context can yield
      */
-    private fun coroutineIsYieldable(context: LuaLibraryContext): LuaValue<*> {
+    private fun coroutineIsYieldable(
+        args: List<LuaValue<*>>,
+        context: LuaLibraryContext,
+    ): LuaValue<*> {
+        // If an argument is provided, check that specific thread
+        val firstArg = args.getOrNull(0)
+        if (firstArg != null) {
+            // Validate argument is a thread
+            validateThreadArgument(firstArg, "coroutine.isyieldable")
+
+            return when (firstArg) {
+                is LuaThread -> LuaBoolean.FALSE // main thread is not yieldable
+                is LuaCoroutine -> {
+                    // A coroutine is yieldable if it is not dead
+                    if (firstArg.status != CoroutineStatus.DEAD) LuaBoolean.TRUE else LuaBoolean.FALSE
+                }
+                else -> LuaBoolean.FALSE
+            }
+        }
+
+        // No argument: check current context (classic behaviour)
         val stateManager = context.getCoroutineStateManager?.invoke() ?: return LuaBoolean.FALSE
         val nativeCallDepth = context.getNativeCallDepth?.invoke() ?: 0
 
@@ -326,6 +355,7 @@ class CoroutineLib : LuaLibrary {
             compiledFunc.upvalues,
             coroutine.func,
             coroutine.thread,
+            coroutine.thread.pendingCloseYield,
         )
     }
 
@@ -383,7 +413,7 @@ class CoroutineLib : LuaLibrary {
                 }
             }
 
-        vm.setHook(debugHook, maskStr, count)
+        vm.setHook(coroutine = null, hook = debugHook, mask = maskStr, count = count)
 
         // Return previous state for restoration
         return HookState(previousHook)
@@ -402,9 +432,9 @@ class CoroutineLib : LuaLibrary {
         // Restore previous hook
         val prevConfig = hookState.previousConfig
         if (prevConfig.hook != null) {
-            vm.setHook(prevConfig.hook, prevConfig.mask.joinToString(""), prevConfig.count)
+            vm.setHook(coroutine = null, hook = prevConfig.hook, mask = prevConfig.mask.joinToString(""), count = prevConfig.count)
         } else {
-            vm.setHook(null, "")
+            vm.setHook(coroutine = null, hook = null, mask = "")
         }
     }
 

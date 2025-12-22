@@ -78,3 +78,4 @@ benchmark = { id = "org.jetbrains.kotlinx.benchmark", version.ref = "benchmark" 
 allopen = { id = "org.jetbrains.kotlin.plugin.allopen", version.ref = "kotlin" }
 cpd = { id = "de.aaschmid.cpd", version.ref = "cpd" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version = "1.23.8" }

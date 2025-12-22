@@ -252,7 +252,8 @@ object ArithmeticOpcodes {
             // Lua's modulo has sign of divisor. Kotlin's % has sign of dividend.
             // Use: r = a % b; if ((r > 0 && b < 0) || (r < 0 && b > 0)) r + b else r
             val r = leftVal % rightVal
-            val result = if ((r > 0.0 && rightVal < 0.0) || (r < 0.0 && rightVal > 0.0)) r + rightVal else r
+            val needsSignAdjustment = (r > 0.0 && rightVal < 0.0) || (r < 0.0 && rightVal > 0.0)
+            val result = if (needsSignAdjustment) r + rightVal else r
             env.setRegister(instr.a, LuaDouble(result))
         }
         env.debug("  R[${instr.a}] = R[${instr.b}] % R[${instr.c}] (${env.registers[instr.a]})")

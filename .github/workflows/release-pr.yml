@@ -21,7 +21,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout dev
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6
         with:
           ref: dev
           fetch-depth: 0
