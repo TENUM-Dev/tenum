@@ -1,3 +1,10 @@
+## <small>1.3.3 (2025-12-29)</small>
+
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.22 to 1.5.23 (#69) ([ad06097](https://github.com/TENUM-Dev/tenum/commit/ad06097)), closes [#69](https://github.com/TENUM-Dev/tenum/issues/69)
+* bump: (deps): bump com.github.gmazzo.buildconfig from 6.0.6 to 6.0.7 (#70) ([e68a92f](https://github.com/TENUM-Dev/tenum/commit/e68a92f)), closes [#70](https://github.com/TENUM-Dev/tenum/issues/70)
+* Merge pull request #67 from TENUM-Dev/release ([bc398eb](https://github.com/TENUM-Dev/tenum/commit/bc398eb)), closes [#67](https://github.com/TENUM-Dev/tenum/issues/67)
+* Merge pull request #68 from TENUM-Dev/main ([d2d217f](https://github.com/TENUM-Dev/tenum/commit/d2d217f)), closes [#68](https://github.com/TENUM-Dev/tenum/issues/68)
+
 ## <small>1.3.2 (2025-12-22)</small>
 
 * Fix npm install command for tenum package (#57) ([abc9c29](https://github.com/TENUM-Dev/tenum/commit/abc9c29)), closes [#57](https://github.com/TENUM-Dev/tenum/issues/57)
