@@ -1,3 +1,10 @@
+## <small>1.3.4 (2026-01-12)</small>
+
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.23 to 1.5.24 (#74) ([cc19a81](https://github.com/TENUM-Dev/tenum/commit/cc19a81)), closes [#74](https://github.com/TENUM-Dev/tenum/issues/74)
+* bump: (deps): bump dev.opensavvy.pedestal:weak from 3.1.1 to 3.2.0 (#73) ([1399e84](https://github.com/TENUM-Dev/tenum/commit/1399e84)), closes [#73](https://github.com/TENUM-Dev/tenum/issues/73)
+* Merge pull request #71 from TENUM-Dev/release ([36a40b6](https://github.com/TENUM-Dev/tenum/commit/36a40b6)), closes [#71](https://github.com/TENUM-Dev/tenum/issues/71)
+* Merge pull request #72 from TENUM-Dev/main ([f3c0f9b](https://github.com/TENUM-Dev/tenum/commit/f3c0f9b)), closes [#72](https://github.com/TENUM-Dev/tenum/issues/72)
+
 ## <small>1.3.3 (2025-12-29)</small>
 
 * bump: (deps): bump ch.qos.logback:logback-classic from 1.5.22 to 1.5.23 (#69) ([ad06097](https://github.com/TENUM-Dev/tenum/commit/ad06097)), closes [#69](https://github.com/TENUM-Dev/tenum/issues/69)

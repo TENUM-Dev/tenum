@@ -49,9 +49,9 @@ kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.
 
 bignum = "com.ionspin.kotlin:bignum:0.3.10"
 
-pedestal-weak = "dev.opensavvy.pedestal:weak:3.1.1"
+pedestal-weak = "dev.opensavvy.pedestal:weak:3.2.0"
 
-logback = "ch.qos.logback:logback-classic:1.5.23"
+logback = "ch.qos.logback:logback-classic:1.5.24"
 
 [bundles]
 kotlin-test = [
