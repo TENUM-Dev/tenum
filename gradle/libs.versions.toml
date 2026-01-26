@@ -2,8 +2,8 @@
 kotlin = "2.2.21"
 convention = "0.9.6"
 coroutines = "1.10.2"
-kotlinx-serialization = "1.9.0"
-koTest = "6.0.7"
+kotlinx-serialization = "1.10.0"
+koTest = "6.1.1"
 benchmark = "0.4.15"
 cpd = "3.5"
 okio = "3.16.4"
@@ -38,7 +38,7 @@ kotlin-test-annotations-common = { module = "org.jetbrains.kotlin:kotlin-test-an
 kotlin-test-common = { module = "org.jetbrains.kotlin:kotlin-test-common", version.ref = "kotlin" }
 kotlin-test-main = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
-kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version = "6.0.7" }
+kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version = "6.1.1" }
 junit = { module = "junit:junit", version = "4.13.2" }
 kotlinx-benchmark-runtime = { module = "org.jetbrains.kotlinx:kotlinx-benchmark-runtime", version.ref = "benchmark" }
 
@@ -51,7 +51,7 @@ bignum = "com.ionspin.kotlin:bignum:0.3.10"
 
 pedestal-weak = "dev.opensavvy.pedestal:weak:3.2.0"
 
-logback = "ch.qos.logback:logback-classic:1.5.24"
+logback = "ch.qos.logback:logback-classic:1.5.25"
 
 [bundles]
 kotlin-test = [

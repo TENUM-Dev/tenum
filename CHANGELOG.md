@@ -1,3 +1,18 @@
+## <small>1.3.6 (2026-01-26)</small>
+
+* bump: (deps-dev): bump @types/node from 25.0.9 to 25.0.10 in /clinpm (#92) ([587ede6](https://github.com/TENUM-Dev/tenum/commit/587ede6)), closes [#92](https://github.com/TENUM-Dev/tenum/issues/92)
+* bump: (deps): bump @js-joda/core from 5.6.5 to 5.7.0 in /clinpm (#91) ([ba35906](https://github.com/TENUM-Dev/tenum/commit/ba35906)), closes [#91](https://github.com/TENUM-Dev/tenum/issues/91)
+* bump: (deps): bump @js-joda/timezone from 2.22.0 to 2.23.0 in /clinpm (#90) ([b65b121](https://github.com/TENUM-Dev/tenum/commit/b65b121)), closes [#90](https://github.com/TENUM-Dev/tenum/issues/90)
+* bump: (deps): bump actions/setup-node from 6.1.0 to 6.2.0 (#84) ([b8f285d](https://github.com/TENUM-Dev/tenum/commit/b8f285d)), closes [#84](https://github.com/TENUM-Dev/tenum/issues/84)
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.24 to 1.5.25 (#85) ([8628653](https://github.com/TENUM-Dev/tenum/commit/8628653)), closes [#85](https://github.com/TENUM-Dev/tenum/issues/85)
+* bump: (deps): bump koTest from 6.0.7 to 6.1.0 (#88) ([fd9aa03](https://github.com/TENUM-Dev/tenum/commit/fd9aa03)), closes [#88](https://github.com/TENUM-Dev/tenum/issues/88)
+* bump: (deps): bump koTest from 6.1.0 to 6.1.1 (#93) ([c5d8cb0](https://github.com/TENUM-Dev/tenum/commit/c5d8cb0)), closes [#93](https://github.com/TENUM-Dev/tenum/issues/93)
+* bump: (deps): bump kotlinx-serialization from 1.9.0 to 1.10.0 (#89) ([7fcfae4](https://github.com/TENUM-Dev/tenum/commit/7fcfae4)), closes [#89](https://github.com/TENUM-Dev/tenum/issues/89)
+* bump: (deps): bump org.danilopianini.npm.publish from 4.1.8 to 4.1.9 (#87) ([3c9b2c8](https://github.com/TENUM-Dev/tenum/commit/3c9b2c8)), closes [#87](https://github.com/TENUM-Dev/tenum/issues/87)
+* bump: (deps): bump org.danilopianini.npm.publish:org.danilopianini.npm.publish.gradle.plugin (#86) ([390a7e0](https://github.com/TENUM-Dev/tenum/commit/390a7e0)), closes [#86](https://github.com/TENUM-Dev/tenum/issues/86)
+* Merge pull request #82 from TENUM-Dev/release ([ffb0eee](https://github.com/TENUM-Dev/tenum/commit/ffb0eee)), closes [#82](https://github.com/TENUM-Dev/tenum/issues/82)
+* Merge pull request #83 from TENUM-Dev/main ([565bbcb](https://github.com/TENUM-Dev/tenum/commit/565bbcb)), closes [#83](https://github.com/TENUM-Dev/tenum/issues/83)
+
 ## <small>1.3.5 (2026-01-19)</small>
 
 * bump: (deps-dev): bump @types/node from 25.0.3 to 25.0.6 in /clinpm (#78) ([2004f71](https://github.com/TENUM-Dev/tenum/commit/2004f71)), closes [#78](https://github.com/TENUM-Dev/tenum/issues/78)

@@ -38,11 +38,11 @@
     "../LICENSE.md"
   ],
   "dependencies": {
-    "@js-joda/core": "5.6.5",
-    "@js-joda/timezone": "2.22.0"
+    "@js-joda/core": "5.7.0",
+    "@js-joda/timezone": "2.23.0"
   },
   "devDependencies": {
-    "@types/node": "25.0.9",
+    "@types/node": "25.0.10",
     "typescript": "5.9.3",
     "cpy-cli": "6.0.0",
     "esbuild": "0.27.2"
