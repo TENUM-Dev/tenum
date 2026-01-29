@@ -18,7 +18,7 @@ dependencies {
     implementation("com.diffplug.spotless-changelog:com.diffplug.spotless-changelog.gradle.plugin:3.1.2")
     implementation("org.nosphere.gradle.github.actions:org.nosphere.gradle.github.actions.gradle.plugin:1.4.0")
     implementation("com.palantir.gradle.docker:gradle-docker:0.37.0")
-    implementation("org.danilopianini.npm.publish:org.danilopianini.npm.publish.gradle.plugin:4.1.9")
+    implementation("org.danilopianini.npm.publish:org.danilopianini.npm.publish.gradle.plugin:4.1.10")
     testImplementation(libs.bundles.convention.test.dependencies)
 }
 
