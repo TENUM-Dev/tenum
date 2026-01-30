@@ -15,7 +15,7 @@ pluginManagement {
         //id("org.zkovari.changelog") version "0.4.0"
         id("org.nosphere.gradle.github.actions") version "1.4.0"
         id("com.palantir.docker") version "0.37.0"
-        id("org.danilopianini.npm.publish") version "4.1.9"
+        id("org.danilopianini.npm.publish") version "4.1.10"
     }
 }
 
