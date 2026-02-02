@@ -1,3 +1,15 @@
+## <small>1.3.7 (2026-02-02)</small>
+
+* bump: (deps-dev): bump @types/node from 25.0.10 to 25.1.0 in /clinpm (#99) ([df0b5a4](https://github.com/TENUM-Dev/tenum/commit/df0b5a4)), closes [#99](https://github.com/TENUM-Dev/tenum/issues/99)
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.25 to 1.5.26 (#96) ([9e36e94](https://github.com/TENUM-Dev/tenum/commit/9e36e94)), closes [#96](https://github.com/TENUM-Dev/tenum/issues/96)
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.26 to 1.5.27 (#103) ([5321766](https://github.com/TENUM-Dev/tenum/commit/5321766)), closes [#103](https://github.com/TENUM-Dev/tenum/issues/103)
+* bump: (deps): bump gradle-wrapper from 9.1.0 to 9.3.0 (#97) ([a4664b2](https://github.com/TENUM-Dev/tenum/commit/a4664b2)), closes [#97](https://github.com/TENUM-Dev/tenum/issues/97)
+* bump: (deps): bump gradle-wrapper from 9.3.0 to 9.3.1 (#100) ([6616f35](https://github.com/TENUM-Dev/tenum/commit/6616f35)), closes [#100](https://github.com/TENUM-Dev/tenum/issues/100)
+* bump: (deps): bump org.danilopianini.npm.publish from 4.1.9 to 4.1.10 (#102) ([685ccc5](https://github.com/TENUM-Dev/tenum/commit/685ccc5)), closes [#102](https://github.com/TENUM-Dev/tenum/issues/102)
+* bump: (deps): bump org.danilopianini.npm.publish:org.danilopianini.npm.publish.gradle.plugin (#101) ([a64597c](https://github.com/TENUM-Dev/tenum/commit/a64597c)), closes [#101](https://github.com/TENUM-Dev/tenum/issues/101)
+* Merge pull request #94 from TENUM-Dev/release ([eb7b42f](https://github.com/TENUM-Dev/tenum/commit/eb7b42f)), closes [#94](https://github.com/TENUM-Dev/tenum/issues/94)
+* Merge pull request #95 from TENUM-Dev/main ([482cb71](https://github.com/TENUM-Dev/tenum/commit/482cb71)), closes [#95](https://github.com/TENUM-Dev/tenum/issues/95)
+
 ## <small>1.3.6 (2026-01-26)</small>
 
 * bump: (deps-dev): bump @types/node from 25.0.9 to 25.0.10 in /clinpm (#92) ([587ede6](https://github.com/TENUM-Dev/tenum/commit/587ede6)), closes [#92](https://github.com/TENUM-Dev/tenum/issues/92)
