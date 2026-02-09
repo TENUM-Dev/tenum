@@ -1,3 +1,19 @@
+## <small>1.3.8 (2026-02-09)</small>
+
+* bump: (deps-dev): bump @types/node from 25.1.0 to 25.2.0 in /clinpm (#108) ([a78bbb8](https://github.com/TENUM-Dev/tenum/commit/a78bbb8)), closes [#108](https://github.com/TENUM-Dev/tenum/issues/108)
+* bump: (deps-dev): bump @types/node from 25.2.0 to 25.2.1 in /clinpm (#112) ([e0ac0ca](https://github.com/TENUM-Dev/tenum/commit/e0ac0ca)), closes [#112](https://github.com/TENUM-Dev/tenum/issues/112)
+* bump: (deps-dev): bump cpy-cli from 6.0.0 to 7.0.0 in /clinpm (#110) ([8b13902](https://github.com/TENUM-Dev/tenum/commit/8b13902)), closes [#110](https://github.com/TENUM-Dev/tenum/issues/110)
+* bump: (deps-dev): bump esbuild from 0.27.2 to 0.27.3 in /clinpm (#116) ([9f43e83](https://github.com/TENUM-Dev/tenum/commit/9f43e83)), closes [#116](https://github.com/TENUM-Dev/tenum/issues/116)
+* bump: (deps): bump benchmark from 0.4.15 to 0.4.16 (#109) ([9b614a9](https://github.com/TENUM-Dev/tenum/commit/9b614a9)), closes [#109](https://github.com/TENUM-Dev/tenum/issues/109)
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.27 to 1.5.28 (#115) ([6adc152](https://github.com/TENUM-Dev/tenum/commit/6adc152)), closes [#115](https://github.com/TENUM-Dev/tenum/issues/115)
+* bump: (deps): bump gradle/actions from 5.0.0 to 5.0.1 (#106) ([58d0211](https://github.com/TENUM-Dev/tenum/commit/58d0211)), closes [#106](https://github.com/TENUM-Dev/tenum/issues/106)
+* bump: (deps): bump koTest from 6.1.1 to 6.1.2 (#98) ([796f6de](https://github.com/TENUM-Dev/tenum/commit/796f6de)), closes [#98](https://github.com/TENUM-Dev/tenum/issues/98)
+* bump: (deps): bump koTest from 6.1.2 to 6.1.3 (#111) ([3710648](https://github.com/TENUM-Dev/tenum/commit/3710648)), closes [#111](https://github.com/TENUM-Dev/tenum/issues/111)
+* bump: (deps): bump org.jetbrains.kotlinx.kover from 0.9.4 to 0.9.5 (#107) ([92ef2b0](https://github.com/TENUM-Dev/tenum/commit/92ef2b0)), closes [#107](https://github.com/TENUM-Dev/tenum/issues/107)
+* bump: (deps): bump org.jetbrains.kotlinx.kover from 0.9.5 to 0.9.6 (#114) ([4d9a16c](https://github.com/TENUM-Dev/tenum/commit/4d9a16c)), closes [#114](https://github.com/TENUM-Dev/tenum/issues/114)
+* Merge pull request #104 from TENUM-Dev/release ([3f71d25](https://github.com/TENUM-Dev/tenum/commit/3f71d25)), closes [#104](https://github.com/TENUM-Dev/tenum/issues/104)
+* Merge pull request #105 from TENUM-Dev/main ([49c0bde](https://github.com/TENUM-Dev/tenum/commit/49c0bde)), closes [#105](https://github.com/TENUM-Dev/tenum/issues/105)
+
 ## <small>1.3.7 (2026-02-02)</small>
 
 * bump: (deps-dev): bump @types/node from 25.0.10 to 25.1.0 in /clinpm (#99) ([df0b5a4](https://github.com/TENUM-Dev/tenum/commit/df0b5a4)), closes [#99](https://github.com/TENUM-Dev/tenum/issues/99)

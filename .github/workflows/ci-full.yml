@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Validate wrapper
-        uses: gradle/actions/wrapper-validation@v5.0.0
+        uses: gradle/actions/wrapper-validation@v5.0.1
 
   lint-format:
     name: Lint & Formatting
@@ -34,7 +34,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Run ktlint
@@ -53,7 +53,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Run Kover
@@ -72,7 +72,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Run CPD
@@ -91,7 +91,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build & Test JVM targets
@@ -111,7 +111,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build & Test JS targets
@@ -131,7 +131,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build Linux targets
@@ -151,7 +151,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Build Windows targets
         shell: pwsh
         run: |
@@ -170,7 +170,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build macOS targets
@@ -190,7 +190,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build macOS arm targets
@@ -221,7 +221,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5.0.0
+        uses: gradle/actions/setup-gradle@v5.0.1
       - name: Make gradlew executable
         if: runner.os != 'Windows'
         run: chmod +x gradlew
