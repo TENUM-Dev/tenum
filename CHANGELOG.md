@@ -1,3 +1,13 @@
+## <small>1.3.9 (2026-02-16)</small>
+
+* bump: (deps-dev): bump @types/node from 25.2.1 to 25.2.2 in /clinpm (#120) ([438541b](https://github.com/TENUM-Dev/tenum/commit/438541b)), closes [#120](https://github.com/TENUM-Dev/tenum/issues/120)
+* bump: (deps-dev): bump @types/node from 25.2.2 to 25.2.3 in /clinpm (#122) ([7d5d3a9](https://github.com/TENUM-Dev/tenum/commit/7d5d3a9)), closes [#122](https://github.com/TENUM-Dev/tenum/issues/122)
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.28 to 1.5.29 (#123) ([e92c624](https://github.com/TENUM-Dev/tenum/commit/e92c624)), closes [#123](https://github.com/TENUM-Dev/tenum/issues/123)
+* bump: (deps): bump codfish/semantic-release-action from 4.0.1 to 5.0.0 (#119) ([b2b2b9a](https://github.com/TENUM-Dev/tenum/commit/b2b2b9a)), closes [#119](https://github.com/TENUM-Dev/tenum/issues/119)
+* bump: (deps): bump org.jetbrains.kotlinx.kover from 0.9.6 to 0.9.7 (#121) ([eed3406](https://github.com/TENUM-Dev/tenum/commit/eed3406)), closes [#121](https://github.com/TENUM-Dev/tenum/issues/121)
+* Merge pull request #117 from TENUM-Dev/release ([826f8c6](https://github.com/TENUM-Dev/tenum/commit/826f8c6)), closes [#117](https://github.com/TENUM-Dev/tenum/issues/117)
+* Merge pull request #118 from TENUM-Dev/main ([3df85c3](https://github.com/TENUM-Dev/tenum/commit/3df85c3)), closes [#118](https://github.com/TENUM-Dev/tenum/issues/118)
+
 ## <small>1.3.8 (2026-02-09)</small>
 
 * bump: (deps-dev): bump @types/node from 25.1.0 to 25.2.0 in /clinpm (#108) ([a78bbb8](https://github.com/TENUM-Dev/tenum/commit/a78bbb8)), closes [#108](https://github.com/TENUM-Dev/tenum/issues/108)
