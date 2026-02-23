@@ -1,3 +1,10 @@
+## <small>1.3.10 (2026-02-23)</small>
+
+* bump: (deps-dev): bump @types/node from 25.2.3 to 25.3.0 in /clinpm (#127) ([4d778d9](https://github.com/TENUM-Dev/tenum/commit/4d778d9)), closes [#127](https://github.com/TENUM-Dev/tenum/issues/127)
+* bump: (deps): bump ch.qos.logback:logback-classic from 1.5.29 to 1.5.32 (#126) ([eb101ba](https://github.com/TENUM-Dev/tenum/commit/eb101ba)), closes [#126](https://github.com/TENUM-Dev/tenum/issues/126)
+* Merge pull request #124 from TENUM-Dev/release ([c359b65](https://github.com/TENUM-Dev/tenum/commit/c359b65)), closes [#124](https://github.com/TENUM-Dev/tenum/issues/124)
+* Merge pull request #125 from TENUM-Dev/main ([0b30a64](https://github.com/TENUM-Dev/tenum/commit/0b30a64)), closes [#125](https://github.com/TENUM-Dev/tenum/issues/125)
+
 ## <small>1.3.9 (2026-02-16)</small>
 
 * bump: (deps-dev): bump @types/node from 25.2.1 to 25.2.2 in /clinpm (#120) ([438541b](https://github.com/TENUM-Dev/tenum/commit/438541b)), closes [#120](https://github.com/TENUM-Dev/tenum/issues/120)
