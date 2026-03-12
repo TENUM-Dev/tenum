@@ -6,7 +6,7 @@ kotlinx-serialization = "1.10.0"
 koTest = "6.1.6"
 benchmark = "0.4.16"
 cpd = "3.5"
-okio = "3.16.4"
+okio = "3.17.0"
 datetime = "0.7.1-0.6.x-compat"
 kover = "0.9.7"
 
