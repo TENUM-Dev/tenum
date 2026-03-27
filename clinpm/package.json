@@ -38,7 +38,7 @@
     "../LICENSE.md"
   ],
   "dependencies": {
-    "@js-joda/core": "5.7.0",
+    "@js-joda/core": "6.0.0",
     "@js-joda/timezone": "2.24.0"
   },
   "devDependencies": {
