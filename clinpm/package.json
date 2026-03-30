@@ -39,7 +39,7 @@
   ],
   "dependencies": {
     "@js-joda/core": "6.0.0",
-    "@js-joda/timezone": "2.24.0"
+    "@js-joda/timezone": "2.25.0"
   },
   "devDependencies": {
     "@types/node": "25.5.0",
