@@ -45,7 +45,7 @@
     "@types/node": "25.5.0",
     "typescript": "6.0.2",
     "cpy-cli": "7.0.0",
-    "esbuild": "0.27.7"
+    "esbuild": "0.28.0"
   }
 }
 
