@@ -13,7 +13,7 @@ jobs:
   autoupdate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v3.0.0
+      - uses: actions/create-github-app-token@v3.1.1
         id: app-token
         with:
           app-id: ${{ secrets.APP_ID }}
