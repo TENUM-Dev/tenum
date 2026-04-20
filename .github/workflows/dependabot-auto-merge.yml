@@ -25,7 +25,7 @@ jobs:
       - name: Dependabot metadata
         id: metadata
         if: github.actor == 'dependabot[bot]'
-        uses: dependabot/fetch-metadata@v3.0.0
+        uses: dependabot/fetch-metadata@v3.1.0
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           
