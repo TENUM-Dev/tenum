@@ -42,7 +42,7 @@
     "@js-joda/timezone": "2.25.1"
   },
   "devDependencies": {
-    "@types/node": "25.8.0",
+    "@types/node": "25.9.0",
     "typescript": "6.0.3",
     "cpy-cli": "7.0.0",
     "esbuild": "0.28.0"
