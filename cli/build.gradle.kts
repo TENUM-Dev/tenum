@@ -6,7 +6,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithHostTests
 plugins {
     id("tenum.conventions.common")
     distribution
-    id("com.github.gmazzo.buildconfig") version "6.0.9"
+    id("com.github.gmazzo.buildconfig") version "6.0.10"
 }
 
 fun KotlinNativeTargetWithHostTests.configureTarget() =
