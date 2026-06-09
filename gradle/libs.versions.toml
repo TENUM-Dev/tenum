@@ -20,7 +20,7 @@ kotest-engine = { module = "io.kotest:kotest-framework-engine", version.ref = "k
 kotest-property = { module = "io.kotest:kotest-property", version.ref = "koTest" }
 kotest-runner-jvm = { module = "io.kotest:kotest-runner-junit5-jvm", version.ref = "koTest" }
 
-kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version = "0.4.0" }
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version = "0.5.0" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 
