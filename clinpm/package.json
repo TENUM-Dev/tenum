@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@types/node": "26.1.0",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "cpy-cli": "7.0.0",
     "esbuild": "0.28.1"
   }
